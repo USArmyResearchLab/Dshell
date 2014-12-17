@@ -26,13 +26,14 @@ clean_rc:
 	rm -fv $(PWD)/dshell
 	rm -fv $(PWD)/dshell-decode
 	rm -fv $(PWD)/.dshellrc
+	rm -fv $(PWD)/bin/decode 
 
 clean_py:
 	find $(PWD)/decoders -name '__init__.py' -exec rm -v {} \;
 
 clean_pyc:
 	find $(PWD)/decoders -name '*.pyc' -exec rm -v {} \;
-	rm $(PWD)/bin/decode 
+	find $(PWD)/lib -name '*.pyc' -exec rm -v {} \;
 
 clean_pydoc:
 	find $(PWD)/doc -name '*.htm*' -exec rm -v {} \;
