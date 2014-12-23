@@ -32,8 +32,6 @@ class DshellDecoder(DNSDecoder):
         return False
 
     def decrypt_payload(payload): pass
-        # if you have the private keys for this encrypted payload, here would be
-        # where you c
 
     def DNSHandler(self,conn,request,response,**kwargs):
         query = ''
