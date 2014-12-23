@@ -62,7 +62,7 @@ class DshellDecoder(DNSDecoder):
             # example: AAAABBBBCCCC.foo.bar.com -> AAAABBBBCCCC is the INNUENDO data
             subdomain = query.split('.')[0]
 
-            if subdomain.isupper() or True: # weak test based on video observation *very poor assumption*
+            if subdomain.isupper(): # weak test based on video observation *very poor assumption*
                 # check each answer in the TXT response
                 for answer in answers:
                     try:
