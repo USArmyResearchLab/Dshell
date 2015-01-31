@@ -1,6 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
-import os, sys
+import os
+import sys
 
 if __name__=='__main__':
     cwd = sys.argv[1]
@@ -22,7 +23,9 @@ if __name__=='__main__':
     try:
         os.mkdir(os.path.join(cwd,'lib','python'+'.'.join(sys.version.split('.',3)[:2]).split(' ')[0]))
         os.mkdir(os.path.join(cwd,'lib','python'+'.'.join(sys.version.split('.',3)[:2]).split(' ')[0],'site-packages'))
-    except Exception,e: print e
+    except Exception as e:
+        print(e)
+
 
     envdict={}
     envdict.update(envvars)

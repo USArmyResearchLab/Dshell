@@ -1,15 +1,21 @@
 #!/usr/bin/env python
 
-import sys,os,glob,copy
-import optparse
-import logging,traceback
-import gzip,zipfile,tempfile
-import output,util
-import dshell
-try: import pcap
-except:
+try:
+    import sys,os,glob,copy
+    import optparse
+    import logging,traceback
+    import gzip,zipfile,tempfile
+    import output,util
+    import dshell
+except ImportError as err:
+    print("Error, could not find library %s", err)
+
+try: 
+    import pcap
+
+except ImportError as err:
     pcap=None
-    print 'pcap not available: decoders requiring pcap are not usable'
+    print('pcap not available: decoders requiring pcap are not usable \n%s', err) 
 
 def import_module(name=None,silent=False,search={}):
     try:
@@ -32,7 +38,7 @@ def import_module(name=None,silent=False,search={}):
         elif name in dir(obj):
             obj = getattr(obj, name)
             if 'dObj' in dir(obj) or 'obj' in dir(obj): return obj
-    except Exception, err:
+    except Exception as err:
         if not silent: sys.stderr.write( "Error '%s' loading module %s\n" % (str(err),module))
     return False
 

@@ -5,11 +5,14 @@ Created on Feb 6, 2012
 @author: tparker
 '''
 
-import sys,dpkt,struct,pcap,socket,time
-from Crypto.Random import random
-from Crypto.Hash import SHA
-from output import PCAPWriter
-from util import getopts
+try:
+    import sys,dpkt,struct,pcap,socket,time
+    from Crypto.Random import random
+    from Crypto.Hash import SHA
+    from output import PCAPWriter
+    from util import getopts
+except ImportError as err:
+    print("Error, missing package: %s", err)
 
 def hashaddr(addr,*extra):
     #hash key+address plus any extra data (ports if flow)
@@ -97,7 +100,8 @@ def pcap_handler(ts,pktdata):
             except: sport=dport=None #nope
             pkt.data.src,pkt.data.dst=mangleIPs(pkt.data.src,pkt.data.dst,sport,dport)
         pktdata=str(pkt)
-    except Exception,e: print e
+    except Exception as error: 
+        print (error)
     out.write(len(pktdata),pktdata,ts)
 
 if __name__ == '__main__':

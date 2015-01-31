@@ -1,8 +1,13 @@
-import dshell
-import util
-import hashlib, urllib, re
+#!/usr/bin/env python
 
-from httpdecoder import HTTPDecoder
+try:
+    import dshell
+    import util
+    import hashlib, urllib, re
+
+    from httpdecoder import HTTPDecoder
+except ImportError as err:
+    print("Error, missing the following libraries: %s", err)
 
 class DshellDecoder(HTTPDecoder):
     def __init__(self):
@@ -23,7 +28,7 @@ class DshellDecoder(HTTPDecoder):
         self.output='colorout'
         self.gunzip=False   # Disable auto-gunzip as we want to indicate content that was compressed in the output
 
-    def HTTPHandler(self,conn,request,response,requesttime,responsetime):
+    def HTTPHandler(self,conn,request,response,requesttime,responsetime): # This is also in web.py, should this be just be imported from there??
         host = ''
         loc = ''
         uri = ''

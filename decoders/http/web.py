@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import dshell, dfile
 import util
 import hashlib
@@ -9,7 +10,7 @@ class DshellDecoder(HTTPDecoder):
         HTTPDecoder.__init__(self,
                 name='web',
                 description='Improved version of web that tracks server response',
-                filter='tcp and (port 80 or port 8080 or port 8000)',
+                filter='TCP and (port 80 or port 8080 or port 8000)',
                 filterfn=lambda ((sip,sp),(dip,dp)): sp in (80, 8000, 8080) or dp in (80, 8000, 8080),
                 author='bg,twp',
                 optiondict={
@@ -20,6 +21,8 @@ class DshellDecoder(HTTPDecoder):
         self.gunzip = False  # Not interested in response body
 
     def HTTPHandler(self,conn,request,response,requesttime,responsetime):
+        ''' Method to handle HTTP requests/responses. '''
+
         host = ''
         loc = ''
         lastmodified = ''
@@ -85,8 +88,9 @@ class DshellDecoder(HTTPDecoder):
             if response: self.write(response.body,direction='sc')
 
 
-    # MD5sum(hex) of the body portion of the response
     def _bodyMD5(self, response):
+    ''' MD5sum(hex) of the body portion of the response'''
+
         try:
             if len(response.body) > 0:
                 return hashlib.md5(response.body.rstrip('\0')).hexdigest()
@@ -96,6 +100,7 @@ class DshellDecoder(HTTPDecoder):
             return ''
 
     def POSTHandler(self,postdata):
+        ''' HTTP method to handle POST requests '''
         next_line_is_data=False
         contenttype = ''
         filename = ''
@@ -118,6 +123,7 @@ class DshellDecoder(HTTPDecoder):
         return contenttype,filename,l
 
     def splitstrip(self,data,sep,strip=' '):
+        ''' Formatting data '''
         return [lpart.strip(strip) for lpart in data.split(sep)]
 
 
