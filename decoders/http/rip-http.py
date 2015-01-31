@@ -1,12 +1,22 @@
-import dshell,re
-import datetime, sys, string
+#!/usr/bin/env python
+
+try:
+    import dshell
+    import re
+    import datetime
+    import sys
+    import string
 
 #import any other modules here
 # import binascii
-import re, os, hashlib, util
+    import os
+    import hashlib
+    import util
 
 #we extend this
-from httpdecoder import HTTPDecoder
+    from httpdecoder import HTTPDecoder
+except ImportError as err:
+    print("Error, could not import: %s", err)
 
 class DshellDecoder(HTTPDecoder):
     def __init__(self):
