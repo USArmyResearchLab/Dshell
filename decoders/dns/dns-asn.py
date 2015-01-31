@@ -1,5 +1,11 @@
-import dshell,dpkt,socket
-from dnsdecoder import DNSDecoder
+
+try:
+    import dshell
+    import dpkt
+    import socket
+    from dnsdecoder import DNSDecoder
+except ImportError as error:
+    print("Import error. Could not find module: %s", error)
 
 class DshellDecoder(DNSDecoder):
     def __init__(self):
