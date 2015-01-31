@@ -100,7 +100,8 @@ def pcap_handler(ts,pktdata):
             except: sport=dport=None #nope
             pkt.data.src,pkt.data.dst=mangleIPs(pkt.data.src,pkt.data.dst,sport,dport)
         pktdata=str(pkt)
-    except Exception,e: print e
+    except Exception as error: 
+        print (error)
     out.write(len(pktdata),pktdata,ts)
 
 if __name__ == '__main__':
