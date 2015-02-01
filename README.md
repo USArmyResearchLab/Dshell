@@ -16,7 +16,6 @@ Key features:
 * Python 2.7
 * [pygeoip](https://github.com/appliedsec/pygeoip), GNU Lesser GPL
   * [MaxMind GeoIP Legacy datasets](http://dev.maxmind.com/geoip/legacy/geolite/)
-* [PyCrypto](https://pypi.python.org/pypi/pycrypto), custom license
 * [dpkt](https://code.google.com/p/dpkt/), New BSD License
 * [IPy](https://github.com/haypo/python-ipy), BSD 2-Clause License
 * [pypcap](https://code.google.com/p/pypcap/), New BSD License
@@ -25,7 +24,7 @@ Key features:
 
 1. Install all of the necessary Python modules listed above. Many of them are available via pip and/or apt-get. Pygeoip is not yet available as a package and must be installed with pip or manually. All except dpkt are available with pip.
  
-  1. sudo apt-get install python-crypto python-dpkt python-ipy python-pypcap
+  1. sudo apt-get install python-dpkt python-ipy python-pypcap
 
   2. sudo pip install pygeoip
 
