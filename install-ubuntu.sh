@@ -2,13 +2,6 @@
 
 pkgs=""
 
-if `python -c 'import Crypto'`; 
-then echo "PyCrypto is installed"
-else
-	echo "dshell requires PyCrypto"
-	pkgs="$pkgs python-crypto"
-fi
-
 if `python -c 'import dpkt'`; 
 then echo "dpkt is installed"
 else
