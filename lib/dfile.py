@@ -82,7 +82,7 @@ class dfile(Blob):
             return md5(self.data()).hexdigest()
         elif self.mode == FILEONDISK:
             m = md5()
-            fh = open(self.diskpath, 'r')
+            fh = open(self.diskpath)
             m.update(fh.read())
             fh.close()
             return m.hexdigest()
@@ -95,7 +95,7 @@ class dfile(Blob):
         '''
         if not self.mode == FILEONDISK: return False
         try:
-            fh = open(self.diskpath, 'r')
+            fh = open(self.diskpath)
             self.update(fh.read())
             fh.close()
             self.mode = FILEINMEMORY
