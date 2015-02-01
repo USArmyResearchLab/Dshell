@@ -5,7 +5,7 @@ Created on Feb 6, 2012
 @author: tparker
 '''
 
-import sys,dpkt,struct,pcap,socket,time,os
+import sys,dpkt,struct,pcap,socket,time,os,hashlib
 from output import PCAPWriter
 from util import getopts
 
