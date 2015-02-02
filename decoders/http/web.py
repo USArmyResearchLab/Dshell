@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-import dshell, dfile
+import dshell
+import dfile
 import util
 import hashlib
 
