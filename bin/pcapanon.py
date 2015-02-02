@@ -5,16 +5,14 @@ Created on Feb 6, 2012
 @author: tparker
 '''
 
-import sys,dpkt,struct,pcap,socket,time
-from Crypto.Random import random
-from Crypto.Hash import SHA
+import sys,dpkt,struct,pcap,socket,time,os,hashlib
 from output import PCAPWriter
 from util import getopts
 
 def hashaddr(addr,*extra):
     #hash key+address plus any extra data (ports if flow)
     global key,ip_range,ip_mask
-    sha=SHA.new(key+addr)
+    sha=hashlib.sha1(key+addr)
     for e in extra: sha.update(str(extra))
     #take len(addr) octets of digest as address, to int, mask, or with range, back to octets
     return inttoip( ( iptoint(sha.digest()[0:len(addr)]) & ip_mask) | ip_range )
@@ -105,7 +103,7 @@ if __name__ == '__main__':
     global key,init_ts,start_ts,replace_ts,by_flow,anon_mac,zero_mac,exclude,exclude_port,anon_all,ip_range,ip_mask
     opts,args=getopts(sys.argv[1:],'i:aezftx:p:rk:',['ip=','all','ether','zero','flow','ts','exclude=','random','key=','port='],['-x','--exclude','-p','--port'])
 
-    if '-r' in opts or '--random' in opts: key=random.long_to_bytes(random.getrandbits(64),8)
+    if '-r' in opts or '--random' in opts: key=os.urandom(8)
     else: key=''
     key=opts.get('-k',opts.get('--key',key))
 
