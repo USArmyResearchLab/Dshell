@@ -2,11 +2,17 @@
 @author: amm
 '''
 
-import output,util,dshell
+import output
+import util
+import dshell
 import sys
-import cgi, string, datetime
+import cgi
+import string
+import datetime
+
 
 class ColorOutput(output.TextOutput):
+
     '''
     Color-coded Output module
     use with --output=colorout
@@ -58,45 +64,51 @@ class ColorOutput(output.TextOutput):
     def errorH(self, **x):
         return True
 
-    def __init__(self,*args,**kwargs):
+    def __init__(self, *args, **kwargs):
 
         if 'format' in kwargs:
-            fmtstr=kwargs['format']
-            del kwargs['format'] #don't let base class process this
-        else: fmtstr=''
+            fmtstr = kwargs['format']
+            del kwargs['format']  # don't let base class process this
+        else:
+            fmtstr = ''
 
         # Title
         if 'title' not in dir(self):
             if 'title' in kwargs:
-                self.title=kwargs['title']
-                del kwargs['title'] #don't let base class process this
-            else: self.title='Dshell'
+                self.title = kwargs['title']
+                del kwargs['title']  # don't let base class process this
+            else:
+                self.title = 'Dshell'
 
         # Check for html generator mode
         if 'htmlgenerator' not in dir(self):
             if 'htmlgenerator' in kwargs:
-                self.htmlgenerator=kwargs['htmlgenerator']
-                del kwargs['htmlgenerator'] #don't let base class process this
-            else: self.htmlgenerator=False
+                self.htmlgenerator = kwargs['htmlgenerator']
+                # don't let base class process this
+                del kwargs['htmlgenerator']
+            else:
+                self.htmlgenerator = False
         if self.htmlgenerator:
             self.htmlbuffer = ''
 
         # Check for force color mode
         if 'force' not in dir(self):
             if 'force' in kwargs:
-                self.force=True
-                del kwargs['force'] #don't let base class process this
-            else: self.force=False
+                self.force = True
+                del kwargs['force']  # don't let base class process this
+            else:
+                self.force = False
 
         # Override HTML for stdout
         if 'html' not in dir(self):
             if 'html' in kwargs:
-                self.html=True
+                self.html = True
                 del kwargs['html']
-            else: self.html=False
+            else:
+                self.html = False
 
         # Call parent init
-        output.TextOutput.__init__(self,format=fmtstr,**kwargs)
+        output.TextOutput.__init__(self, format=fmtstr, **kwargs)
 
         self.setColorMode()
 
@@ -123,8 +135,6 @@ class ColorOutput(output.TextOutput):
             # File.  Use HTML.
             self._COLORMODE = 'HTML'
 
-
-
     # Internal function to write HTML
     # or buffer it in factory mode
     def _htmlwrite(self, text):
@@ -143,7 +153,6 @@ class ColorOutput(output.TextOutput):
         self.htmlbuffer = ''
         return tmp
 
-
     def close(self):
         # Footer
         if self._COLORMODE == 'HTML':
@@ -155,28 +164,35 @@ class ColorOutput(output.TextOutput):
         self._SC_offset = value
         self._NODIR_offset = value
 
-    def write(self,*args,**kw):
+    def write(self, *args, **kw):
 
         # KW Options
-        if 'hex' in kw and kw['hex']: self._hexmode = True
-        else: self._hexmode = False
+        if 'hex' in kw and kw['hex']:
+            self._hexmode = True
+        else:
+            self._hexmode = False
         if 'time' in kw and kw['time']:
             self._timemode = True
             self._htmldisplaytimes = True
-        else: self._timemode = False
+        else:
+            self._timemode = False
 
         # KW formatTag
         if 'formatTag' in kw:
             formatTag = kw['formatTag']
             del kw['formatTag']
-        else: formatTag = ''
+        else:
+            formatTag = ''
 
         # KW Direction
-        if 'direction' in kw: kwdirection = kw['direction']
-        else: kwdirection = ''
+        if 'direction' in kw:
+            kwdirection = kw['direction']
+        else:
+            kwdirection = ''
 
         # KW Offset
-        if 'offset' in kw: self._reset_offsets(kw['offset'])
+        if 'offset' in kw:
+            self._reset_offsets(kw['offset'])
 
         # KW Timestamp
         if 'timestamp' in kw and kw['timestamp'] != None:
@@ -209,19 +225,22 @@ class ColorOutput(output.TextOutput):
         if len(formatTag) and self._COLORMODE == 'HTML':
             self._htmlwrite('</%s>' % formatTag)
 
-    def _write_blob(self, blob, encoding = None):
-        self._write_string(blob.data(errorHandler=self.errorH), blob.direction, blob.starttime, encoding)
+    def _write_blob(self, blob, encoding=None):
+        self._write_string(
+            blob.data(errorHandler=self.errorH), blob.direction, blob.starttime, encoding)
 
-    def _write_string(self, text, direction, timestamp, encoding = None):
+    def _write_string(self, text, direction, timestamp, encoding=None):
 
-        colorTag=''
+        colorTag = ''
 
         # Print TimestampcolorTag
         if self._COLORMODE == 'HTML' and timestamp != None:
-            self._htmlwrite('<div class="timestamp">\n%s UTC:</div>' % datetime.datetime.utcfromtimestamp(timestamp))
+            self._htmlwrite('<div class="timestamp">\n%s UTC:</div>' %
+                            datetime.datetime.utcfromtimestamp(timestamp))
             #if self._hexmode: self._htmlwrite("<br>")
         elif self._COLORMODE == 'TTY' and self._timemode and timestamp != None:
-            self.fh.write('\x1b[36m%s UTC:\x1b[0m\n' % datetime.datetime.utcfromtimestamp(timestamp))
+            self.fh.write('\x1b[36m%s UTC:\x1b[0m\n' %
+                          datetime.datetime.utcfromtimestamp(timestamp))
 
         # Set Direction
         if direction.lower() == 'cs':
@@ -336,9 +355,11 @@ display: none;
 """
 
     def _HTMLFooter(self):
-        if self._htmldisplaytimes: display_timestamps = "<script>tsOnOff();</script>\n";
-        else: display_timestamps = ''
-        return display_timestamps+"""</body>
+        if self._htmldisplaytimes:
+            display_timestamps = "<script>tsOnOff();</script>\n"
+        else:
+            display_timestamps = ''
+        return display_timestamps + """</body>
 </html>
 """
 

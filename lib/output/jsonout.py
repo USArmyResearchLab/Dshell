@@ -6,7 +6,9 @@ import output
 import datetime
 import json
 
+
 class JSONOutput(output.TextOutput):
+
     '''
     JSON Output module
     use with --output=jsonout
@@ -21,9 +23,10 @@ class JSONOutput(output.TextOutput):
 
     '''
 
-    _TIMESTAMP_FIELDS=('ts', 'starttime', 'endtime', 'request_time', 'response_time')
+    _TIMESTAMP_FIELDS = (
+        'ts', 'starttime', 'endtime', 'request_time', 'response_time')
 
-    def __init__(self,*args,**kwargs):
+    def __init__(self, *args, **kwargs):
 
         # Options
         self.options = {}
@@ -42,9 +45,9 @@ class JSONOutput(output.TextOutput):
                 self.jsonfields.append(a)
 
         # Call parent init
-        output.TextOutput.__init__(self,**kwargs)
+        output.TextOutput.__init__(self, **kwargs)
 
-    def alert(self,*args,**kw):
+    def alert(self, *args, **kw):
 
         # User specified field list??
         if self.jsonfields != None:
@@ -54,20 +57,27 @@ class JSONOutput(output.TextOutput):
         elif not self.options['notrim']:
             # Remove Common Redundant Fields
             for name in ('addr', 'direction', 'clientport', 'serverport', 'clientip', 'serverip', 'sipint', 'dipint'):
-                if name in kw: del kw[name]
+                if name in kw:
+                    del kw[name]
             # Time Fields
             # Rename 'ts' to 'starttime' if 'starttime' not present
             if 'ts' in kw:
-                if 'starttime' not in kw: kw['starttime'] = kw['ts']
+                if 'starttime' not in kw:
+                    kw['starttime'] = kw['ts']
                 del kw['ts']
             # Convert known timestamp fields to string format
             for name in self._TIMESTAMP_FIELDS:
-                try: kw[name] = datetime.datetime.fromtimestamp(float(kw[name])).strftime(self.timeformat)
-                except: pass
+                try:
+                    kw[name] = datetime.datetime.fromtimestamp(
+                        float(kw[name])).strftime(self.timeformat)
+                except:
+                    pass
             # Remove GEOIP Fields
             if not self.options['geoip']:
                 for name in ('servercountrycode', 'clientcountrycode', 'sipcc', 'dipcc', 'clientasn', 'serverasn', 'dipasn', 'sipasn'):
-                    if name in kw: del kw[name]
-        self.fh.write(json.dumps(kw, ensure_ascii=self.options['ensure_ascii']) + "\n")
+                    if name in kw:
+                        del kw[name]
+        self.fh.write(
+            json.dumps(kw, ensure_ascii=self.options['ensure_ascii']) + "\n")
 
 obj = JSONOutput

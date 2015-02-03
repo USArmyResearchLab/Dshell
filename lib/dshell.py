@@ -5,17 +5,24 @@ Dshell base classes
 __version__ = "3.0"
 
 import dpkt
-import struct,socket,traceback
+import struct
+import socket
+import traceback
 import util
-import os, datetime,logging
+import os
+import datetime
+import logging
 import binascii
 
 # For IP lookups
-try: import pygeoip
-except: pass
+try:
+    import pygeoip
+except:
+    pass
 
 
 class Decoder(object):
+
     """
     Base class that all decoders will inherit
 
@@ -49,68 +56,87 @@ class Decoder(object):
 
 
     """
+
     def __super__(self):
         '''convenience function to get bound instance of superclass'''
-        return super(self.__class__,self)
+        return super(self.__class__, self)
 
-    def __init__(self,**kwargs):
+    def __init__(self, **kwargs):
         self.name = 'unnamed'
         self.description = ''
         self.longdescription = ''
         self.filter = ''
         self.author = 'xx'
-        self.decodedbytes=0
-        self.count=0
+        self.decodedbytes = 0
+        self.count = 0
         '''dict of options specific to this decoder in format
                 'optname':{configdict} translates to --decodername_optname'''
-        self.optiondict={}
+        self.optiondict = {}
 
-        #out holds the output plugin. If None, will inherit the global output
-        self.out=None
-        #format is the format string for this plugin, if None, uses global
-        self.format=None
+        # out holds the output plugin. If None, will inherit the global output
+        self.out = None
+        # format is the format string for this plugin, if None, uses global
+        self.format = None
 
-        #capture options
-        self.l2decoder=dpkt.ethernet.Ethernet #decoder to use if raw mode
-        self.striplayers=0 #strip extra layers before IP/IPv6? (such as PPPoE, IP-over-IP, etc..)
+        # capture options
+        self.l2decoder = dpkt.ethernet.Ethernet  # decoder to use if raw mode
+        # strip extra layers before IP/IPv6? (such as PPPoE, IP-over-IP, etc..)
+        self.striplayers = 0
 
-        self._DEBUG=False
+        self._DEBUG = False
 
-        self.chainable=False #can we chain a decoder off the output of this one?
-        self.subDecoder=None #decoder to pass output to for chaining
+        # can we chain a decoder off the output of this one?
+        self.chainable = False
+        self.subDecoder = None  # decoder to pass output to for chaining
 
-        #set flags to indicate if handlers are present
-        if 'packetHandler' in dir(self): self.isPacketHandlerPresent = True
-        else: self.isPacketHandlerPresent = False
-        if 'connectionHandler' in dir(self): self.isConnectionHandlerPresent = True
-        else: self.isConnectionHandlerPresent = False
-        if 'blobHandler' in dir(self): self.isBlobHandlerPresent = True
-        else: self.isBlobHandlerPresent = False
+        # set flags to indicate if handlers are present
+        if 'packetHandler' in dir(self):
+            self.isPacketHandlerPresent = True
+        else:
+            self.isPacketHandlerPresent = False
+        if 'connectionHandler' in dir(self):
+            self.isConnectionHandlerPresent = True
+        else:
+            self.isConnectionHandlerPresent = False
+        if 'blobHandler' in dir(self):
+            self.isBlobHandlerPresent = True
+        else:
+            self.isBlobHandlerPresent = False
 
-        #for connection tracking, if applicable
+        # for connection tracking, if applicable
         self.connectionsDict = {}
-        self.cleanupts=0
+        self.cleanupts = 0
 
-        #instantiate and save references to lookup function
+        # instantiate and save references to lookup function
         try:
-            self.geoccdb = [ pygeoip.GeoIP(os.environ['DATAPATH']+'/GeoIP/GeoIP.dat', pygeoip.MEMORY_CACHE).country_code_by_addr ]
-            try: self.geoccdb.append( pygeoip.GeoIP(os.environ['DATAPATH']+'/GeoIP/GeoIPv6.dat', pygeoip.MEMORY_CACHE).country_code_by_addr )
-            except: pass
+            self.geoccdb = [pygeoip.GeoIP(os.environ[
+                                          'DATAPATH'] + '/GeoIP/GeoIP.dat', pygeoip.MEMORY_CACHE).country_code_by_addr]
+            try:
+                self.geoccdb.append(pygeoip.GeoIP(os.environ[
+                                    'DATAPATH'] + '/GeoIP/GeoIPv6.dat', pygeoip.MEMORY_CACHE).country_code_by_addr)
+            except:
+                pass
         except:
             self.geoccdb = None
 
         try:
-            self.geoasndb = [ pygeoip.GeoIP(os.environ['DATAPATH']+'/GeoIP/GeoIPASNum.dat', pygeoip.MEMORY_CACHE).org_by_addr ]
-            try: self.geoasndb.append( pygeoip.GeoIP(os.environ['DATAPATH']+'/GeoIP/GeoIPASNumv6.dat', pygeoip.MEMORY_CACHE).org_by_addr )
-            except: pass
+            self.geoasndb = [pygeoip.GeoIP(
+                os.environ['DATAPATH'] + '/GeoIP/GeoIPASNum.dat', pygeoip.MEMORY_CACHE).org_by_addr]
+            try:
+                self.geoasndb.append(pygeoip.GeoIP(os.environ[
+                                     'DATAPATH'] + '/GeoIP/GeoIPASNumv6.dat', pygeoip.MEMORY_CACHE).org_by_addr)
+            except:
+                pass
         except:
             self.geoasndb = None
 
-        #import kw args into class members
-        if kwargs: self.__dict__.update(kwargs)
+        # import kw args into class members
+        if kwargs:
+            self.__dict__.update(kwargs)
 
     '''convenience functions for alert output and logging'''
-    def alert(self,*args,**kw):
+
+    def alert(self, *args, **kw):
         '''sends alert to output handler
                 typically self.alert will be called with the decoded data and the packet/connection info dict last, as follows:
 
@@ -133,100 +159,115 @@ class Decoder(object):
                          - remaining keyword arguments that do not match fields will be represented by "key=value" strings
                             concatenated together into the "extra" field
         '''
-        oargs=[]
+        oargs = []
         for a in args:
-            #merge dict args, overriding kws
-            if type(a)==dict: kw.update(a)
-            elif type(a)==list: oargs.extend(a)
-            else: oargs.append(a)
-        if 'decoder' not in kw: kw['decoder']=self.name
-        self.out.alert(*oargs,**kw) #add decoder name
+            # merge dict args, overriding kws
+            if type(a) == dict:
+                kw.update(a)
+            elif type(a) == list:
+                oargs.extend(a)
+            else:
+                oargs.append(a)
+        if 'decoder' not in kw:
+            kw['decoder'] = self.name
+        self.out.alert(*oargs, **kw)  # add decoder name
 
-    def write(self,obj,**kw):
+    def write(self, obj, **kw):
         '''write session data'''
-        self.out.write(obj,**kw)
+        self.out.write(obj, **kw)
 
-    def dump(self,*args,**kw):
+    def dump(self, *args, **kw):
         '''write packet data (probably to the PCAP writer if present)'''
-        if len(args)==3:
-            kw['len'],kw['pkt'],kw['ts']=args
-        elif len(args)==2:
-            kw['pkt'],kw['ts']=args
-        elif len(args)==1:
-            kw['pkt']=args[0]
+        if len(args) == 3:
+            kw['len'], kw['pkt'], kw['ts'] = args
+        elif len(args) == 2:
+            kw['pkt'], kw['ts'] = args
+        elif len(args) == 1:
+            kw['pkt'] = args[0]
         self.out.dump(**kw)
 
-    def log(self,msg,level=logging.INFO):
+    def log(self, msg, level=logging.INFO):
         '''logs msg at specified level (default of INFO is for -v/--verbose output)'''
-        self.out.log(msg,level=level) #default level is INFO (verbose) can be overridden
+        self.out.log(
+            msg, level=level)  # default level is INFO (verbose) can be overridden
 
-    def debug(self,msg):
+    def debug(self, msg):
         '''logs msg at debug level'''
-        self.log(msg,level=logging.DEBUG)
+        self.log(msg, level=logging.DEBUG)
 
-    def warn(self,msg):
+    def warn(self, msg):
         '''logs msg at warning level'''
-        self.log(msg,level=logging.WARN)
+        self.log(msg, level=logging.WARN)
         pass
 
-    def error(self,msg):
+    def error(self, msg):
         '''logs msg at error level'''
-        self.log(msg,level=logging.ERROR)
+        self.log(msg, level=logging.ERROR)
 
     def __repr__(self):
-        return '%s %s %s' % (self.name,self.filter,
-                                                 ' '.join([ ('%s=%s'%(x, str(self.__dict__.get(x)))) for x in self.optiondict.keys() ] ) )
-
+        return '%s %s %s' % (self.name, self.filter,
+                             ' '.join([('%s=%s' % (x, str(self.__dict__.get(x)))) for x in self.optiondict.keys()]))
 
     def preModule(self):
         '''preModule is called before capture starts
                 default preModule, dumps object data to debug'''
-        if self.subDecoder: self.subDecoder.preModule()
-        self.debug (self.name+' '+str(self.__dict__))
+        if self.subDecoder:
+            self.subDecoder.preModule()
+        self.debug(self.name + ' ' + str(self.__dict__))
 
     def postModule(self):
         '''postModule is called after capture stops
                 default postModule, prints basic decoding stats'''
         self.cleanConnectionStore()
-        self.log("%s: %d packets (%d bytes) decoded"%(self.name,self.count,self.decodedbytes))
-        if self.subDecoder: self.subDecoder.postModule()
+        self.log("%s: %d packets (%d bytes) decoded" %
+                 (self.name, self.count, self.decodedbytes))
+        if self.subDecoder:
+            self.subDecoder.postModule()
 
     def preFile(self):
-        if self.subDecoder: self.subDecoder.preFile()
+        if self.subDecoder:
+            self.subDecoder.preFile()
 
     def postFile(self):
-        if self.subDecoder: self.subDecoder.postFile()
+        if self.subDecoder:
+            self.subDecoder.postFile()
 
-    def parseOptions(self,options={}):
+    def parseOptions(self, options={}):
         '''option keys:values will set class members (self.key=value)
                 if key is in optiondict'''
         for optname in self.optiondict.iterkeys():
-            if optname in options: self.__dict__[optname]=options[optname]
+            if optname in options:
+                self.__dict__[optname] = options[optname]
 
     def parseArgs(self, args, options={}):
         '''called to parse command-line arguments and cli/config file options
                 if options dict contains 'all' or the decoder name as a key
                 class members will be updated from value'''
-        #get positional args after the --
+        # get positional args after the --
         self.args = args
-        #update from all decoders section of config file
-        if 'all' in options: self.parseOptions(options['all'])
-        #update from named section of config file
-        if self.name in options: self.parseOptions(options[self.name])
+        # update from all decoders section of config file
+        if 'all' in options:
+            self.parseOptions(options['all'])
+        # update from named section of config file
+        if self.name in options:
+            self.parseOptions(options[self.name])
 
     def getGeoIP(self, ip, db=[], notfound='--'):
         """
         Get record associated with an IP
         requires GeoIP
         """
-        o=None
-        if db == []: db = self.geoccdb  # default to self.geoccdb
+        o = None
+        if db == []:
+            db = self.geoccdb  # default to self.geoccdb
         for d in db:
-            try: o=d(ip)
+            try:
+                o = d(ip)
             except:
-                #traceback.print_exc()  # removed by bg on 20121203
-                continue #passing ipv6 address to ipv4 lookup or v/v
-            if o: return o #stop when we get a result
+                # traceback.print_exc()  # removed by bg on 20121203
+                continue  # passing ipv6 address to ipv4 lookup or v/v
+            if o:
+                return o  # stop when we get a result
         return notfound
 
     def getASN(self, ip, db=[], notfound='--'):
@@ -234,134 +275,173 @@ class Decoder(object):
         Get record associated with an IP
         requires GeoIP
         """
-        o=None
-        if db == []: db = self.geoasndb # default to self.geoccdb
+        o = None
+        if db == []:
+            db = self.geoasndb  # default to self.geoccdb
         for d in db:
-            try: o=d(ip)
+            try:
+                o = d(ip)
             except:
-                #traceback.print_exc()  # removed by bg on 20121203
-                continue #passing ipv6 address to ipv4 lookup or v/v
-            if o: return o #stop when we get a result
+                # traceback.print_exc()  # removed by bg on 20121203
+                continue  # passing ipv6 address to ipv4 lookup or v/v
+            if o:
+                return o  # stop when we get a result
         return notfound
 
-    def close(self,conn,ts=None):
+    def close(self, conn, ts=None):
         '''for connection based decoders
                 close and discard the connection object'''
-        #just return if we have already been called on this connection
-        #prevents infinite loop of a handler calling close() when we call it
-        if conn.state=='closed': return
+        # just return if we have already been called on this connection
+        # prevents infinite loop of a handler calling close() when we call it
+        if conn.state == 'closed':
+            return
 
-        #set state to closed
-        conn.state='closed'
-        if ts: conn.endtime=ts
-        # we have already stopped this so don't call the handlers if we have already stopped
+        # set state to closed
+        conn.state = 'closed'
+        if ts:
+            conn.endtime = ts
+        # we have already stopped this so don't call the handlers if we have
+        # already stopped
         if not conn.stop:
-            #flush out the last blob to the blob handler
-            if self.isBlobHandlerPresent and conn.blobs: self.blobHandler(conn,conn.blobs[-1])
+            # flush out the last blob to the blob handler
+            if self.isBlobHandlerPresent and conn.blobs:
+                self.blobHandler(conn, conn.blobs[-1])
             # process connection handler
-            if self.isConnectionHandlerPresent: self.connectionHandler(conn)
-        #connection close handler
-        #will be called regardless of conn.stop right before conn object is destroyed
-        if 'connectionCloseHandler' in dir(self): self.connectionCloseHandler(conn)
-        #discard but check first in case a handler deleted it
-        if conn.addr in self.connectionsDict: del self.connectionsDict[conn.addr]
+            if self.isConnectionHandlerPresent:
+                self.connectionHandler(conn)
+        # connection close handler
+        # will be called regardless of conn.stop right before conn object is
+        # destroyed
+        if 'connectionCloseHandler' in dir(self):
+            self.connectionCloseHandler(conn)
+        # discard but check first in case a handler deleted it
+        if conn.addr in self.connectionsDict:
+            del self.connectionsDict[conn.addr]
 
-    def stop(self,conn):
+    def stop(self, conn):
         '''stop following connection
                 handlers will not be called, except for connectionCloseHandler'''
         conn.stop = True
 
-    def cleanup(self,ts):
+    def cleanup(self, ts):
         '''if cleanup interval expired, close connections not updated in last interval'''
-        ts=util.mktime(ts)
-        #if cleanup interval has passed
-        if self.cleanupts<(ts-self.cleanupinterval):
+        ts = util.mktime(ts)
+        # if cleanup interval has passed
+        if self.cleanupts < (ts - self.cleanupinterval):
             for conn in self.connectionsDict.values():
-                if util.mktime(conn.endtime)<=self.cleanupts: self.close(conn)
-            self.cleanupts=ts
+                if util.mktime(conn.endtime) <= self.cleanupts:
+                    self.close(conn)
+            self.cleanupts = ts
 
     def cleanConnectionStore(self):
         '''cleans connection store of all information, flushing out data'''
-        for conn in self.connectionsDict.values(): self.close(conn)
+        for conn in self.connectionsDict.values():
+            self.close(conn)
 
-    def _exc(self,e):
+    def _exc(self, e):
         '''exception handler'''
         self.warn(str(e))
-        if self._DEBUG: traceback.print_exc()
+        if self._DEBUG:
+            traceback.print_exc()
 
-    def find(self,addr,state=None):
-        if addr in self.connectionsDict: conn=self.connectionsDict[addr]
-        elif (addr[1],addr[0]) in self.connectionsDict: conn=self.connectionsDict[(addr[1],addr[0])]
-        else: return None
-        if not state or conn.state==state: return conn
-        else: return None
+    def find(self, addr, state=None):
+        if addr in self.connectionsDict:
+            conn = self.connectionsDict[addr]
+        elif (addr[1], addr[0]) in self.connectionsDict:
+            conn = self.connectionsDict[(addr[1], addr[0])]
+        else:
+            return None
+        if not state or conn.state == state:
+            return conn
+        else:
+            return None
 
-    def track(self,addr,data=None,ts=None,offset=None,**kwargs):
+    def track(self, addr, data=None, ts=None, offset=None, **kwargs):
         '''connection tracking for TCP and UDP
                 finds or creates connection based on addr
                 updates connection with data if provided (using offset to reorder)
                 tracks timestamps if ts provided
                 extra args get passed to new connection objects
         '''
-        conn=self.find(addr)
-        #look for forward and reverse address tuples
-        if not conn: #create new connection
-            #if swapping and source has low port, swap source/dest so dest has low port
-            if self.swaplowport and addr[0][1]<addr[1][1]: addr=(addr[1],addr[0])
-            #create connection and call init handler
-            conn=Connection(self,addr=addr,ts=ts,**kwargs)
-            if 'connectionInitHandler' in dir(self): self.connectionInitHandler(conn)
-            #save in state dict
-            self.connectionsDict[addr]=conn
+        conn = self.find(addr)
+        # look for forward and reverse address tuples
+        if not conn:  # create new connection
+            # if swapping and source has low port, swap source/dest so dest has
+            # low port
+            if self.swaplowport and addr[0][1] < addr[1][1]:
+                addr = (addr[1], addr[0])
+            # create connection and call init handler
+            conn = Connection(self, addr=addr, ts=ts, **kwargs)
+            if 'connectionInitHandler' in dir(self):
+                self.connectionInitHandler(conn)
+            # save in state dict
+            self.connectionsDict[addr] = conn
 
-        #has tracking been stopped?
-        if conn.stop: return False
+        # has tracking been stopped?
+        if conn.stop:
+            return False
 
         if data:
-            #forward or reverse direction?
-            if addr==conn.addr: direction='cs'
-            else: direction='sc'
+            # forward or reverse direction?
+            if addr == conn.addr:
+                direction = 'cs'
+            else:
+                direction = 'sc'
 
-            #check direction and blob count.
-            #If we have switched direction but already have max blobs
-            #close connection and replace it with a new one
-            if self.maxblobs and (direction!=conn.direction) and (len(conn.blobs)==self.maxblobs):
-                self.close(conn) #close and call handlers
-                #recurse to create a new connection for the next request/response
-                return self.track(addr,data,ts)
+            # check direction and blob count.
+            # If we have switched direction but already have max blobs
+            # close connection and replace it with a new one
+            if self.maxblobs and (direction != conn.direction) and (len(conn.blobs) == self.maxblobs):
+                self.close(conn)  # close and call handlers
+                # recurse to create a new connection for the next
+                # request/response
+                return self.track(addr, data, ts)
 
-            #update the connection to update current blob or start a new one and return the last one
-            blob=conn.update(ts,direction,data,offset=offset) #we will get a blob back if there is data to flush
-            if blob and self.isBlobHandlerPresent: self.blobHandler(conn,blob)
-            if not self.isConnectionHandlerPresent: #we can discard all but the last blob
-                while len(conn.blobs)>1: conn.blobs.pop(0)
+            # update the connection to update current blob or start a new one
+            # and return the last one
+            # we will get a blob back if there is data to flush
+            blob = conn.update(ts, direction, data, offset=offset)
+            if blob and self.isBlobHandlerPresent:
+                self.blobHandler(conn, blob)
+            # we can discard all but the last blob
+            if not self.isConnectionHandlerPresent:
+                while len(conn.blobs) > 1:
+                    conn.blobs.pop(0)
 
-        self.cleanup(ts) #do stale state cleanup
-        return conn #return a reference to the connection
+        self.cleanup(ts)  # do stale state cleanup
+        return conn  # return a reference to the connection
 
     '''directly extend Decoder and set raw=True to capture raw PCAP data'''
 
-    #we get the raw output from pcapy as header, data
-    def decode(self,*args,**kw):
-        if len(args) is 3: pktlen,pktdata,ts=args #orig_len,packet,ts format (pylibpcap)
-        else: #ts,pktdata (pypcap)
-            ts,pktdata=args
-            pktlen=len(pktdata)
+    # we get the raw output from pcapy as header, data
+    def decode(self, *args, **kw):
+        if len(args) is 3:
+            pktlen, pktdata, ts = args  # orig_len,packet,ts format (pylibpcap)
+        else:  # ts,pktdata (pypcap)
+            ts, pktdata = args
+            pktlen = len(pktdata)
         try:
-            if pktlen!=len(pktdata): raise Exception('packet truncated',pktlen,pktdata)
-            #decode with the L2 decoder (probably Ether)
-            pkt=self.l2decoder(pktdata)
-            #strip any intermediate layers (PPPoE, etc)
-            for l in xrange(int(self.striplayers)): pkt=pkt.data
+            if pktlen != len(pktdata):
+                raise Exception('packet truncated', pktlen, pktdata)
+            # decode with the L2 decoder (probably Ether)
+            pkt = self.l2decoder(pktdata)
+            # strip any intermediate layers (PPPoE, etc)
+            for l in xrange(int(self.striplayers)):
+                pkt = pkt.data
             '''will call self.rawHandler(len,pkt,ts)
             (hdr,data) is the PCAP header and raw packet data'''
             if 'rawHandler' in dir(self):
-                self.rawHandler(pktlen,pkt,ts,**kw)
-            else: pass
-        except Exception,e: self._exc(e)
+                self.rawHandler(pktlen, pkt, ts, **kw)
+            else:
+                pass
+        except Exception, e:
+            self._exc(e)
 
-#IP handler
+# IP handler
+
+
 class IPDecoder(Decoder):
+
     '''extend IP6Decoder to capture IPv4 and IPv6 data
             (but does basic IPv4 defragmentation)
             config:
@@ -378,108 +458,130 @@ class IPDecoder(Decoder):
             so keep your BPF to 'tcp' or 'udp' and set something like
             self.filterfn = lambda ((sip,sp),(dip,dp)): (sp==53 or dp==53) '''
 
-    IP_PROTO_MAP={
-                    dpkt.ip.IP_PROTO_ICMP:'ICMP',
-                    dpkt.ip.IP_PROTO_ICMP6:'ICMP6',
-                    dpkt.ip.IP_PROTO_TCP:'TCP',
-                    dpkt.ip.IP_PROTO_UDP:'UDP',
-                    dpkt.ip.IP_PROTO_IP6:'IP6',
-                    dpkt.ip.IP_PROTO_IP:'IP'}
+    IP_PROTO_MAP = {
+        dpkt.ip.IP_PROTO_ICMP: 'ICMP',
+        dpkt.ip.IP_PROTO_ICMP6: 'ICMP6',
+        dpkt.ip.IP_PROTO_TCP: 'TCP',
+        dpkt.ip.IP_PROTO_UDP: 'UDP',
+        dpkt.ip.IP_PROTO_IP6: 'IP6',
+        dpkt.ip.IP_PROTO_IP: 'IP'}
 
     def __init__(self, **kwargs):
-        self.v6only=False
-        self.decode6to4=True
-        self.defrag=True
-        self.striplayers=0
-        self.l2decoder=dpkt.ethernet.Ethernet
-        self.filterfn=lambda addr: True
-        Decoder.__init__(self,**kwargs)
-        self.frags={}
+        self.v6only = False
+        self.decode6to4 = True
+        self.defrag = True
+        self.striplayers = 0
+        self.l2decoder = dpkt.ethernet.Ethernet
+        self.filterfn = lambda addr: True
+        Decoder.__init__(self, **kwargs)
+        self.frags = {}
 
-    def ipdefrag(self,pkt):
+    def ipdefrag(self, pkt):
         '''ip fragment reassembly'''
-        #if pkt.off&dpkt.ip.IP_DF or pkt.off==0: return pkt #DF or !MF and offset 0
-        f=self.frags.setdefault((pkt.src,pkt.dst,pkt.id),{}) #if we need to create a store for this IP addr/id
-        f[pkt.off&dpkt.ip.IP_OFFMASK]=pkt
-        offset=0
-        data=''
+        # if pkt.off&dpkt.ip.IP_DF or pkt.off==0: return pkt #DF or !MF and
+        # offset 0
+        # if we need to create a store for this IP addr/id
+        f = self.frags.setdefault((pkt.src, pkt.dst, pkt.id), {})
+        f[pkt.off & dpkt.ip.IP_OFFMASK] = pkt
+        offset = 0
+        data = ''
         while True:
-            if offset not in f: return None #we don't have this offset, can't reassemble yet
-            data+=str(pkt.data) #add this to the data
-            if not pkt.off&dpkt.ip.IP_MF: break #this is the next packet in order and no more fragments
-            offset=len(data)/8 #calculate the next fragment's offset
-        #we hit no MF and last offset, so return a defragged packet
-        del self.frags[(pkt.src,pkt.dst,pkt.id)] #discard store
-        pkt.data=data #replace payload with defragged data
-        pkt.off=0 #no frags, offset 0
-        pkt.sum=0 #recompute checksum
-        return dpkt.ip.IP(str(pkt)) #dump and redecode packet to get checksum right
+            if offset not in f:
+                return None  # we don't have this offset, can't reassemble yet
+            data += str(pkt.data)  # add this to the data
+            if not pkt.off & dpkt.ip.IP_MF:
+                break  # this is the next packet in order and no more fragments
+            offset = len(data) / 8  # calculate the next fragment's offset
+        # we hit no MF and last offset, so return a defragged packet
+        del self.frags[(pkt.src, pkt.dst, pkt.id)]  # discard store
+        pkt.data = data  # replace payload with defragged data
+        pkt.off = 0  # no frags, offset 0
+        pkt.sum = 0  # recompute checksum
+        # dump and redecode packet to get checksum right
+        return dpkt.ip.IP(str(pkt))
 
-    def rawHandler(self,pktlen,pkt,ts,**kwargs):
+    def rawHandler(self, pktlen, pkt, ts, **kwargs):
         '''takes ethernet data and determines if it contains IP or IP6.
         defragments IPv4
         if 6to4, unencaps the IPv6
         If IP/IP6, hands off to IPDecoder via IPHandler()'''
         try:
-            #if this is an IPv4 packet, defragment, decode and hand it off
-            if type(pkt.data)==dpkt.ip.IP:
-                if self.defrag: pkt=self.ipdefrag(pkt.data) #return packet if whole, None if more frags needed
-                else: pkt=pkt.data #get the layer 3 packet
-                if pkt: #do we have a whole IP packet?
-                    if self.decode6to4 and pkt.p == dpkt.ip.IP_PROTO_IP6: pass #fall thru to ip6 decode
-                    elif not self.v6only: #if we are decoding ip4
-                        sip,dip=socket.inet_ntoa(pkt.src),socket.inet_ntoa(pkt.dst)
-                        #try to decode ports
+            # if this is an IPv4 packet, defragment, decode and hand it off
+            if type(pkt.data) == dpkt.ip.IP:
+                if self.defrag:
+                    # return packet if whole, None if more frags needed
+                    pkt = self.ipdefrag(pkt.data)
+                else:
+                    pkt = pkt.data  # get the layer 3 packet
+                if pkt:  # do we have a whole IP packet?
+                    if self.decode6to4 and pkt.p == dpkt.ip.IP_PROTO_IP6:
+                        pass  # fall thru to ip6 decode
+                    elif not self.v6only:  # if we are decoding ip4
+                        sip, dip = socket.inet_ntoa(
+                            pkt.src), socket.inet_ntoa(pkt.dst)
+                        # try to decode ports
                         try:
-                            sport,dport=pkt.data.sport,pkt.data.dport
-                        except: #no ports in this layer-4 protocol
-                            sport,dport=None,None
-                        #generate int forms of src/dest ips
-                        sipint,dipint=struct.unpack('!L',pkt.src)[0],struct.unpack('!L',pkt.dst)[0]
-                        #call IPHandler with extra data
-                        self.IPHandler(((sip,sport),(dip,dport)),pkt,ts,
-                                                pkttype=dpkt.ethernet.ETH_TYPE_IP,
-                                                proto=self.IP_PROTO_MAP.get(pkt.p,pkt.p),
-                                                sipint=sipint,dipint=dipint,
-                                                **kwargs)
-            if pkt and type(pkt.data)==dpkt.ip6.IP6:
-                pkt=pkt.data #no defrag of ipv6
-                #decode ipv6 addresses
-                sip,dip=socket.inet_ntop(socket.AF_INET6,pkt.src), socket.inet_ntop(socket.AF_INET6,pkt.dst)
-                #try to get layer-4 ports
+                            sport, dport = pkt.data.sport, pkt.data.dport
+                        except:  # no ports in this layer-4 protocol
+                            sport, dport = None, None
+                        # generate int forms of src/dest ips
+                        sipint, dipint = struct.unpack(
+                            '!L', pkt.src)[0], struct.unpack('!L', pkt.dst)[0]
+                        # call IPHandler with extra data
+                        self.IPHandler(((sip, sport), (dip, dport)), pkt, ts,
+                                       pkttype=dpkt.ethernet.ETH_TYPE_IP,
+                                       proto=self.IP_PROTO_MAP.get(
+                                           pkt.p, pkt.p),
+                                       sipint=sipint, dipint=dipint,
+                                       **kwargs)
+            if pkt and type(pkt.data) == dpkt.ip6.IP6:
+                pkt = pkt.data  # no defrag of ipv6
+                # decode ipv6 addresses
+                sip, dip = socket.inet_ntop(socket.AF_INET6, pkt.src), socket.inet_ntop(
+                    socket.AF_INET6, pkt.dst)
+                # try to get layer-4 ports
                 try:
-                    sport,dport=pkt.data.sport,pkt.data.dport
+                    sport, dport = pkt.data.sport, pkt.data.dport
                 except:
-                    sport,dport=None,None
-                #call ipv6 handler
-                self.IPHandler(((sip,sport),(dip,dport)),pkt,ts,
-                                        pkttype=dpkt.ethernet.ETH_TYPE_IP6,
-                                        proto=self.IP_PROTO_MAP.get(pkt.nxt,pkt.nxt),
-                                        **kwargs)
-        except Exception, e: self._exc(e)
+                    sport, dport = None, None
+                # call ipv6 handler
+                self.IPHandler(((sip, sport), (dip, dport)), pkt, ts,
+                               pkttype=dpkt.ethernet.ETH_TYPE_IP6,
+                               proto=self.IP_PROTO_MAP.get(pkt.nxt, pkt.nxt),
+                               **kwargs)
+        except Exception, e:
+            self._exc(e)
 
-    def IPHandler(self,addr,pkt,ts,**kwargs):
+    def IPHandler(self, addr, pkt, ts, **kwargs):
         '''called if packet is IPv4/IPv6
                                 check packets using filterfn here'''
-        self.decodedbytes+=len(str(pkt))
-        self.count+=1
+        self.decodedbytes += len(str(pkt))
+        self.count += 1
         if self.isPacketHandlerPresent and self.filterfn(addr):
-            return self.packetHandler(ip=Packet(self,addr,pkt=str(pkt),ts=ts,**kwargs))
-class IP6Decoder(IPDecoder): pass
+            return self.packetHandler(ip=Packet(self, addr, pkt=str(pkt), ts=ts, **kwargs))
+
+
+class IP6Decoder(IPDecoder):
+    pass
+
 
 class UDPDecoder(IPDecoder):
+
     '''extend UDPDecoder to decode UDP  optionally track state
             config if tracking state with connectionHandler or blobHandler
             maxblobs - if tracking state, max blobs to track before flushing
             swaplowport - when establishing state, swap source/dest so dest has low port
             cleanupinterval  - seconds with no activity before state is discarded (default 60)      '''
-    def __init__(self, **kwargs):
-        self.maxblobs=2 #by default limit UDP 'connections' to a single request and response
-        self.swaplowport=True #can we swap source/dest so dest always has low port?
-        self.cleanupinterval=60
-        IPDecoder.__init__(self,**kwargs)
 
-    def UDP(self,addr,data,pkt,ts=None,**kwargs):
+    def __init__(self, **kwargs):
+        # by default limit UDP 'connections' to a single request and response
+        self.maxblobs = 2
+        # can we swap source/dest so dest always has low port?
+        self.swaplowport = True
+        self.cleanupinterval = 60
+        IPDecoder.__init__(self, **kwargs)
+
+    def UDP(self, addr, data, pkt, ts=None, **kwargs):
         ''' will call self.packetHandler(udp=Packet(),data=data)
         (see Packet() for Packet object common attributes)
         udp.pkt will contain the raw IP data
@@ -506,26 +608,32 @@ class UDPDecoder(IPDecoder):
                 self.connectionCloseHandler(conn=Connection())
                         when state is discarded (always)
         '''
-        self.decodedbytes+=len(data)
-        self.count+=1
+        self.decodedbytes += len(data)
+        self.count += 1
         try:
             if self.isPacketHandlerPresent:
-                #create a Packet object and populate it
-                return self.packetHandler(udp=Packet(self,addr,pkt=pkt,ts=ts,**kwargs),data=data)
+                # create a Packet object and populate it
+                return self.packetHandler(udp=Packet(self, addr, pkt=pkt, ts=ts, **kwargs), data=data)
 
-            #if no PacketHandler, we need to track state
-            self.track(addr,data,ts,**kwargs)
+            # if no PacketHandler, we need to track state
+            self.track(addr, data, ts, **kwargs)
 
-        except Exception,e: self._exc(e)
+        except Exception, e:
+            self._exc(e)
 
-    def IPHandler(self,addr,pkt,ts,**kwargs):
+    def IPHandler(self, addr, pkt, ts, **kwargs):
         '''IPv4 dispatch, hands address, UDP payload and packet up to UDP callback'''
         if self.filterfn(addr):
-            if type(pkt.data)==dpkt.udp.UDP: return self.UDP(addr,str(pkt.data.data),str(pkt),ts,**kwargs)
+            if type(pkt.data) == dpkt.udp.UDP:
+                return self.UDP(addr, str(pkt.data.data), str(pkt), ts, **kwargs)
 
-class UDP6Decoder(UDPDecoder): pass
+
+class UDP6Decoder(UDPDecoder):
+    pass
+
 
 class TCPDecoder(UDPDecoder):
+
     '''IPv6 TCP/UDP decoder
             reassembles TCP and UDP streams
             For TCP and UDP (if no packetHandler)
@@ -551,54 +659,65 @@ class TCPDecoder(UDPDecoder):
             if packetHandler is present, it will be called only for UDP (and UDP will not be tracked)'''
 
     def __init__(self, **kwargs):
-        self.maxblobs=None #no limit on connections
-        self.swaplowport=False #can we swap source/dest so dest always has low port?
-        self.ignore_handshake=False #if set true, will requre TCP handshake to track connection
-        self.cleanupinterval=300
-        #up two levels to IPDecoder
-        IPDecoder.__init__(self,**kwargs)
-        self.optiondict['ignore_handshake']={'action':'store_true','help':'ignore TCP handshake'}
+        self.maxblobs = None  # no limit on connections
+        # can we swap source/dest so dest always has low port?
+        self.swaplowport = False
+        # if set true, will requre TCP handshake to track connection
+        self.ignore_handshake = False
+        self.cleanupinterval = 300
+        # up two levels to IPDecoder
+        IPDecoder.__init__(self, **kwargs)
+        self.optiondict['ignore_handshake'] = {
+            'action': 'store_true', 'help': 'ignore TCP handshake'}
 
-    def IPHandler(self,addr,pkt,ts,**kwargs):
+    def IPHandler(self, addr, pkt, ts, **kwargs):
         '''IPv4 dispatch'''
         if self.filterfn(addr):
-            if type(pkt.data)==dpkt.udp.UDP: return self.UDP(addr,str(pkt.data.data),str(pkt),ts,**kwargs)
-            elif type(pkt.data)==dpkt.tcp.TCP: return self.TCP(addr,pkt.data,ts,**kwargs)
+            if type(pkt.data) == dpkt.udp.UDP:
+                return self.UDP(addr, str(pkt.data.data), str(pkt), ts, **kwargs)
+            elif type(pkt.data) == dpkt.tcp.TCP:
+                return self.TCP(addr, pkt.data, ts, **kwargs)
 
-    def TCP(self,addr,tcp,ts,**kwargs):
+    def TCP(self, addr, tcp, ts, **kwargs):
         '''TCP dispatch'''
-        self.decodedbytes+=len(str(tcp))
-        self.count+=1
+        self.decodedbytes += len(str(tcp))
+        self.count += 1
 
         try:
-            #close connection
-            if tcp.flags&(dpkt.tcp.TH_FIN|dpkt.tcp.TH_RST):
-                conn=self.find(addr)
+            # close connection
+            if tcp.flags & (dpkt.tcp.TH_FIN | dpkt.tcp.TH_RST):
+                conn = self.find(addr)
                 if conn:
-                    #we might occasionally have data in a FIN packet
-                    self.track(addr,str(tcp.data),ts,offset=tcp.seq)
+                    # we might occasionally have data in a FIN packet
+                    self.track(addr, str(tcp.data), ts, offset=tcp.seq)
                     self.close(conn, ts)
-            #init connection, set TCP ISN
-            elif not self.ignore_handshake and tcp.flags==dpkt.tcp.TH_SYN:
-                conn=self.track(addr,ts=ts,state='init',**kwargs)
-                if conn: conn.nextoffset['cs']=tcp.seq+1
-            #SYN ACK
-            elif not self.ignore_handshake and tcp.flags==(dpkt.tcp.TH_SYN|dpkt.tcp.TH_ACK):
-                conn=self.find(addr,state='init')
-                if conn and tcp.ack==conn.nextoffset['cs']:
-                    conn.nextoffset['sc']=tcp.seq+1
-                    conn.state='established'
+            # init connection, set TCP ISN
+            elif not self.ignore_handshake and tcp.flags == dpkt.tcp.TH_SYN:
+                conn = self.track(addr, ts=ts, state='init', **kwargs)
+                if conn:
+                    conn.nextoffset['cs'] = tcp.seq + 1
+            # SYN ACK
+            elif not self.ignore_handshake and tcp.flags == (dpkt.tcp.TH_SYN | dpkt.tcp.TH_ACK):
+                conn = self.find(addr, state='init')
+                if conn and tcp.ack == conn.nextoffset['cs']:
+                    conn.nextoffset['sc'] = tcp.seq + 1
+                    conn.state = 'established'
 
-            #all other states, or always if ignoring handshake
-            if self.ignore_handshake or self.find(addr,state='established'): self.track(addr,str(tcp.data),ts,
-                                                            state='established',offset=tcp.seq,**kwargs)
+            # all other states, or always if ignoring handshake
+            if self.ignore_handshake or self.find(addr, state='established'):
+                self.track(addr, str(tcp.data), ts,
+                           state='established', offset=tcp.seq, **kwargs)
 
-        except Exception,e: self._exc(e)
+        except Exception, e:
+            self._exc(e)
 
-class TCP6Decoder(TCPDecoder): pass
+
+class TCP6Decoder(TCPDecoder):
+    pass
 
 
 class Data(object):
+
     '''base class for data objects (packets,connections, etc..)
             these objects hold data (appendable array, typically of strings)
             and info members (updateable/accessible as members or as dict via info())
@@ -606,52 +725,56 @@ class Data(object):
             and associated functions (update,iter,str,repr) with a data() function
             and functions to manipulate the data'''
 
-    def __init__(self,*args,**kwargs):
+    def __init__(self, *args, **kwargs):
         self.info_keys = []
-        #update with list data
-        self.data=list(args)
-        #update with keyword data
+        # update with list data
+        self.data = list(args)
+        # update with keyword data
         self.info(**kwargs)
 
-    def info(self,*args,**kwargs):
+    def info(self, *args, **kwargs):
         '''update/return info stored in this object
                 data can be passwd as dict(s) or keyword args'''
-        args=list(args)+[kwargs]
+        args = list(args) + [kwargs]
         for a in args:
-            for k,v in a.iteritems():
-                if k not in self.info_keys: self.info_keys.append(k)
-                self.__dict__[k]=v
-        return dict((k,self.__dict__[k]) for k in self.info_keys)
+            for k, v in a.iteritems():
+                if k not in self.info_keys:
+                    self.info_keys.append(k)
+                self.__dict__[k] = v
+        return dict((k, self.__dict__[k]) for k in self.info_keys)
 
-    def unpack(self,fmt,data,*args):
+    def unpack(self, fmt, data, *args):
         '''unpacks data using fmt to keys listed in args'''
-        self.info(dict(zip(args,struct.unpack(fmt,data))))
+        self.info(dict(zip(args, struct.unpack(fmt, data))))
 
-    def pack(self,fmt,*args):
+    def pack(self, fmt, *args):
         '''packs info keys in args using fmt'''
-        return struct.pack(fmt,*[self.__dict__[k] for k in args])
+        return struct.pack(fmt, *[self.__dict__[k] for k in args])
 
-    def update(self,*args,**kwargs):
+    def update(self, *args, **kwargs):
         '''updates data (and optionally keyword args)'''
         self.data.extend(args)
         self.info(kwargs)
 
     def __iter__(self):
         '''returns each data element in order added'''
-        for data in self.data: yield data
+        for data in self.data:
+            yield data
 
     def __str__(self):
         '''return string built from data'''
         return ''.join(self.data)
 
     def __repr__(self):
-        return ' '.join(['%s=%s'%(k,v) for k,v in self.info().iteritems()])
+        return ' '.join(['%s=%s' % (k, v) for k, v in self.info().iteritems()])
 
-    def __getitem__(self,k): return self.__dict__[k]
-    def __setitem__(self,k,v): self.__dict__[k]=v
+    def __getitem__(self, k): return self.__dict__[k]
+
+    def __setitem__(self, k, v): self.__dict__[k] = v
 
 
 class Packet(Data):
+
     '''metadata class for connectionless data
             Members:
                     sip, sport, dip, dport : source ip and port, dest ip and port
@@ -661,38 +784,43 @@ class Packet(Data):
                     pkt : raw packet data
                     any additional args will be added to info dict
     '''
-    def __init__(self,decoder,addr,ts=None,pkt=None,**kwargs):
-        self.info_keys = ['addr','sip','dip','sport','dport','ts']
-        self.addr=addr
-        #do not define pkt unless passed in
-        self.ts=ts
-        ((self.sip,self.sport),(self.dip,self.dport))=self.addr
+
+    def __init__(self, decoder, addr, ts=None, pkt=None, **kwargs):
+        self.info_keys = ['addr', 'sip', 'dip', 'sport', 'dport', 'ts']
+        self.addr = addr
+        # do not define pkt unless passed in
+        self.ts = ts
+        ((self.sip, self.sport), (self.dip, self.dport)) = self.addr
         if pkt:
-            self.pkt=pkt
+            self.pkt = pkt
             self.info(bytes=len(self.pkt))
 
-        #pass instantiating decoder's cc/asn lookup objects to keep global cache
+        # pass instantiating decoder's cc/asn lookup objects to keep global
+        # cache
         try:
-            self.info(sipcc = decoder.getGeoIP(self.sip,db=decoder.geoccdb),
-                            sipasn = decoder.getGeoIP(self.sip,db=decoder.geoasndb),
-                            dipcc = decoder.getGeoIP(self.dip,db=decoder.geoccdb),
-                            dipasn = decoder.getGeoIP(self.dip,db=decoder.geoasndb))
+            self.info(sipcc=decoder.getGeoIP(self.sip, db=decoder.geoccdb),
+                      sipasn=decoder.getGeoIP(self.sip, db=decoder.geoasndb),
+                      dipcc=decoder.getGeoIP(self.dip, db=decoder.geoccdb),
+                      dipasn=decoder.getGeoIP(self.dip, db=decoder.geoasndb))
         except:
-            self.sipcc,self.sipasn,self.dipcc,self.dipasn=None,None,None,None
+            self.sipcc, self.sipasn, self.dipcc, self.dipasn = None, None, None, None
 
-        #update with additional info
+        # update with additional info
         self.info(**kwargs)
 
     def __iter__(self):
-        for p in self.pkt: yield ord(p)
+        for p in self.pkt:
+            yield ord(p)
 
     def __str__(self):
         return self.pkt
 
     def __repr__(self):
-        return "%(ts)s  %(sip)16s :%(sport)-5s -> %(dip)5s :%(dport)-5s (%(sipcc)s -> %(dipcc)s)\n"%self.info()
+        return "%(ts)s  %(sip)16s :%(sport)-5s -> %(dip)5s :%(dport)-5s (%(sipcc)s -> %(dipcc)s)\n" % self.info()
+
 
 class Connection(Packet):
+
     """
     Connection class is used for tracking all information
     contained within an established TCP connection / UDP pseudoconnection
@@ -715,74 +843,88 @@ class Connection(Packet):
             stop: if True, stopped following stream
 
     """
-    MAX_OFFSET=0xffffffff #max offset before wrap, default is MAXINT32 for TCP sequence numbers
+    MAX_OFFSET = 0xffffffff  # max offset before wrap, default is MAXINT32 for TCP sequence numbers
 
-    def __init__(self,decoder,addr,ts=None,**kwargs):
-        self.state=None
-        self.nextoffset={'cs':0,'sc':0} #the offset we expect for the next blob in this direction
-        Packet.__init__(self,decoder,addr,ts=ts,**kwargs) #init IP-level data
-        self.clientip,self.clientport,self.serverip, self.serverport=(self.sip,self.sport,self.dip,self.dport)
-        self.info_keys.extend(['clientip','serverip','clientport','serverport'])
-        self.clientcountrycode,self.clientasn,self.servercountrycode,self.serverasn=(self.sipcc,self.sipasn,self.dipcc,self.dipasn)
-        self.info_keys.extend(['clientcountrycode','servercountrycode','clientasn','serverasn'])
+    def __init__(self, decoder, addr, ts=None, **kwargs):
+        self.state = None
+        # the offset we expect for the next blob in this direction
+        self.nextoffset = {'cs': 0, 'sc': 0}
+        # init IP-level data
+        Packet.__init__(self, decoder, addr, ts=ts, **kwargs)
+        self.clientip, self.clientport, self.serverip, self.serverport = (
+            self.sip, self.sport, self.dip, self.dport)
+        self.info_keys.extend(
+            ['clientip', 'serverip', 'clientport', 'serverport'])
+        self.clientcountrycode, self.clientasn, self.servercountrycode, self.serverasn = (
+            self.sipcc, self.sipasn, self.dipcc, self.dipasn)
+        self.info_keys.extend(
+            ['clientcountrycode', 'servercountrycode', 'clientasn', 'serverasn'])
         self.clientpackets = 0  # we have the first packet for each connection
         self.serverpackets = 0
         self.clientbytes = 0
         self.serverbytes = 0
         self.starttime = self.ts        # datetime Obj containing start time
         self.endtime = self.ts
-        self.direction = 'init' # first update will change this, creating first blob
-        self.info_keys.extend(['clientpackets','clientbytes','serverpackets','serverbytes','starttime','endtime','state','direction'])
+        # first update will change this, creating first blob
+        self.direction = 'init'
+        self.info_keys.extend(['clientpackets', 'clientbytes', 'serverpackets',
+                               'serverbytes', 'starttime', 'endtime', 'state', 'direction'])
 
-        self.blobs = [] #list of tuples of (direction,halfstream,startoffset,endoffset) indicating where each side talks
+        # list of tuples of (direction,halfstream,startoffset,endoffset)
+        # indicating where each side talks
+        self.blobs = []
         self.stop = False
-
 
     def __repr__(self):
         # starttime  cip sip
         return '%s  %16s -> %16s  (%s -> %s)  %6s  %6s %5d  %5d  %7d  %7d  %6ds  %s' % (
-                                                                self.starttime,
-                                                                self.clientip,
-                                                                self.serverip,
-                                                                self.clientcountrycode,
-                                                                self.servercountrycode,
-                                                                self.clientport,
-                                                                self.serverport,
-                                                                self.clientpackets,
-                                                                self.serverpackets,
-                                                                self.clientbytes,
-                                                                self.serverbytes,
-                                                                (util.mktime(self.endtime) - util.mktime(self.starttime)),
-                                                                self.state)
+            self.starttime,
+            self.clientip,
+            self.serverip,
+            self.clientcountrycode,
+            self.servercountrycode,
+            self.clientport,
+            self.serverport,
+            self.clientpackets,
+            self.serverpackets,
+            self.clientbytes,
+            self.serverbytes,
+            (util.mktime(self.endtime) - util.mktime(self.starttime)),
+            self.state)
 
-    def update(self,ts,direction,data,offset=None):
-        #if we have no blobs or direction changes, start a new blob
-        lastblob=None
+    def update(self, ts, direction, data, offset=None):
+        # if we have no blobs or direction changes, start a new blob
+        lastblob = None
         if direction != self.direction:
-            self.direction=direction
-            #if we have a finished blob, return it
-            if self.blobs: lastblob=self.blobs[-1]
-            #for tracking offsets across blobs (TCP) set the startoffset of this blob to what we know it should be
-            #this may not necessarily be the offset of THIS data if packets are out of order
-            self.blobs.append(Blob(ts,direction,startoffset=self.nextoffset[direction]))
-        self.blobs[-1].update(ts,data,offset=offset) #update latest blob
-        if direction=='cs':
-            self.clientpackets+=1
-            self.clientbytes+=len(data)
-        elif direction=='sc':
-            self.serverpackets+=1
-            self.serverbytes+=len(data)
-        self.endtime=ts
-        #if we are tracking offsets, expect the next blob to be where this one ends so far
-        if offset!=None and offset >= self.nextoffset[direction]: self.nextoffset[direction]=(offset+len(data))&self.MAX_OFFSET
+            self.direction = direction
+            # if we have a finished blob, return it
+            if self.blobs:
+                lastblob = self.blobs[-1]
+            # for tracking offsets across blobs (TCP) set the startoffset of this blob to what we know it should be
+            # this may not necessarily be the offset of THIS data if packets
+            # are out of order
+            self.blobs.append(
+                Blob(ts, direction, startoffset=self.nextoffset[direction]))
+        self.blobs[-1].update(ts, data, offset=offset)  # update latest blob
+        if direction == 'cs':
+            self.clientpackets += 1
+            self.clientbytes += len(data)
+        elif direction == 'sc':
+            self.serverpackets += 1
+            self.serverbytes += len(data)
+        self.endtime = ts
+        # if we are tracking offsets, expect the next blob to be where this one
+        # ends so far
+        if offset != None and offset >= self.nextoffset[direction]:
+            self.nextoffset[direction] = (offset + len(data)) & self.MAX_OFFSET
         return lastblob
 
-    #return one or both sides of the stream
+    # return one or both sides of the stream
     def data(self, direction=None, errorHandler=None, padding=None, overlap=True, caller=None):
         '''returns reassembled half-stream selected by direction 'sc' or 'cs'
                 if no direction, return all stream data interleaved
                 see Blob.data() for errorHandler docs'''
-        return ''.join( [b.data(errorHandler=errorHandler, padding=padding, overlap=overlap, caller=caller) for b in self.blobs if (not direction or b.direction==direction)] )
+        return ''.join([b.data(errorHandler=errorHandler, padding=padding, overlap=overlap, caller=caller) for b in self.blobs if (not direction or b.direction == direction)])
 
     def __str__(self):
         '''return all data interleaved'''
@@ -790,9 +932,12 @@ class Connection(Packet):
 
     def __iter__(self):
         '''return each blob in capture order'''
-        for blob in self.blobs: yield blob
+        for blob in self.blobs:
+            yield blob
+
 
 class Blob(Data):
+
     '''a blob containins a contiguous part of the half-stream
     Members:
             starttime,endtime : start and end timestamps of this blob
@@ -801,34 +946,40 @@ class Blob(Data):
             startoffset,endoffset: offset of this blob start/end in bytes from start of stream
     '''
 
-    MAX_OFFSET=0xffffffff #max offset before wrap, default is MAXINT32 for TCP sequence numbers
+    # max offset before wrap, default is MAXINT32 for TCP sequence numbers
+    MAX_OFFSET = 0xffffffff
 
-    def __init__(self,ts,direction,startoffset):
-        self.starttime=ts
-        self.endtime=ts
-        self.direction=direction
-        self.segments={} # offset:[segments with offset]
-        self.startoffset=startoffset
-        self.endoffset=startoffset
-        self.info_keys = ['starttime','endtime','direction','startoffset','endoffset']
+    def __init__(self, ts, direction, startoffset):
+        self.starttime = ts
+        self.endtime = ts
+        self.direction = direction
+        self.segments = {}  # offset:[segments with offset]
+        self.startoffset = startoffset
+        self.endoffset = startoffset
+        self.info_keys = [
+            'starttime', 'endtime', 'direction', 'startoffset', 'endoffset']
 
-    def update(self,ts,data,offset=None):
-        #if offsets are not being provided, just keep packets in wire order
-        if offset==None: offset=self.endoffset
-        #buffer each segment in a list, keyed by offset (captures retrans, etc)
-        self.segments.setdefault(offset,[]).append(data)
-        if ts>self.endtime: self.endtime=ts
-        #update the end offset if this packet goes at the end
-        if offset >= self.endoffset: self.endoffset=(offset+len(data))&self.MAX_OFFSET
+    def update(self, ts, data, offset=None):
+        # if offsets are not being provided, just keep packets in wire order
+        if offset == None:
+            offset = self.endoffset
+        # buffer each segment in a list, keyed by offset (captures retrans,
+        # etc)
+        self.segments.setdefault(offset, []).append(data)
+        if ts > self.endtime:
+            self.endtime = ts
+        # update the end offset if this packet goes at the end
+        if offset >= self.endoffset:
+            self.endoffset = (offset + len(data)) & self.MAX_OFFSET
 
     def __repr__(self):
-        return '%s %s (%s) +%s %d' % (self.starttime,self.endtime,self.direction,self.startoffset,len(self.segments))
+        return '%s %s (%s) +%s %d' % (self.starttime, self.endtime, self.direction, self.startoffset, len(self.segments))
 
     def __str__(self):
         '''returns segments of blob as string'''
         return self.data(padding='')
 
-    def data(self,errorHandler=None,padding=None,overlap=True,caller=None,dup=-1):
+    def data(self, errorHandler=None, padding=None, overlap=True, caller=None, dup=-1):
         '''returns segments of blob reassembled into a string
            if next segment offset is not the expected offset
            errorHandler(blob,expected,offset) will be called
@@ -846,21 +997,31 @@ class Blob(Data):
                 0: use first segment seen
                 -1 (default): use last segment seen
         '''
-        d=''
-        nextoffset=self.startoffset
+        d = ''
+        nextoffset = self.startoffset
         for segoffset in sorted(self.segments.iterkeys()):
-            if segoffset!=nextoffset:
-                if errorHandler: #errorhandler can mangle blob data
-                    if not errorHandler(blob=self, expected=nextoffset, offset=segoffset, caller=caller): continue #errorhandler determines pass or fail here
-                elif segoffset>nextoffset:
-                    if padding is not None: #data missing and padding specified
-                        if len(padding): d+=str(padding)*(segoffset-nextoffset) #add padding to data
-                    else: raise KeyError(nextoffset) #data missing, and no padding
-                elif segoffset<nextoffset and not overlap: continue #skip if not allowing overlap
-            #advance next expected offset
-            nextoffset = ( segoffset + len(self.segments[segoffset][dup]) ) & self.MAX_OFFSET
-            #append or splice data
-            d = d[:segoffset-self.startoffset] + self.segments[segoffset][dup] + d[nextoffset-self.startoffset:]
+            if segoffset != nextoffset:
+                if errorHandler:  # errorhandler can mangle blob data
+                    if not errorHandler(blob=self, expected=nextoffset, offset=segoffset, caller=caller):
+                        continue  # errorhandler determines pass or fail here
+                elif segoffset > nextoffset:
+                    # data missing and padding specified
+                    if padding is not None:
+                        if len(padding):
+                            # add padding to data
+                            d += str(padding) * (segoffset - nextoffset)
+                    else:
+                        # data missing, and no padding
+                        raise KeyError(nextoffset)
+                elif segoffset < nextoffset and not overlap:
+                    continue  # skip if not allowing overlap
+            # advance next expected offset
+            nextoffset = (
+                segoffset + len(self.segments[segoffset][dup])) & self.MAX_OFFSET
+            # append or splice data
+            d = d[:segoffset - self.startoffset] + \
+                self.segments[segoffset][dup] + \
+                d[nextoffset - self.startoffset:]
         return d
 
     def __iter__(self):
@@ -870,4 +1031,5 @@ class Blob(Data):
                 for UDP this will return datagrams payloads in capture order,
                         (very useful for RTP or other streaming protocol.)
         '''
-        for segoffset in sorted(self.segments.iterkeys()): yield self.segments[segoffset][-1]
+        for segoffset in sorted(self.segments.iterkeys()):
+            yield self.segments[segoffset][-1]

@@ -1,38 +1,43 @@
 #!/usr/bin/python
 
-import os, sys
+import os
+import sys
 
-if __name__=='__main__':
+if __name__ == '__main__':
     cwd = sys.argv[1]
 
-    #environment variables used by shell and modules
-    envvars={
-     'DSHELL':'%s'%(cwd),
- 'DECODERPATH':'%s/decoders' %(cwd),
-     'BINPATH':'%s/bin' % (cwd),
-     'LIBPATH':'%s/lib' %(cwd),
-     'DATAPATH':'%s/share' % (cwd),
+    # environment variables used by shell and modules
+    envvars = {
+        'DSHELL': '%s' % (cwd),
+        'DECODERPATH': '%s/decoders' % (cwd),
+        'BINPATH': '%s/bin' % (cwd),
+        'LIBPATH': '%s/lib' % (cwd),
+        'DATAPATH': '%s/share' % (cwd),
     }
-    #further shell environment setup
-    envsetup= {
-     'LD_LIBRARY_PATH':'$LIBPATH:$LD_LIBRARY_PATH',
-     'PATH':'$BINPATH:$PATH',
-     'PYTHONPATH':'$DSHELL:$LIBPATH:$LIBPATH/output:'+os.path.join('$LIBPATH','python'+'.'.join(sys.version.split('.',3)[:2]).split(' ')[0],'site-packages')+':$PYTHONPATH' }
+    # further shell environment setup
+    envsetup = {
+        'LD_LIBRARY_PATH': '$LIBPATH:$LD_LIBRARY_PATH',
+        'PATH': '$BINPATH:$PATH',
+        'PYTHONPATH': '$DSHELL:$LIBPATH:$LIBPATH/output:' + os.path.join('$LIBPATH', 'python' + '.'.join(sys.version.split('.', 3)[:2]).split(' ')[0], 'site-packages') + ':$PYTHONPATH'}
 
     try:
-        os.mkdir(os.path.join(cwd,'lib','python'+'.'.join(sys.version.split('.',3)[:2]).split(' ')[0]))
-        os.mkdir(os.path.join(cwd,'lib','python'+'.'.join(sys.version.split('.',3)[:2]).split(' ')[0],'site-packages'))
-    except Exception,e: print e
+        os.mkdir(os.path.join(
+            cwd, 'lib', 'python' + '.'.join(sys.version.split('.', 3)[:2]).split(' ')[0]))
+        os.mkdir(os.path.join(cwd, 'lib', 'python' +
+                              '.'.join(sys.version.split('.', 3)[:2]).split(' ')[0], 'site-packages'))
+    except Exception, e:
+        print e
 
-    envdict={}
+    envdict = {}
     envdict.update(envvars)
     envdict.update(envsetup)
 
     #.dshellrc text
-    env = [ 'export PS1="`whoami`@`hostname`:\w Dshell> "' ]+['export %s=%s'%(k,v) for k,v in envvars.items()]+['export %s=%s'%(k,v) for k,v in envsetup.items()]
-    outfd = open('.dshellrc','w')
+    env = ['export PS1="`whoami`@`hostname`:\w Dshell> "'] + ['export %s=%s' %
+                                                              (k, v) for k, v in envvars.items()] + ['export %s=%s' % (k, v) for k, v in envsetup.items()]
+    outfd = open('.dshellrc', 'w')
     outfd.write("\n".join(env))
-    if len(sys.argv)>2 and sys.argv[2]=='with_bash_completion':
+    if len(sys.argv) > 2 and sys.argv[2] == 'with_bash_completion':
         outfd.write('''
 
 
@@ -128,14 +133,14 @@ fi
 ''')
     outfd.close()
 
-    #dshell text
-    outfd = open('dshell','w')
+    # dshell text
+    outfd = open('dshell', 'w')
     outfd.write('#!/bin/bash\n')
     outfd.write('/bin/bash --rcfile %s/.dshellrc\n' % (cwd))
     outfd.close()
 
-    #dshell-decode text
-    outfd = open('dshell-decode','w')
+    # dshell-decode text
+    outfd = open('dshell-decode', 'w')
     outfd.write('#!/bin/bash\n')
     outfd.write('source %s/.dshellrc\n' % (cwd))
     outfd.write('decode "$@"')

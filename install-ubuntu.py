@@ -26,4 +26,3 @@ if missing_pkgs:
     call(cmd)
 
 call(["make", "all"])
-

@@ -12,7 +12,7 @@ from hashlib import md5
 '''
 Mode Constants
 '''
-FILEONDISK   = 1  # Object refers to file already written to disk
+FILEONDISK = 1  # Object refers to file already written to disk
 FILEINMEMORY = 2  # Object contains file contents in data member
 
 '''
@@ -32,25 +32,28 @@ A dfile object can have one of the following modes:
   FILEINMEMORY
 
 '''
+
+
 class dfile(Blob):
 
-    def __init__(self,mode=FILEINMEMORY,name=None,data=None,**kwargs):
+    def __init__(self, mode=FILEINMEMORY, name=None, data=None, **kwargs):
 
         # Initialize Segments
         # Only really used in memory mode
-        self.segments={}
-        self.startoffset=0
-        self.endoffset=0
+        self.segments = {}
+        self.startoffset = 0
+        self.endoffset = 0
 
         # Initialize consistent info members
-        self.mode=mode
-        self.name=name
-        self.diskpath=None
-        self.info_keys = ['mode','name','diskpath','startoffset','endoffset']
+        self.mode = mode
+        self.name = name
+        self.diskpath = None
+        self.info_keys = [
+            'mode', 'name', 'diskpath', 'startoffset', 'endoffset']
 
-        #update with additional info
+        # update with additional info
         self.info(**kwargs)
-        #update data
+        # update data
         if data != None:
             self.update(data)
 
@@ -93,7 +96,8 @@ class dfile(Blob):
         '''
         Load file from disk.  Converts object to mode FILEINMEMORY
         '''
-        if not self.mode == FILEONDISK: return False
+        if not self.mode == FILEONDISK:
+            return False
         try:
             fh = open(self.diskpath, 'r')
             self.update(fh.read())
@@ -102,7 +106,7 @@ class dfile(Blob):
         except:
             return False
 
-    def write(self,path='.',name=None,clobber=False,errorHandler=None,padding=None,overlap=True):
+    def write(self, path='.', name=None, clobber=False, errorHandler=None, padding=None, overlap=True):
         '''
         Write file contents at location relative to path.
         Name on disk will be based on internal name unless one is provided.
@@ -113,33 +117,38 @@ class dfile(Blob):
 
         '''
         olddiskpath = self.diskpath
-        if name == None: name=self.name
-        self.diskpath =  self.__localfilename(name, path, clobber)
+        if name == None:
+            name = self.name
+        self.diskpath = self.__localfilename(name, path, clobber)
         if self.mode == FILEINMEMORY:
             fh = open(self.diskpath, 'w')
             fh.write(self.data())
             fh.close()
-            self.segments={}
-            self.startoffset=0
-            self.endoffset=0
+            self.segments = {}
+            self.startoffset = 0
+            self.endoffset = 0
             return self.diskpath
         elif self.mode == FILEONDISK:
             move(olddiskpath, self.diskpath)
             return self.diskpath
 
-    def update(self,data,offset=None):
-        if self.mode != FILEINMEMORY: return
-        #if offsets are not being provided, just keep packets in wire order
-        if offset==None: offset=self.endoffset
-        #don't buffer duplicate packets
-        if offset not in self.segments: self.segments[offset]=data
-        #update the end offset if this packet goes at the end
-        if offset >= self.endoffset: self.endoffset=offset+len(data)
+    def update(self, data, offset=None):
+        if self.mode != FILEINMEMORY:
+            return
+        # if offsets are not being provided, just keep packets in wire order
+        if offset == None:
+            offset = self.endoffset
+        # don't buffer duplicate packets
+        if offset not in self.segments:
+            self.segments[offset] = data
+        # update the end offset if this packet goes at the end
+        if offset >= self.endoffset:
+            self.endoffset = offset + len(data)
 
     #
     # Generate a local (extracted) filename based on the original
     #
-    def __localfilename(self, origname, path = '.', clobber = False):
+    def __localfilename(self, origname, path='.', clobber=False):
         tmp = origname.replace("\\", "_")
         tmp = tmp.replace("/", "_")
         tmp = tmp.replace(":", "_")
@@ -151,16 +160,19 @@ class dfile(Blob):
                 localname += c
             else:
                 localname += "%%%02X" % ord(c)
-        # Truncate (from left) to max filename length on filesystem (-3 in case we need to add a suffix)
-        localname = localname[os.statvfs(path).f_namemax*-1:]
+        # Truncate (from left) to max filename length on filesystem (-3 in case
+        # we need to add a suffix)
+        localname = localname[os.statvfs(path).f_namemax * -1:]
         # Empty filename not allowed
-        if localname == '': localname = 'blank'
-        localname = os.path.realpath(os.path.join(path,localname))
-        if clobber: return localname
+        if localname == '':
+            localname = 'blank'
+        localname = os.path.realpath(os.path.join(path, localname))
+        if clobber:
+            return localname
         # No Clobber mode, check to see if file exists
         suffix = ''
         i = 0
-        while os.path.exists(localname+suffix):
+        while os.path.exists(localname + suffix):
             i += 1
             suffix = "_%02d" % i
-        return localname+suffix
+        return localname + suffix
