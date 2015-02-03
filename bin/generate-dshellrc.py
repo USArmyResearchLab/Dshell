@@ -36,15 +36,13 @@ if __name__=='__main__':
         outfd.write('''
 
 
-if [ `echo $BASH_VERSION | cut -d'.' -f1` -ge '4' ]; then
+if [ $(echo "$BASH_VERSION" | cut -d'.' -f1) -ge '4'  ]; then
 if [ -f ~/.bash_aliases ]; then
 . ~/.bash_aliases
 fi
-
 if [ -f /etc/bash_completion ]; then
 . /etc/bash_completion
 fi
-
 find_decoder()
 {
 local IFS="+"
@@ -55,22 +53,18 @@ do
    fi
 done
 }
-
 get_decoders()
 {
-   decoders=$(for x in `find $DECODERPATH -iname '*.py' | grep -v '__init__'`; do basename ${x} .py; done)
+   decoders=$(for x in $(find "$DECODERPATH" -iname '*.py' | grep -v '__init__'); do basename "${x}" .py; done)
 }
-
 _decode()
 {
 local dashdashcommands=' --ebpf --output --outfile --logfile'
-
 local cur prev xspec decoders
 COMPREPLY=()
-cur=`_get_cword`
+cur=$(_get_cword)
 _expand || return 0
 prev="${COMP_WORDS[COMP_CWORD-1]}"
-
 case "${cur}" in
 --*)
     find_decoder
@@ -82,45 +76,36 @@ case "${cur}" in
 #                 options+=" "
 #               done
 #           fi
-
     options+=$dashdashcommands
-    COMPREPLY=( $(compgen -W "${options}" -- ${cur}) )
+    COMPREPLY=$(compgen -W "${options}" -- "${cur}") 
     return 0
     ;;
-
 *+*)
    get_decoders
    firstdecoder=${cur%+*}"+"
-   COMPREPLY=( $(compgen -W "${decoders}" -P $firstdecoder -- ${cur//*+}) )
+   COMPREPLY=$(compgen -W "${decoders}" -P "$firstdecoder" -- "${cur//*+}")
    return 0
    ;;
-
 esac
-
 xspec="*.@(cap|pcap)"
 xspec="!"$xspec
 case "${prev}" in
 -d)
    get_decoders
-   COMPREPLY=( $(compgen -W "${decoders[0]}" -- ${cur}) )
+   COMPREPLY=$(compgen -W "${decoders[0]}" -- "${cur}")
    return 0
    ;;
-
 --output)
-   local outputs=$(for x in `find $DSHELL/lib/output -iname '*.py' | grep -v 'output.py'`; do basename ${x} .py; done)
-
-   COMPREPLY=( $(compgen -W "${outputs}" -- ${cur}) )
+   local outputs=$(for x in $(find "$DSHELL"/lib/output -iname '*.py' | grep -v 'output.py'); do basename "${x}" .py; done)
+   COMPREPLY=$(compgen -W "${outputs}" -- "${cur}")
    return 0
    ;;
-
 -F | -o | --outfile | -L | --logfile)
    xspec=
    ;;
-
 esac
-
-COMPREPLY=( $( compgen -f -X "$xspec" -- "$cur" ) \
-$( compgen -d -- "$cur" ) )
+COMPREPLY=$( compgen -f -X "$xspec" -- "$cur" ) \
+$( compgen -d -- "$cur" )
 }
 complete -F _decode -o filenames decode
 complete -F _decode -o filenames decode.py
