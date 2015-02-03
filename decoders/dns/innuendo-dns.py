@@ -1,10 +1,18 @@
 import dpkt
 from dnsdecoder import DNSDecoder
 import base64
+import math
+
+MIN_ENTROPY = 4.7
 
 class DshellDecoder(DNSDecoder):
     """ 
     Proof-of-concept Dshell decoder to detect INNUENDO DNS Channel
+
+	Added a more mathamatical check based on entropy in the domain name, it is
+	set fairly low as a demonstration but you can move the 4.7 up to 5 or 6 in 
+	real world noisy test and slide it down to something interesting.  That base64
+	test is probably not very useful, see below. (added a commit comment)
 
 	Based on the short marketing video [http://vimeo.com/115206626] the INNUENDO
 	DNS Channel relies on DNS to communicate with an authoritative name server.
@@ -17,6 +25,21 @@ class DshellDecoder(DNSDecoder):
 	Usage: decode -d innuendo-dns *.pcap
 
     """
+    def range_bytes():
+	''' range '''
+        return range(256)
+
+    def entropy_score(data, iterator=range_bytes):
+	''' simple entropy score'''
+	if not data:
+	    return 0
+	entropy = 0
+	for byte in iterator():
+	    p_x = float(data.count(chr(byte)))/len(data)
+	    if p_x > 0:
+		entropy += - p_x*math.log(p_x, 2)
+	return entropy
+
 
     def __init__(self):
         DNSDecoder.__init__(self,
@@ -71,6 +94,9 @@ class DshellDecoder(DNSDecoder):
                         dummy = base64.b64decode( answer )
 
                         self.alert('INNUENDO DNS Channel', query ,'/',answer,**conn.info())
+			
+			if entropy_score(answer) > MIN_ENTROPY:
+			    self.alert('HIGH ENTROPY, possible DNS C2 score'+entropy_score(answer)[0:5],'/',answer,**conn.info())
    
                         # here would be a good place to decrypt the payload (if you have the keys)
                         # decrypt_payload( answer )
@@ -82,3 +108,4 @@ if __name__=='__main__':
     print dObj
 else:
     dObj = DshellDecoder()
+
