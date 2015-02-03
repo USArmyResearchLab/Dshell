@@ -6,17 +6,21 @@ import gzip
 import cStringIO
 
 class HTTPDecoder(dshell.TCPDecoder):
-    '''extend HTTPDecoder to handle HTTP request/responses
-            will call HTTPHandler(
-                                                            conn=Connection(),
-                                                            request=dpkt.http.Request,
-                                                            response=dpkt.http.Response,
-                                                            requesttime=timestamp, responsetime=timestamp
-                                                    )
-            after each response.
+    '''
+    extend HTTPDecoder to handle HTTP request/responses will call 
 
-            config: noresponse: if True and connection closes w/o response, will call with response,responsetime=None,None (True)
-                    gunzip: if True will decompress gzip encoded response bodies (default True)
+    HTTPHandler(conn=Connection(),
+                request=dpkt.http.Request,
+                response=dpkt.http.Response,
+                requesttime=timestamp, 
+                responsetime=timestamp)
+
+    after each response.
+
+        config: noresponse: if True and connection closes w/o response, 
+                will call with response,responsetime=None,None (True)
+                gunzip: if True will decompress gzip encoded response 
+                bodies (default True)
 
     '''
 
@@ -31,8 +35,11 @@ class HTTPDecoder(dshell.TCPDecoder):
         return True
 
     def blobHandler(self,conn,blob):
-        '''buffer the request blob and call the handler once we have the response blob'''
-        if blob.direction=='cs':
+        '''
+        Buffer the request blob and call the handler once we have the 
+        response blob
+        '''
+        if blob.direction == 'cs':
             try:
                 self.requests[conn]=(blob.starttime,dpkt.http.Request(blob.data(self.errorH)))
             except Exception, e: self.UnpackError(e)
@@ -44,29 +51,36 @@ class HTTPDecoder(dshell.TCPDecoder):
                         bodyUnzip = self.decompressGzipContent(response.body)
                         if bodyUnzip != None: response.body = bodyUnzip
                     self.HTTPHandler(conn=conn,
-                                                            request=self.requests[conn][1],
-                                                            response=response,
-                                                            requesttime=self.requests[conn][0],
-                                                            responsetime=blob.starttime)
+                                     request=self.requests[conn][1],
+                                     response=response,
+                                     requesttime=self.requests[conn][0],
+                                     responsetime=blob.starttime)
                 del self.requests[conn]
             except Exception,e:
                 self.UnpackError(e)
-                self.HTTPHandler(conn=conn,request=self.requests[conn][1],response=None,requesttime=self.requests[conn][0],responsetime=blob.starttime)
+                self.HTTPHandler(conn=conn, 
+                                 request=self.requests[conn][1],
+                                 response=None,
+                                 requesttime=self.requests[conn][0],
+                                 responsetime=blob.starttime)
                 del self.requests[conn]
 
     def connectionHandler(self,conn):
-        '''when the connection closes, flush out any request blobs that did not have a response'''
+        '''
+        When the connection closes, flush out any request blobs that 
+        did not have a response
+        '''
         if conn in self.requests:
             if self.noresponse and 'HTTPHandler' in dir(self):
                 self.HTTPHandler(conn=conn,
-                                                request=self.requests[conn][1],
-                                                response=None,
-                                                requesttime=self.requests[conn][0],
-                                                responsetime=self.requests[conn][0])
+                                 request=self.requests[conn][1],
+                                 response=None,
+                                 requesttime=self.requests[conn][0],
+                                 responsetime=self.requests[conn][0])
             del self.requests[conn]
 
     def decompressGzipContent(self,httpcontent):
-        '''utility function to decompress gzip compressed content'''
+        '''Utility function to decompress gzip compressed content'''
         cstr = cStringIO.StringIO(httpcontent)
         try: return gzip.GzipFile(fileobj=cstr).read()
         except: return None
