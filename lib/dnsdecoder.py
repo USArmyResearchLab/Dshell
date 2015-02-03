@@ -4,9 +4,10 @@ import dshell, util, dpkt
 
 class DNSDecoder(dshell.TCPDecoder):
     '''
-    Extend DNSDecoder to handle DNS request/responses. Pairs request and 
-    response(s) by connection and query ID to allow for detection of DNS 
-    spoofing, etc.. (multiple responses to request with same ID will call
+    Extend DNSDecoder to handle DNS request/responses. Pairs request 
+    and response(s) by connection and query ID to allow for detection 
+    of DNS spoofing, etc.. (multiple responses to request with same ID 
+    will call
 
     DNSHandler(conn=Connection(), request=dpkt.dns.DNS,
                response=dpkt.dns.DNS, requesttime=timestamp, 
@@ -15,8 +16,8 @@ class DNSDecoder(dshell.TCPDecoder):
 
     after each response.
 
-    config: noanswer: if True and discarding w/o response, will call with 
-    response,responsetime=None, None (True)
+    config: noanswer: if True and discarding w/o response, will call
+    with response,responsetime=None, None (True)
     '''
     def __init__(self,**kwargs):
         self.noanswer=True
@@ -26,8 +27,8 @@ class DNSDecoder(dshell.TCPDecoder):
 
     def blobHandler(self,conn,blob):
         '''
-        For each blob, examine each segment (UDP packet) separately as each 
-        will be a DNS Q/A pair Q/A by ID and return as pairs
+        For each blob, examine each segment (UDP packet) separately as 
+        each will be a DNS Q/A pair Q/A by ID and return as pairs
         '''
         connrqs=self.requests.setdefault(conn,{})
         # Iterate blob as each packet will be a separate request. 
@@ -47,7 +48,9 @@ class DNSDecoder(dshell.TCPDecoder):
                                     responsecount=rq[2])
 
     def connectionHandler(self, conn):
-        '''Clean up unanswered requests when we discard the connection'''
+        '''
+        Clean up unanswered requests when we discard the connection
+        '''
         requests = self.requests
         if self.noanswer and "DNSHandler" in dir(self) and requests.get(conn):
             for requesttime, request, responsecount in requests[conn].values():
