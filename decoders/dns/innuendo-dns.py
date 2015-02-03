@@ -10,7 +10,7 @@ class DshellDecoder(DNSDecoder):
 	Added a more mathamatical check based on entropy in the domain name, it is
 	set fairly low as a demonstration but you can move the 4.7 up to 5 or 6 in 
 	real world noisy test and slide it down to something interesting.  That base64
-	test is probably not very useful, see below.
+	test is probably not very useful, see below. (added a commit comment)
 
 	Based on the short marketing video [http://vimeo.com/115206626] the INNUENDO
 	DNS Channel relies on DNS to communicate with an authoritative name server.
