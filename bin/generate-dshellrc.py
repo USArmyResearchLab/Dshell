@@ -34,6 +34,7 @@ if __name__=='__main__':
     outfd.write("\n".join(env))
     if len(sys.argv)>2 and sys.argv[2]=='with_bash_completion':
         outfd.write('''
+
 if [ $(echo "$BASH_VERSION" | cut -d'.' -f1) -ge '4'  ]; then
 if [ -f ~/.bash_aliases ]; then
 . ~/.bash_aliases
