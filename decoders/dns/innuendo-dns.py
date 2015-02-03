@@ -1,6 +1,8 @@
 import dpkt
 from dnsdecoder import DNSDecoder
 import base64
+import math
+
 MIN_ENTROPY = 4.7
 
 class DshellDecoder(DNSDecoder):
