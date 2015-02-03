@@ -19,7 +19,10 @@ class DshellDecoder(HTTPDecoder):
                               'append_ts':{'action':'store_true','help':'append timestamp to filename'},
                               'direction':{'help':'cs=only capture client POST, sc=only capture server GET response'},
                               'content_filter':{'help':'regex MIME type filter for files to save'},
-                              'name_filter':{'help':'regex filename filter for files to save'}}
+                              'name_filter':{'help':'regex filename filter for files to save'},
+                              'output_dir':{
+                                  'help':'specify a directory to place the output files.',
+                                  'default':''}}
                 )
 
     def preModule(self):
@@ -60,6 +63,7 @@ class DshellDecoder(HTTPDecoder):
                 if not self.name_filter or self.name_filter.search(filename):
                     if self.append_conn: filename+='_%s-%s'%(conn.clientip,conn.serverip)
                     if self.append_ts: filename+='_%d'%(conn.ts)
+                    if self.output_dir: filename = os.path.join(self.output_dir, filename)
                     self.debug(filename)
                     f=open(filename,'w')
                     f.write(data)
@@ -84,7 +88,8 @@ class DshellDecoder(HTTPDecoder):
                         if self.append_conn: filename+='_%s-%s'%(conn.serverip,conn.clientip)
                         if self.append_ts: filename+='_%d'%(conn.ts)
                         if not len(filename): filename ='%s-%s_index.html'%(conn.serverip,conn.clientip)
-                        while os.path.exists(filename): filename += '_'
+                        while os.path.exists(os.path.join(self.output_dir, filename)): filename += '_'
+                        filename = os.path.join(self.output_dir, filename)
                         self.alert("New file: %s (%s)" % (filename, url), conn.info())
                         self.openfiles[url] = httpfile(filename)
                         (s,e) = self.openfiles[url].handleresponse(response)
