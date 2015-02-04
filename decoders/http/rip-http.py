@@ -5,7 +5,6 @@ import sys
 import string
 
 # import any other modules here
-# import binascii
 import re
 import os
 import hashlib
@@ -26,6 +25,7 @@ class DshellDecoder(HTTPDecoder):
                              optiondict={'append_conn': {'action': 'store_true', 'help': 'append sourceip-destip to filename'},
                                          'append_ts': {'action': 'store_true', 'help': 'append timestamp to filename'},
                                          'direction': {'help': 'cs=only capture client POST, sc=only capture server GET response'},
+                                         'outdir': {'help': 'directory to write output files (Default: current directory)', 'metavar': 'DIRECTORY', 'default': '.'},
                                          'content_filter': {'help': 'regex MIME type filter for files to save'},
                                          'name_filter': {'help': 'regex filename filter for files to save'}}
                              )
@@ -36,7 +36,17 @@ class DshellDecoder(HTTPDecoder):
         if self.name_filter:
             self.name_filter = re.compile(self.name_filter)
         HTTPDecoder.preModule(self)
+
         self.openfiles = {}  # dict of httpfile objects, indexed by url
+
+        # Create output directory, if necessary
+        if not os.path.exists(self.outdir):
+            try:
+                os.makedirs(self.outdir)
+            except (IOError, OSError) as e:
+                self.error("Could not create directory '%s': %s" %
+                           (self.outdir, e))
+                sys.exit(1)
 
     def splitstrip(self, data, sep, strip=' '):
         return [lpart.strip(strip) for lpart in data.split(sep)]
@@ -76,8 +86,8 @@ class DshellDecoder(HTTPDecoder):
                         filename += '_%s-%s' % (conn.clientip, conn.serverip)
                     if self.append_ts:
                         filename += '_%d' % (conn.ts)
-                    self.debug(filename)
-                    f = open(filename, 'w')
+                    self.debug(os.path.join(self.outdir, filename))
+                    f = open(os.path.join(self.outdir, filename), 'w')
                     f.write(data)
                     f.close()
         elif (not self.direction or self.direction == 'sc') and response and response.status[0] == '2':
@@ -105,11 +115,12 @@ class DshellDecoder(HTTPDecoder):
                         if not len(filename):
                             filename = '%s-%s_index.html' % (
                                 conn.serverip, conn.clientip)
-                        while os.path.exists(filename):
+                        while os.path.exists(os.path.join(self.outdir, filename)):
                             filename += '_'
                         self.alert("New file: %s (%s)" %
                                    (filename, url), conn.info())
-                        self.openfiles[url] = httpfile(filename)
+                        self.openfiles[url] = httpfile(
+                            os.path.join(self.outdir, filename), self)
                         (s, e) = self.openfiles[url].handleresponse(response)
                         self.write(" --> Range: %d - %d\n" % (s, e))
                 if self.openfiles[url].done():
@@ -120,16 +131,25 @@ class DshellDecoder(HTTPDecoder):
 
 class httpfile:
 
-    def __init__(self, filename):
+    def __init__(self, filename, decoder_instance):
         self.complete = False
-        self.size = 0          # Expected size in bytes of full file transfer
+        # Expected size in bytes of full file transfer
+        self.size = 0
         # List of tuples indicating byte chunks already received and written to
         # disk
         self.ranges = []
+        self.decoder = decoder_instance
         self.filename = filename
-        self.fh = open(filename, 'w')
+        try:
+            self.fh = open(filename, 'w')
+        except IOError as e:
+            self.decoder.error(
+                "Could not create file '%s': %s" % (filename, e))
+            self.fh = None
 
     def __del__(self):
+        if self.fh is None:
+            return
         self.fh.close()
         if not self.done():
             print "Incomplete file: %s" % self.filename
@@ -170,8 +190,9 @@ class httpfile:
         # Update range tracking
         self.ranges.append((range_start, range_end))
         # Write part of file
-        self.fh.seek(range_start)
-        self.fh.write(response.body)
+        if self.fh is not None:
+            self.fh.seek(range_start)
+            self.fh.write(response.body)
         return (range_start, range_end)
 
     def done(self):
