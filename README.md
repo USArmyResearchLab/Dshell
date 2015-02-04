@@ -1,11 +1,11 @@
 # Dshell
 
-An extensible network forensic analysis framework.  Enables rapid development of plugins to support the dissection of network packet captures.  
+An extensible network forensic analysis framework.  Enables rapid development of plugins to support the dissection of network packet captures.
 
 Key features:
 
 
-* Robust stream reassembly 
+* Robust stream reassembly
 * IPv4 and IPv6 support
 * Custom output handlers
 * Chainable decoders
