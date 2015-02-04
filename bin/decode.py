@@ -32,7 +32,8 @@ def import_module(name=None, silent=False, search=None):
         try:
             module = search[name]  # a -> from search[a] import a
         except KeyError:
-            module, name = name.split('.')[:-1], name.split('.')[-1]  # a.b.c from a.b import c
+            # a.b.c from a.b import c
+            module, name = name.split('.')[:-1], name.split('.')[-1]
             if module:
                 module = '.'.join(module)
             else:
@@ -54,7 +55,8 @@ def import_module(name=None, silent=False, search=None):
                 return obj
     except Exception as err:
         if not silent:
-            sys.stderr.write("Error '%s' loading module %s\n" % (str(err), module))
+            sys.stderr.write(
+                "Error '%s' loading module %s\n" % (str(err), module))
     return False
 
 
@@ -66,7 +68,8 @@ def setDecoderPath(decoder_path):
     paths.append(decoder_path)  # append base path first
     # walk decoder directories an add to sys.path
     for root, dirs, files in os.walk(decoder_path):
-        [dirs.remove(d) for d in dirs if d.startswith('.')]  # skip hidden dirs like .svn
+        # skip hidden dirs like .svn
+        [dirs.remove(d) for d in dirs if d.startswith('.')]
         for d in sorted(dirs):
             paths.append(os.path.join(root, d))
     return paths  # return the paths we found
@@ -75,7 +78,8 @@ def setDecoderPath(decoder_path):
 def getDecoders(decoder_paths):
     ''' find all decoders and map decoder to import.path.decoder
     expect common prefix to start with basepath'''
-    import_base = os.path.commonprefix(decoder_paths).split(os.path.sep)[:-1]  # keep last part as base
+    import_base = os.path.commonprefix(decoder_paths).split(
+        os.path.sep)[:-1]  # keep last part as base
     decoders = {}
     for path in decoder_paths:
         # split path and trim off part before base
@@ -84,7 +88,7 @@ def getDecoders(decoder_paths):
             name = os.path.splitext(os.path.basename(f))[0]
             if name != '__init__':  # skip package stubs
                 # build topdir.path...module name from topdir/dir.../file
-                decoders[name] = '.'.join(import_path+[name])
+                decoders[name] = '.'.join(import_path + [name])
     return decoders
 
 
@@ -127,7 +131,8 @@ def readInFilter(fname):
     tmpfd = open(fname, 'r')
     for line in tmpfd:
         if '#' in line:
-            line = line.split('#')[0]+'\n'  # keep \n for visual output sanity
+            # keep \n for visual output sanity
+            line = line.split('#')[0] + '\n'
         filter += line
     tmpfd.close()
 
@@ -141,7 +146,8 @@ def decode_live(out, options, decoder, decoder_args, decoder_options):
     if 'preModule' in dir(decoder):
         decoder.preModule()
 
-    decoder.input_file = options.interface  # give the interface name to the decoder
+    # give the interface name to the decoder
+    decoder.input_file = options.interface
     stats = None
     if options.verbose:
         log('Attempting to listen on %s' % options.interface)
@@ -153,7 +159,8 @@ def decode_live(out, options, decoder, decoder_args, decoder_options):
         if decoder.filter:
             decoder.capture.setfilter(decoder.filter)
         while not options.count or decoder.count < options.count:
-            decoder.capture.dispatch(1, decoder.decode)  # use dispatch so we can handle signals
+            # use dispatch so we can handle signals
+            decoder.capture.dispatch(1, decoder.decode)
     except KeyboardInterrupt:
         pass
     except Exception as exc:
@@ -230,14 +237,15 @@ class dshellOptionParser(optparse.OptionParser):
     def error(self, msg):
         pass
 
-    #create options for all loaded decoders
+    # create options for all loaded decoders
     def add_decoder_options(self, d):
         if d.subDecoder:
             # if we have a subdecoder, recurse down until we don't
             self.add_decoder_options(d.subDecoder)
         try:
             if d.optiondict:
-                group = optparse.OptionGroup(self, "%s decoder options" % d.name)
+                group = optparse.OptionGroup(
+                    self, "%s decoder options" % d.name)
                 for argname, optargs in d.optiondict.iteritems():
                     optname = "%s_%s" % (d.name, argname)
                     group.add_option("--" + optname, dest=optname, **optargs)
@@ -251,13 +259,15 @@ class dshellOptionParser(optparse.OptionParser):
             options, args = optparse.OptionParser.parse_args(self, args)
             options.__dict__.update(kwargs)
         except UnboundLocalError:
-            # probably missing a value for an argument, e.g. 'decode -d' without a decoder
+            # probably missing a value for an argument, e.g. 'decode -d'
+            # without a decoder
             self.print_help()
             return None, None
         return options, args
 
         # Fix for handling unknown options (e.g. decoder-specific options)
-        # reference: http://stackoverflow.com/questions/1885161/how-can-i-get-optparses-optionparser-to-ignore-invalid-arguments
+        # reference:
+        # http://stackoverflow.com/questions/1885161/how-can-i-get-optparses-optionparser-to-ignore-invalid-arguments
     def _process_args(self, largs, rargs, values):
         while rargs:
             try:
@@ -287,18 +297,22 @@ def initDecoderOptions(decoder, out, options, decoder_args, decoder_options):
 
     # recurse from the bottom of the chain to the top
     if decoder.subDecoder:
-        initDecoderOptions(decoder.subDecoder, out, options, decoder_args, decoder_options)
+        initDecoderOptions(
+            decoder.subDecoder, out, options, decoder_args, decoder_options)
 
     # give the decoder the output object if the decoder doesn't pick one
     # or if an output object is specified via command line options
     if not decoder.out or options.output != 'output':
         decoder.out = out
     else:
-        # initialize the decoder's custom output using the channels from the global
-        decoder.globalout = out  # provide global output module under alternate name
+        # initialize the decoder's custom output using the channels from the
+        # global
+        # provide global output module under alternate name
+        decoder.globalout = out
         # decoder.out.__init__(fh=out.fh) #re-init the decoder
         try:
-        # If the decoder's default output doesn't have a filehandle set, use the user provided one
+            # If the decoder's default output doesn't have a filehandle set,
+            # use the user provided one
             if decoder.out.fh == sys.stdout:
                 decoder.out.fh = out.fh
         except AttributeError:
@@ -319,7 +333,8 @@ def initDecoderOptions(decoder, out, options, decoder_args, decoder_options):
     # set verbosity
     decoder.verbose = options.verbose
     if options.debug:
-        decoder._DEBUG = options.debug  # debug() is already taken, and _DEBUG might already be set
+        # debug() is already taken, and _DEBUG might already be set
+        decoder._DEBUG = options.debug
 
     # override decoder BPF
     if options.bpf != None:
@@ -334,7 +349,8 @@ def initDecoderOptions(decoder, out, options, decoder_args, decoder_options):
         try:
             tmpbpf = readInFilter(options.filefilter)
         except:
-            log("Invalid tcpdump filter file: %s" % (options.filefilter), level=logging.ERROR)
+            log("Invalid tcpdump filter file: %s" %
+                (options.filefilter), level=logging.ERROR)
             return
 
         decoder.filter = tmpbpf
@@ -360,108 +376,146 @@ def initDecoderOptions(decoder, out, options, decoder_args, decoder_options):
 
     if not options.novlan and not(decoder.filter.startswith('vlan')):
         if decoder.filter:
-            decoder.filter = '( '+decoder.filter+' ) or ( vlan and ( '+decoder.filter+' ) )'
+            decoder.filter = '( ' + decoder.filter + \
+                ' ) or ( vlan and ( ' + decoder.filter + ' ) )'
         else:
-            decoder.filter = '' #fix for null filter case
+            decoder.filter = ''  # fix for null filter case
 
-    #pass args and config file to decoder
+    # pass args and config file to decoder
     decoder.parseArgs(decoder_args, decoder_options)
 
-    log('Using module '+repr(decoder))
+    log('Using module ' + repr(decoder))
 
 
 def main(*largs, **kwargs):
     global log
     bin_path = os.environ['BINPATH']
     sys.path.insert(0, bin_path)
-    #get map of name to module import path
+    # get map of name to module import path
     decoder_map = getDecoders(setDecoderPath(os.environ['DECODERPATH']))
 
     # The main argument parser. It will have every command line option
     # available and should be used when actually parsing
     parser = dshellOptionParser(
         usage="usage: %prog [options] [decoder options] file1 file2 ... filen [-- [decoder args]+]",
-        version="%prog "+str(dshell.__version__), add_help_option=False)
+        version="%prog " + str(dshell.__version__), add_help_option=False)
     # A short argument parser, meant to only hold the shorter list of
     # arguments for when a decoder is called without a pcap file. DO
     # NOT USE for any serious argument parsing.
     parser_short = dshellOptionParser(
         usage="usage: %prog [options] [decoder options] file1 file2 ... filen [-- [decoder args]+]",
-        version="%prog "+str(dshell.__version__), add_help_option=False)
+        version="%prog " + str(dshell.__version__), add_help_option=False)
     parser.add_option('-h', '-?', '--help', dest='help',
                       help="Print common command-line flags and exit", action='store_true',
                       default=False)
     parser_short.add_option('-h', '-?', '--help', dest='help',
                             help="Print common command-line flags and exit", action='store_true',
                             default=False)
-    parser.add_option('-d', '--decoder', dest="decoder", action='append', help="Use a specific decoder module")
-    parser.add_option('-l', '--ls', '--list', action="store_true", help='List all available decoders', dest='list')
-    parser.add_option('-C', '--config', dest='config', help='specify config.ini file')
-    parser.add_option('--tmpdir', dest='tmpdir', type='string', default=tempfile.gettempdir(), help='alternate temp directory (for use when processing compressed pcap files)')
-    parser.add_option('-r', '--recursive', dest='recursive', action='store_true', help='recursively process all PCAP files under input directory')
+    parser.add_option('-d', '--decoder', dest="decoder",
+                      action='append', help="Use a specific decoder module")
+    parser.add_option('-l', '--ls', '--list', action="store_true",
+                      help='List all available decoders', dest='list')
+    parser.add_option(
+        '-C', '--config', dest='config', help='specify config.ini file')
+    parser.add_option('--tmpdir', dest='tmpdir', type='string', default=tempfile.gettempdir(),
+                      help='alternate temp directory (for use when processing compressed pcap files)')
+    parser.add_option('-r', '--recursive', dest='recursive', action='store_true',
+                      help='recursively process all PCAP files under input directory')
 
     group = optparse.OptionGroup(parser, "Multiprocessing options")
-    group.add_option('-p', '--parallel', dest='parallel', action='store_true', help='process multiple files in parallel')
-    group.add_option('-t', '--threaded', dest='threaded', action='store_true', help='run multiple decoders in parallel')
-    group.add_option('-n', '--nprocs', dest='numprocs', type='int', default=4, help='number of simultaneous processes')
+    group.add_option('-p', '--parallel', dest='parallel',
+                     action='store_true', help='process multiple files in parallel')
+    group.add_option('-t', '--threaded', dest='threaded',
+                     action='store_true', help='run multiple decoders in parallel')
+    group.add_option('-n', '--nprocs', dest='numprocs', type='int',
+                     default=4, help='number of simultaneous processes')
     parser.add_option_group(group)
 
     # decode-pcap specific options
     group = optparse.OptionGroup(parser, "Input options")
-    group.add_option('-i', '--interface', dest='interface', default=None, help='listen live on INTERFACE')
-    group.add_option('-c', '--count', dest='count', type='int', help='number of packets to process', default=0)
-    group.add_option('-f', '--bpf', dest='bpf', help='replace default decoder filter (use carefully)')
-    group.add_option('--nofilterfn', dest='nofilterfn', action="store_true", help='Set filterfn to pass-thru')
-    group.add_option('-F', dest='filefilter', help='Use filefilter as input for the filter expression.  An additional expression given on the command line is ignored.')
-    group.add_option('--ebpf', dest='ebpf', help='BPF filter to exclude traffic, extends other filters')
-    group.add_option('--no-vlan', dest='novlan', action="store_true", help='do not examine traffic which has VLAN headers present')
-    group.add_option('--layer2', dest='layer2', default='ethernet.Ethernet', help='select the layer-2 protocol module')
-    group.add_option('--strip', dest='striplayers', default=0, help='extra data-link layers to strip')
+    group.add_option('-i', '--interface', dest='interface',
+                     default=None, help='listen live on INTERFACE')
+    group.add_option('-c', '--count', dest='count', type='int',
+                     help='number of packets to process', default=0)
+    group.add_option('-f', '--bpf', dest='bpf',
+                     help='replace default decoder filter (use carefully)')
+    group.add_option('--nofilterfn', dest='nofilterfn',
+                     action="store_true", help='Set filterfn to pass-thru')
+    group.add_option('-F', dest='filefilter',
+                     help='Use filefilter as input for the filter expression.  An additional expression given on the command line is ignored.')
+    group.add_option(
+        '--ebpf', dest='ebpf', help='BPF filter to exclude traffic, extends other filters')
+    group.add_option('--no-vlan', dest='novlan', action="store_true",
+                     help='do not examine traffic which has VLAN headers present')
+    group.add_option('--layer2', dest='layer2', default='ethernet.Ethernet',
+                     help='select the layer-2 protocol module')
+    group.add_option('--strip', dest='striplayers', default=0,
+                     help='extra data-link layers to strip')
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser_short, "Input options")
-    group.add_option('-i', '--interface', dest='interface', default=None, help='listen live on INTERFACE')
-    group.add_option('-c', '--count', dest='count', type='int', help='number of packets to process', default=0)
-    group.add_option('-f', '--bpf', dest='bpf', help='replace default decoder filter (use carefully)')
-    group.add_option('--nofilterfn', dest='nofilterfn', action="store_true", help='Set filterfn to pass-thru')
-    group.add_option('-F', dest='filefilter', help='Use filefilter as input for the filter expression.  An additional expression given on the command line is ignored.')
-    group.add_option('--ebpf', dest='ebpf', help='BPF filter to exclude traffic, extends other filters')
-    group.add_option('--no-vlan', dest='novlan', action="store_true", help='do not examine traffic which has VLAN headers present')
-    group.add_option('--layer2', dest='layer2', default='ethernet.Ethernet', help='select the layer-2 protocol module')
-    group.add_option('--strip', dest='striplayers', default=0, help='extra data-link layers to strip')
+    group.add_option('-i', '--interface', dest='interface',
+                     default=None, help='listen live on INTERFACE')
+    group.add_option('-c', '--count', dest='count', type='int',
+                     help='number of packets to process', default=0)
+    group.add_option('-f', '--bpf', dest='bpf',
+                     help='replace default decoder filter (use carefully)')
+    group.add_option('--nofilterfn', dest='nofilterfn',
+                     action="store_true", help='Set filterfn to pass-thru')
+    group.add_option('-F', dest='filefilter',
+                     help='Use filefilter as input for the filter expression.  An additional expression given on the command line is ignored.')
+    group.add_option(
+        '--ebpf', dest='ebpf', help='BPF filter to exclude traffic, extends other filters')
+    group.add_option('--no-vlan', dest='novlan', action="store_true",
+                     help='do not examine traffic which has VLAN headers present')
+    group.add_option('--layer2', dest='layer2', default='ethernet.Ethernet',
+                     help='select the layer-2 protocol module')
+    group.add_option('--strip', dest='striplayers', default=0,
+                     help='extra data-link layers to strip')
     parser_short.add_option_group(group)
 
-
     group = optparse.OptionGroup(parser, "Output options")
-    group.add_option('-o', '--outfile', dest='outfile', help='write output to the file OUTFILE. Additional output can be set with KEYWORD=VALUE,...\n'+\
-        '\tmode=<w: write (default), a: append, noclobber: do not overwrite, use a  a OUTFILE.1 (.2,.3) file if file(s) exists\n'+\
-        '\tpcap=PCAPFILE to write packets to a PCAP file\n'+\
-        '\tsession=SESSION to write session text\n'+\
-        '\tdirection=data direction to write (c,s,both,split)')
-    group.add_option('-w', '--session', dest='session', help='write session file, same as -o session=')
-    group.add_option('-W', '--pcap', dest='pcap', default=None, help='output decoded packets to PCAP (same as -o pcap=....)')
-    group.add_option('--db', dest='db', default=None, help='output to db. Supply "config=file" or "param=...,param=..." ')
-    group.add_option('--oformat', dest='oformat', help='define the output format')
-    group.add_option('-x', '--extra', dest='oextra', action='store_true', help='output a lot of extra information')
-    group.add_option('-O', '--output', dest='output', default=None, help='Use a custom output module. Supply "modulename,option=value,..."')
+    group.add_option('-o', '--outfile', dest='outfile', help='write output to the file OUTFILE. Additional output can be set with KEYWORD=VALUE,...\n' +
+                     '\tmode=<w: write (default), a: append, noclobber: do not overwrite, use a  a OUTFILE.1 (.2,.3) file if file(s) exists\n' +
+                     '\tpcap=PCAPFILE to write packets to a PCAP file\n' +
+                     '\tsession=SESSION to write session text\n' +
+                     '\tdirection=data direction to write (c,s,both,split)')
+    group.add_option('-w', '--session', dest='session',
+                     help='write session file, same as -o session=')
+    group.add_option('-W', '--pcap', dest='pcap', default=None,
+                     help='output decoded packets to PCAP (same as -o pcap=....)')
+    group.add_option('--db', dest='db', default=None,
+                     help='output to db. Supply "config=file" or "param=...,param=..." ')
+    group.add_option(
+        '--oformat', dest='oformat', help='define the output format')
+    group.add_option('-x', '--extra', dest='oextra',
+                     action='store_true', help='output a lot of extra information')
+    group.add_option('-O', '--output', dest='output', default=None,
+                     help='Use a custom output module. Supply "modulename,option=value,..."')
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, "Logging options")
     group.add_option('-L', '--logfile', dest="logfile", help="log to file")
-    group.add_option('--debug', action="store_true", dest="debug", help="debug logging (debug may also affect decoding behavior)")
-    group.add_option('-v', '--verbose', action="store_true",  dest="verbose", help="verbose logging")
-    group.add_option('-q', '--quiet', action="store_true",  dest="quiet", help="practically zero logging")
+    group.add_option('--debug', action="store_true", dest="debug",
+                     help="debug logging (debug may also affect decoding behavior)")
+    group.add_option('-v', '--verbose', action="store_true",
+                     dest="verbose", help="verbose logging")
+    group.add_option('-q', '--quiet', action="store_true",
+                     dest="quiet", help="practically zero logging")
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser_short, "Logging options")
     group.add_option('-L', '--logfile', dest="logfile", help="log to file")
-    group.add_option('--debug', action="store_true", dest="debug", help="debug logging (debug may also affect decoding behavior)")
-    group.add_option('-v', '--verbose', action="store_true", dest="verbose", help="verbose logging")
-    group.add_option('-q', '--quiet', action="store_true", dest="quiet", help="practically zero logging")
+    group.add_option('--debug', action="store_true", dest="debug",
+                     help="debug logging (debug may also affect decoding behavior)")
+    group.add_option(
+        '-v', '--verbose', action="store_true", dest="verbose", help="verbose logging")
+    group.add_option('-q', '--quiet', action="store_true",
+                     dest="quiet", help="practically zero logging")
     parser_short.add_option_group(group)
 
-
-    decoder_options={}  # [decoder][option]=value dict of decoder options, set by config file
+    # [decoder][option]=value dict of decoder options, set by config file
+    decoder_options = {}
     decoder_args = []
     args = []
     extra_args = False
@@ -493,7 +547,8 @@ def main(*largs, **kwargs):
             config = ConfigParser.ConfigParser()
             config.read(options.config)
             for s in config.sections():
-                if s.lower() == 'dshell':  # this is the main section, set the options
+                # this is the main section, set the options
+                if s.lower() == 'dshell':
                     for k, v in config.items(s, raw=True):
                         if k in options.__dict__:
                             options.__dict__[k] = v
@@ -505,8 +560,8 @@ def main(*largs, **kwargs):
         out = output.QueueOutput(options.queue)
     # if not, parse output args
     else:
-        outfile=None
-        outkw={}
+        outfile = None
+        outkw = {}
 
         # set output file (and other args if -o filename,key=val...)
         if options.outfile:
@@ -532,13 +587,17 @@ def main(*largs, **kwargs):
             options.output = 'output'
         # init output module
         if options.output:
-            a, kw = util.strtok(options.output, as_list=True)  # parse output arglist (-O module,args..,k=val...)
+            # parse output arglist (-O module,args..,k=val...)
+            a, kw = util.strtok(options.output, as_list=True)
             kw.update(outkw)  # set output options
             if outfile:
-                kw.update(file=outfile)  # set filename arg if -o given (can also be first arg in module arglist)
+                # set filename arg if -o given (can also be first arg in module
+                # arglist)
+                kw.update(file=outfile)
             outmod = import_module(name=os.path.basename(a[0]))  # load module
             if outmod:
-                out = outmod.obj(*a[1:], **kw)  # pass remaining args and keyword args to init object
+                # pass remaining args and keyword args to init object
+                out = outmod.obj(*a[1:], **kw)
 
         # set the output format
         if options.oformat != None:
@@ -563,8 +622,10 @@ def main(*largs, **kwargs):
     decoderNames = set()
     # check for a decoder
     if options.decoder != None:
-        if type(options.decoder) == str:  # single decoder or came from config file
-            options.decoder = util.strtok(options.decoder, as_list=True)[0]  # make it a list
+        # single decoder or came from config file
+        if type(options.decoder) == str:
+            options.decoder = util.strtok(
+                options.decoder, as_list=True)[0]  # make it a list
         # we have a list of decoders
         for dnames in options.decoder:
             chain = dnames.split('+')
@@ -576,7 +637,9 @@ def main(*largs, **kwargs):
                 n = None
             m = import_module(module, search=decoder_map)
             if m:
-                dObj = copy.copy(m.dObj)  # create copy in case we import multiple times under different names
+                # create copy in case we import multiple times under different
+                # names
+                dObj = copy.copy(m.dObj)
                 if n:
                     dObj.name = n
             else:
@@ -635,7 +698,7 @@ def main(*largs, **kwargs):
     for k, v in options.__dict__.iteritems():
         for decName in decoderNames:
             try:
-                n = k.split(decName+'_', 1)[1]
+                n = k.split(decName + '_', 1)[1]
                 decoder_options.setdefault(decName, {}).setdefault(n, v)
             except IndexError:
                 continue
@@ -643,7 +706,9 @@ def main(*largs, **kwargs):
     # reparse config file to handle decoder options
     if options.config:
         for s in config.sections():
-            if s.lower() in decoder_options:  # set the options for loaded decoders if they are present in the config file
+            # set the options for loaded decoders if they are present in the
+            # config file
+            if s.lower() in decoder_options:
                 for k, v in config.items(s, raw=True):
                     if k in decoder_options[s]:  # if this is a valid option
                         if v.isdigit():
@@ -667,8 +732,7 @@ def main(*largs, **kwargs):
         printDecoderBriefs(decoders)
         return
 
-
-        #####################################################################################
+        #######################################################################
         # listen live on the interface
         # this will not process any files
     if options.interface != None:
@@ -683,10 +747,9 @@ def main(*largs, **kwargs):
         out.close()
 
         return
-        #####################################################################################
+        #######################################################################
 
     # take all other command line arguments as files to process
-
 
     ####################################################
     # Works if directory (e.g. ~/data/) or * (e.g. ~/data/*
@@ -734,13 +797,14 @@ def main(*largs, **kwargs):
         # do not pass the config file or outfile because we handled that here
         for d in decoder_options:  # put pre-parsed decoder options in kwargs
             for k, v in decoder_options[d].items():
-                kwargs[d+'_' + k] = v
+                kwargs[d + '_' + k] = v
 
-    #check here to see if we are running in parallel-file mode
+    # check here to see if we are running in parallel-file mode
     if options.parallel and len(inputs) > 1:
         for f in inputs:
             # create a child process for each input file
-            procs.append(multiprocessing.Process(target=main, kwargs=kwargs, args=[f]))
+            procs.append(
+                multiprocessing.Process(target=main, kwargs=kwargs, args=[f]))
         runChildProcs(procs, q, out, numprocs=options.numprocs)
 
     # check here to see if we are running decoders multithreaded
@@ -748,7 +812,8 @@ def main(*largs, **kwargs):
         for d in options.decoder:
             # create a child for each decoder
             kwargs.update(decoder=d)
-            procs.append(multiprocessing.Process(target=main, kwargs=kwargs, args=inputs))
+            procs.append(
+                multiprocessing.Process(target=main, kwargs=kwargs, args=inputs))
         runChildProcs(procs, q, out, numprocs=options.numprocs)
 
     # fall through to here (single threaded or child process)
@@ -761,7 +826,8 @@ def main(*largs, **kwargs):
 
         for module in decoders.keys():
             decoder = decoders[module]
-            initDecoderOptions(decoder, out, options, decoder_args, decoder_options)
+            initDecoderOptions(
+                decoder, out, options, decoder_args, decoder_options)
 
             # If the decoder has a preModule function, will execute it now
             decoder.preModule()
@@ -792,12 +858,14 @@ def main(*largs, **kwargs):
 
                     else:
                         # we have a compressed file
-                        tmpfile = expandCompressedFile(input_file, options.verbose, options.tmpdir)
+                        tmpfile = expandCompressedFile(
+                            input_file, options.verbose, options.tmpdir)
                         temporaryFiles.append(tmpfile)
                         pcapfile = tmpfile
                 except:
                     if options.verbose:
-                        sys.stderr.write('+Error processing file %s' % (input_file))
+                        sys.stderr.write(
+                            '+Error processing file %s' % (input_file))
                     continue
 
                 # give the decoder access to the input filename
@@ -814,13 +882,15 @@ def main(*largs, **kwargs):
 
                 try:
                     if not pcap:
-                        raise NotImplementedError("pcap support not implemented")
+                        raise NotImplementedError(
+                            "pcap support not implemented")
                     decoder.capture = pcap.pcap(pcapfile)
                     if decoder.filter:
                         decoder.capture.setfilter(decoder.filter)
                     while not options.count or decoder.count < options.count:
                         try:
-                            ts, pkt = decoder.capture.next()  # read next packet and break on EOF
+                            # read next packet and break on EOF
+                            ts, pkt = decoder.capture.next()
                         except:
                             break  # no data
                         decoder.decode(ts, pkt)
@@ -861,7 +931,8 @@ def main(*largs, **kwargs):
 def runChildProcs(procs, q, out, numprocs=4):
     import Queue
     running = []
-    while procs or running:  # while we still have processes to spawn or running
+    # while we still have processes to spawn or running
+    while procs or running:
         if procs and len(running) < numprocs:
             proc = procs.pop(0)
             proc.start()
@@ -869,7 +940,8 @@ def runChildProcs(procs, q, out, numprocs=4):
             running.append(proc)
         for proc in running:
             if not proc.is_alive():  # see if it finished
-                out.log('%d exited (%d)' % (proc.pid, proc.exitcode), level=logging.INFO)
+                out.log('%d exited (%d)' %
+                        (proc.pid, proc.exitcode), level=logging.INFO)
                 running.remove(proc)
         try:  # get from the output queue until empty
             while True:
