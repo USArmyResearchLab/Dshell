@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# pylint: disable-msg=C0103,E501
+# pylint: disable-msg=C0103
 
 import copy
 import dshell
@@ -15,6 +15,7 @@ import tempfile
 import traceback
 import util
 import zipfile
+import bz2
 try:
     import pcap
 except ImportError:
@@ -127,16 +128,16 @@ def printDecoders(decoder_map, silent=True):
 
 def readInFilter(fname):
     '''Read in a BPF filter provided by a command line argument'''
-    filter = ''
+    filter_name = ''
     tmpfd = open(fname, 'r')
     for line in tmpfd:
         if '#' in line:
             # keep \n for visual output sanity
             line = line.split('#')[0] + '\n'
-        filter += line
+        filter_name += line
     tmpfd.close()
 
-    return filter
+    return filter_name
 
 
 def decode_live(out, options, decoder, decoder_args, decoder_options):
@@ -148,7 +149,6 @@ def decode_live(out, options, decoder, decoder_args, decoder_options):
 
     # give the interface name to the decoder
     decoder.input_file = options.interface
-    stats = None
     if options.verbose:
         log('Attempting to listen on %s' % options.interface)
     try:
@@ -374,7 +374,7 @@ def initDecoderOptions(decoder, out, options, decoder_args, decoder_options):
     if options.striplayers:
         decoder.striplayers = int(options.striplayers)
 
-    if not options.novlan and not(decoder.filter.startswith('vlan')):
+    if not options.novlan and not decoder.filter.startswith('vlan'):
         if decoder.filter:
             decoder.filter = '( ' + decoder.filter + \
                 ' ) or ( vlan and ( ' + decoder.filter + ' ) )'
