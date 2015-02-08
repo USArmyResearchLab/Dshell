@@ -337,7 +337,7 @@ def initDecoderOptions(decoder, out, options, decoder_args, decoder_options):
         decoder._DEBUG = options.debug
 
     # override decoder BPF
-    if options.bpf != None:
+    if options.bpf is not None:
         decoder.filter = options.bpf
 
     # override decoder filterfn
@@ -345,7 +345,7 @@ def initDecoderOptions(decoder, out, options, decoder_args, decoder_options):
         decoder.filterfn = lambda addr: True
 
     # read BPF from file
-    if options.filefilter != None:
+    if options.filefilter is not None:
         try:
             tmpbpf = readInFilter(options.filefilter)
         except:
@@ -356,7 +356,7 @@ def initDecoderOptions(decoder, out, options, decoder_args, decoder_options):
         decoder.filter = tmpbpf
 
     # extend bpf filter if necessary
-    if options.ebpf != None:
+    if options.ebpf is not None:
         ebpf = options.ebpf
         if not decoder.filter:
             decoder.filter = ebpf
@@ -531,7 +531,7 @@ def main(*largs, **kwargs):
     # parse basic options and crdate the options object
     options = parser.parse_args(args, **kwargs)[0]
 
-    if options == None:
+    if options is None:
         print "\nError processing provided arguments"
         return
 
@@ -600,7 +600,7 @@ def main(*largs, **kwargs):
                 out = outmod.obj(*a[1:], **kw)
 
         # set the output format
-        if options.oformat != None:
+        if options.oformat is not None:
             out.setformat(options.oformat)
 
     # set global log functions
@@ -621,7 +621,7 @@ def main(*largs, **kwargs):
     decoders = {}
     decoderNames = set()
     # check for a decoder
-    if options.decoder != None:
+    if options.decoder is not None:
         # single decoder or came from config file
         if type(options.decoder) == str:
             options.decoder = util.strtok(
@@ -735,7 +735,7 @@ def main(*largs, **kwargs):
         #######################################################################
         # listen live on the interface
         # this will not process any files
-    if options.interface != None:
+    if options.interface is not None:
         if len(decoders) != 1:
             print 'Can only run one module live on an interface'
             return
