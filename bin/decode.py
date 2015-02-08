@@ -104,13 +104,14 @@ def printDecoders(decoder_map, silent=True):
                 print "Exception loading module '%s': %s" % (module, exc)
                 continue
             # get the type of decoder it is
-            dtype = 'RAW'
             if 'IP' in dir(decoder):
                 dtype = 'IP '
-            if 'UDP' in dir(decoder):
+            elif 'UDP' in dir(decoder):
                 dtype = 'UDP'
-            if 'TCP' in dir(decoder):
+            elif 'TCP' in dir(decoder):
                 dtype = 'TCP'
+            else:
+                dtype = 'RAW'
             dList.append(FS % (
                 module, decoder.name,
                 decoder.author,
