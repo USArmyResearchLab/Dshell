@@ -60,7 +60,6 @@ def decode_base64(
                 sys.stderr.write(
                     "Non-alphabet character found in chunk: %s\n" % (
                         hexPlusAscii(intext[i:i + 4])))
-            if debug:
                 sys.stderr.write("Input: %s" % hexPlusAscii(intext))
             raise Exception
         val = b64DictDec[intext[i]] * 262144
