@@ -52,10 +52,7 @@ def decode_base64(
 
     i = 0
     while i < len(intext) - 3:
-        if intext[i] not in alphabet or \
-                intext[i + 1] not in alphabet or \
-                intext[i + 2] not in alphabet or \
-                intext[i + 3] not in alphabet:
+        if not all([char in alphabet for char in intext[i:i + 4]]):
             if debug:
                 sys.stderr.write(
                     "Non-alphabet character found in chunk: %s\n" % (
