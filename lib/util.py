@@ -8,11 +8,11 @@ import datetime
 # dShell Utility Functions
 
 
-def xor(input, key):
+def xor(input_str, key):
     """
     Xor an input string with a given character key.
     """
-    output = ''.join([chr(ord(c) ^ key) for c in input])
+    output = ''.join([chr(ord(c) ^ key) for c in input_str])
     return output
 
 # decode_base64 - decodes Base64 text with (optional) custom alphabet
