@@ -21,12 +21,17 @@ def xor(input, key):
 # Inputs:
 #    intext:   string, text to decode
 #    alphabet: string, 64 chars, custom alphabet for decoding (optional)
-#    padchar:  char, single character used for padding bytes in input (optional)
+#    padchar:  char, single character used for padding bytes in input
+#        (optional)
 # Returns: decoded string
 #
 
 
-def decode_base64(intext, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/', padchar='=', debug=False):
+def decode_base64(
+        intext,
+        alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+        '0123456789+/',
+        padchar='=', debug=False):
 
     # Build dictionary from alphabet
     b64DictDec = {}
@@ -47,10 +52,14 @@ def decode_base64(intext, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 
     i = 0
     while i < len(intext) - 3:
-        if intext[i] not in alphabet or intext[i + 1] not in alphabet or intext[i + 2] not in alphabet or intext[i + 3] not in alphabet:
+        if intext[i] not in alphabet or \
+                intext[i + 1] not in alphabet or \
+                intext[i + 2] not in alphabet or \
+                intext[i + 3] not in alphabet:
             if debug:
                 sys.stderr.write(
-                    "Non-alphabet character found in chunk: %s\n" % (hexPlusAscii(intext[i:i + 4])))
+                    "Non-alphabet character found in chunk: %s\n" % (
+                        hexPlusAscii(intext[i:i + 4])))
             if debug:
                 sys.stderr.write("Input: %s" % hexPlusAscii(intext))
             raise Exception
@@ -80,8 +89,9 @@ def printableText(intext, onlyText=False):
         FILTER_std_display = ''.join(
             [chr(x) if x in range(32, 127) else '.' for x in range(256)])
     else:
-        FILTER_std_display = ''.join(
-            [chr(x) if x in [9, 10, 13] + range(32, 127) else '.' for x in range(256)])
+        FILTER_std_display = ''.join([
+            chr(x) if x in [9, 10, 13] + range(32, 127)
+            else '.' for x in range(256)])
     return intext.translate(FILTER_std_display)
 
 # printableUnicode - returns unicode text minus control characters
@@ -110,7 +120,9 @@ def printableUnicode(intext, onlyText=False):
             except:
                 return unicode(printableText(intext, onlyText))
     if onlyText:
-        return ''.join([x for x in intext if x not in UNICODE_CONTROL_CHARS + [u'\t', u'\n', u'\r']])
+        return ''.join([
+            x for x in intext if x not in
+            UNICODE_CONTROL_CHARS + [u'\t', u'\n', u'\r']])
     else:
         return ''.join([x for x in intext if x not in UNICODE_CONTROL_CHARS])
 
@@ -151,12 +163,15 @@ def hexPlusAscii(data, width=16, offset=0):
 def URLDataToParameterDict(data):
     if not ' ' in data:
         p, kwp = strtok(data, sep='&')
-        return dict((urllib.unquote(k), urllib.unquote(kwp[k]))for k in kwp.keys())
+        return dict(
+            (urllib.unquote(k), urllib.unquote(kwp[k])) for k in kwp.keys())
 
 # strtok - string tokenizer a lot like C strtok
 # Author: twp
-# Input: a string, optionally a param sep and a key/value sep, as_list will force a list even if 0/1 params
-# Output: tuple of: None or string or list of params, dictionary indexed by key=value names of k/v params
+# Input: a string, optionally a param sep and a key/value sep,
+#     as_list will force a list even if 0/1 params
+# Output: tuple of: None or string or list of params,
+#     dictionary indexed by key=value names of k/v params
 # Example : a,b,c=d,e=f returns ([a,b],{c:d,e:f})
 
 
@@ -212,7 +227,8 @@ def inttoip(i): return socket.inet_ntoa(struct.pack('!L', i))
 # long_options = long options string, see getopt docs
 #
 # for repeated options:
-# list_options = list of repeatable option keys ['-o','--option'] to make into lists
+# list_options = list of repeatable option keys ['-o','--option']
+#     to make into lists
 # auto_list = True to place any repeated options' values into lists
 # replace_value = True to replace existing value if repeated option
 
@@ -281,9 +297,13 @@ def getHeader(request_or_response, header_name):
 
 def HTTPlastmodified(response):
     try:
-        return datetime.datetime.strptime(response.headers['last-modified'], '%a, %d %b %Y %H:%M:%S %Z').strftime('%Y-%m-%d %H:%M:%S')
+        return datetime.datetime.strptime(
+            response.headers['last-modified'],
+            '%a, %d %b %Y %H:%M:%S %Z').strftime('%Y-%m-%d %H:%M:%S')
     except:
         try:
-            return datetime.datetime.strptime(response.headers['date'], '%a, %d %b %Y %H:%M:%S %Z').strftime('%Y-%m-%d %H:%M:%S')
+            return datetime.datetime.strptime(
+                response.headers['date'],
+                '%a, %d %b %Y %H:%M:%S %Z').strftime('%Y-%m-%d %H:%M:%S')
         except:
             return ''
