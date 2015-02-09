@@ -161,7 +161,7 @@ def hexPlusAscii(data, width=16, offset=0):
 
 
 def URLDataToParameterDict(data):
-    if not ' ' in data:
+    if ' ' not in data:
         p, kwp = strtok(data, sep='&')
         return dict(
             (urllib.unquote(k), urllib.unquote(kwp[k])) for k in kwp.keys())
