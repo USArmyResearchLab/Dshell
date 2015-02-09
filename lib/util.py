@@ -236,10 +236,12 @@ def inttoip(i):
 
 
 def getopts(args, options,
-            long_options=[],
+            long_options=None,
             list_options=None,
             auto_list=False,
             replace_value=False):
+    if long_options is None:
+        long_options = []
     import getopt
     optd = {}
     opts, args = getopt.getopt(args, options, long_options)
