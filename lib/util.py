@@ -43,7 +43,8 @@ def decode_base64(intext, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 
     outtext = ''
 
-    intext = intext.rstrip('\n')
+    # support DOS and Unix line endings
+    intext = intext.rstrip('\r\n')
 
     i = 0
     while i < len(intext) - 3:
