@@ -23,8 +23,8 @@ Key features:
 
 ## Installation
 
-1. Install all of the necessary Python modules listed above. Many of them are available via pip and/or apt-get. Pygeoip is not yet available as a package and must be installed with pip or manually. All except dpkt are available with pip.
- 
+1. Install all of the necessary Python modules listed above. Many of them are available via pip and/or apt-get. Pygeoip is not yet available as a package and must be installed with pip or manually.
+
   1. `sudo apt-get install python-crypto python-dpkt python-ipy python-pypcap`
 
   2. `sudo pip install pygeoip`
