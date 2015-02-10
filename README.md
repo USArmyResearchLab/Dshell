@@ -29,7 +29,7 @@ Key features:
 
   2. `sudo pip install pygeoip`
 
-2. Configure pygeoip by moving the MaxMind data files (GeoIP.dat, GeoIPv6.dat, GeoIPASNum.dat, GeoIPASNumv6.dat) to <dshell>/share/GeoIP/
+2. Configure pygeoip by moving the MaxMind data files (GeoIP.dat, GeoIPv6.dat, GeoIPASNum.dat, GeoIPASNumv6.dat) to &lt;install-location&gt;/share/GeoIP/
 
 2. Run `make`. This will build Dshell.
 
