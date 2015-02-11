@@ -16,7 +16,7 @@ Key features:
 * Python 2.7
 * [pygeoip](https://github.com/appliedsec/pygeoip), GNU Lesser GPL
   * [MaxMind GeoIP Legacy datasets](http://dev.maxmind.com/geoip/legacy/geolite/)
-* [PyCrypto](https://pypi.python.org/pypi/pycrypto), custom license
+* [PyCrypto](https://pypi.python.org/pypi/pycrypto), Custom License
 * [dpkt](https://code.google.com/p/dpkt/), New BSD License
 * [IPy](https://github.com/haypo/python-ipy), BSD 2-Clause License
 * [pypcap](https://code.google.com/p/pypcap/), New BSD License
