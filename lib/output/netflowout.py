@@ -80,5 +80,7 @@ class NetflowOutput(output.TextOutput):
                                                                                                        kw['endtime'] - kw['starttime'])
                                                                                                    )
                       )
+        if self.nobuffer:
+            self.fh.flush()
 
 obj = NetflowOutput
