@@ -10,7 +10,7 @@ import tests.test_bin_generate_dshellrc as test_generate_dshellrc
 class TestRcConfiguration(unittest.TestCase):
 
     def test_assert_path_exists(self):
-
+        """ Test rc_configuration.assert_path_exists decorator. """
         class PathExistsException(Exception):
             def __init__(self):
                 pass

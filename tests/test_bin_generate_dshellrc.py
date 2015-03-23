@@ -16,12 +16,14 @@ dshellrc = importlib.import_module("generate-dshellrc", "bin")
 
 import lib.rc_configuration as rc_configuration
 
+
 def _get_parent_folder(filepath):
     """ Get folder that contains the one where reference file is in.
 
     :param filepath: Reference file name.
     :type filepath: str
-    :return: str
+    :return: Absolute path to parent folder.
+    :rtype: str
     """
     absolute_filepath = os.path.abspath(filepath)
     file_folder = os.path.dirname(absolute_filepath)
@@ -124,15 +126,6 @@ def _check_all_texts_inside(main_text, texts_to_check):
     else:
         return True
     return False
-
-
-def _create_temporary_directory():
-    """
-    :return: Temporary directory just created.
-    :rtype: TemporaryDirectory.
-    """
-    temporary_directory = tempfile.TemporaryDirectory()
-    return temporary_directory
 
 
 class TemporaryDirectory(object):

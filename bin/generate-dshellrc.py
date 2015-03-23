@@ -4,6 +4,33 @@ import argparse
 import os
 import sys
 
+
+def _get_parent_folder(filepath):
+    """ Get folder that contains the one where reference file is in.
+
+    :param filepath: Reference file name.
+    :type filepath: str
+    :return: Absolute path to parent folder.
+    :rtype: str
+    """
+    absolute_filepath = os.path.abspath(filepath)
+    file_folder = os.path.dirname(absolute_filepath)
+    parent_file_folder = os.path.dirname(file_folder)
+    return parent_file_folder
+
+
+def _add_folder_to_python_path(folder):
+    """  Include given folder in Python path.
+
+    :param folder: Absolute path to folder include.
+    :type folder: str
+    :return: None
+    """
+    sys.path.append(folder)
+
+_parent_folder = _get_parent_folder(__file__)
+_add_folder_to_python_path(_parent_folder)
+
 import lib.rc_configuration as rc_configuration
 
 
@@ -31,6 +58,7 @@ def _get_python_version_name():
     python_main_version = ".".join(sys.version.split('.', 3)[:2]).split(' ')[0]
     python_version_name = ".".join(["python", python_main_version])
     return python_version_name
+
 
 def _load_environment_variables(configuration):
     """  Get configuration envvars and envsetup and return the in a dictionary.

@@ -16,6 +16,7 @@ def _get_python_version():
     python_version = '.'.join(sys.version.split('.', 3)[:2]).split(' ')[0]
     return python_version
 
+
 def assert_path_exists(function):
     """ Decorator to raise an exception if path set in argument does not
     exists.
