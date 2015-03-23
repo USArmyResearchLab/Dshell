@@ -1,146 +1,178 @@
 #!/usr/bin/python
 
+import argparse
 import os
 import sys
 
-DSHELLRC_CONTENT = '''
+import lib.rc_configuration as rc_configuration
 
 
-if [ `echo $BASH_VERSION | cut -d'.' -f1` -ge '4' ]; then
-if [ -f ~/.bash_aliases ]; then
-. ~/.bash_aliases
-fi
+def _create_lib_folders(base_folder):
+    """ Create installation Dshell folders.
 
-if [ -f /etc/bash_completion ]; then
-. /etc/bash_completion
-fi
-
-find_decoder()
-{
-local IFS="+"
-for (( i=0; i<${#COMP_WORDS[@]}; i++ ));
-do
-   if [ "${COMP_WORDS[$i]}" == '-d' ] ; then
-        decoders=(${COMP_WORDS[$i+1]})
-   fi
-done
-}
-
-get_decoders()
-{
-   decoders=$(for x in `find $DECODERPATH -iname '*.py' | grep -v '__init__'`; do basename ${x} .py; done)
-}
-
-_decode()
-{
-local dashdashcommands=' --ebpf --output --outfile --logfile'
-
-local cur prev xspec decoders
-COMPREPLY=()
-cur=`_get_cword`
-_expand || return 0
-prev="${COMP_WORDS[COMP_CWORD-1]}"
-
-case "${cur}" in
---*)
-    find_decoder
-    local options=""
-#           if [ -n "$decoders" ]; then
-#               for decoder in "${decoders[@]}"
-#               do
-#                 options+=`/usr/bin/python $BINPATH/gen_decoder_options.py $decoder`
-#                 options+=" "
-#               done
-#           fi
-
-    options+=$dashdashcommands
-    COMPREPLY=( $(compgen -W "${options}" -- ${cur}) )
-    return 0
-    ;;
-
-*+*)
-   get_decoders
-   firstdecoder=${cur%+*}"+"
-   COMPREPLY=( $(compgen -W "${decoders}" -P $firstdecoder -- ${cur//*+}) )
-   return 0
-   ;;
-
-esac
-
-xspec="*.@(cap|pcap)"
-xspec="!"$xspec
-case "${prev}" in
--d)
-   get_decoders
-   COMPREPLY=( $(compgen -W "${decoders[0]}" -- ${cur}) )
-   return 0
-   ;;
-
---output)
-   local outputs=$(for x in `find $DSHELL/lib/output -iname '*.py' | grep -v 'output.py'`; do basename ${x} .py; done)
-
-   COMPREPLY=( $(compgen -W "${outputs}" -- ${cur}) )
-   return 0
-   ;;
-
--F | -o | --outfile | -L | --logfile)
-   xspec=
-   ;;
-
-esac
-
-COMPREPLY=( $( compgen -f -X "$xspec" -- "$cur" ) \
-$( compgen -d -- "$cur" ) )
-}
-complete -F _decode -o filenames decode
-complete -F _decode -o filenames decode.py
-fi
-'''
-
-if __name__ == '__main__':
-    cwd = sys.argv[1]
-
-    # environment variables used by shell and modules
-    envvars = {
-        'DSHELL': '%s' % (cwd),
-        'DECODERPATH': '%s/decoders' % (cwd),
-        'BINPATH': '%s/bin' % (cwd),
-        'LIBPATH': '%s/lib' % (cwd),
-        'DATAPATH': '%s/share' % (cwd),
-    }
-    # further shell environment setup
-    envsetup = {
-        'LD_LIBRARY_PATH': '$LIBPATH:$LD_LIBRARY_PATH',
-        'PATH': '$BINPATH:$PATH',
-        'PYTHONPATH': '$DSHELL:$LIBPATH:$LIBPATH/output:' + os.path.join('$LIBPATH', 'python' + '.'.join(sys.version.split('.', 3)[:2]).split(' ')[0], 'site-packages') + ':$PYTHONPATH'}
-
+    :param base_folder: Dshell folder absolute path.
+    :type base_folder: str
+    :return: None
+    """
+    python_version_name = _get_python_version_name()
     try:
-        os.mkdir(os.path.join(
-            cwd, 'lib', 'python' + '.'.join(sys.version.split('.', 3)[:2]).split(' ')[0]))
-        os.mkdir(os.path.join(cwd, 'lib', 'python' +
-                              '.'.join(sys.version.split('.', 3)[:2]).split(' ')[0], 'site-packages'))
-    except Exception, e:
+        os.makedirs(os.path.join(base_folder, 'lib', python_version_name,
+                                 'site-packages'))
+    except Exception as e:
         print e
 
+
+def _get_python_version_name():
+    """ Get python version name, for instance: "Python.2.7"
+
+    :return: Python version name.
+    :rtype: str
+    """
+    python_main_version = ".".join(sys.version.split('.', 3)[:2]).split(' ')[0]
+    python_version_name = ".".join(["python", python_main_version])
+    return python_version_name
+
+def _load_environment_variables(configuration):
+    """  Get configuration envvars and envsetup and return the in a dictionary.
+
+    :param configuration: Dshell shell configuration.
+    :type configuration: lib.rc_configuration.RcConfiguration
+    :return: Envvars and envsetup packet in a single dictionary.
+    :rtype: dict
+    """
     envdict = {}
-    envdict.update(envvars)
-    envdict.update(envsetup)
+    envdict.update(configuration.envvars)
+    envdict.update(configuration.envsetup)
+    return envdict
 
-    #.dshellrc text
-    env = ['export PS1="`whoami`@`hostname`:\w Dshell> "'] + ['export %s=%s' %
-                                                              (k, v) for k, v in envvars.items()] + ['export %s=%s' % (k, v) for k, v in envsetup.items()]
-    with open('.dshellrc', 'w') as outfd:
-        outfd.write("\n".join(env))
-        if len(sys.argv) > 2 and sys.argv[2] == 'with_bash_completion':
-            outfd.write(DSHELLRC_CONTENT)
 
-    # dshell text
-    with open('dshell', 'w') as outfd:
+def _create_bash_files(configuration, bash_completion):
+    """ Create Dshell bash files and populate them with default content.
+
+    :param configuration: Dshell shell configuration.
+    :type configuration: lib.rc_configuration.RcConfiguration
+    :param bash_completion: Dshell console should have bash completion?
+    :type bash_completion: bool
+    :return: None
+    """
+    _create_dshellrc(configuration=configuration,
+                     bash_completion=bash_completion)
+    _create_dshell_launcher(configuration)
+    _create_dshell_decode(configuration)
+    pass
+
+
+def _create_dshellrc(configuration, bash_completion):
+    """ Create Dshell bashrc files and populate it with default content.
+
+    :param configuration: Dshell shell configuration.
+    :type configuration: lib.rc_configuration.RcConfiguration
+    :param bash_completion: Dshell console should have bash completion?
+    :type bash_completion: bool
+    :return: None
+    """
+    env = _create_variable_exports_strings(configuration)
+    _create_dshellrc_file(configuration=configuration,
+                          bash_completion=bash_completion,
+                          env_string=env)
+
+
+def _create_variable_exports_strings(configuration):
+    """ Create lines with needed bash variables exports.
+
+    :param configuration: Dshell shell configuration.
+    :type configuration: lib.rc_configuration.RcConfiguration
+    :return: List with bash variable exports lines.
+    :rtype: list
+    """
+    ps1_string = ['export PS1="`whoami`@`hostname`:\w Dshell> "']
+    envvars_strings = ["export {0}={1}".format(k, v)
+                       for k, v in configuration.envvars.items()]
+    envsetup_strings = ["export {0}={1}".format(k, v)
+                        for k, v in configuration.envsetup.items()]
+    env = ps1_string + envvars_strings + envsetup_strings
+    return env
+
+
+def _create_dshellrc_file(configuration, bash_completion, env_string):
+    """ Create Dshell bashrc file and populate it with default content and
+     with bash variables exports lines.
+
+    :param configuration: Dshell shell configuration.
+    :type configuration: lib.rc_configuration.RcConfiguration
+    :param bash_completion: Dshell console should have bash completion?
+    :type bash_completion: bool
+    :param env_string: Variables export lines
+    :type env_string: list
+    :return: None
+    """
+    file_path = os.path.join(configuration.base_folder, ".dshellrc")
+    with open(file_path, 'w') as outfd:
+        outfd.write("\n".join(env_string))
+        if bash_completion:
+            outfd.write("\n\n")
+            outfd.write(configuration.dshellrc)
+
+
+def _create_dshell_launcher(configuration):
+    """ Create Dshell launcher and populate it with default content.
+
+    :param configuration: Dshell shell configuration.
+    :type configuration: lib.rc_configuration.RcConfiguration
+    :return: None
+    """
+    file_path = os.path.join(configuration.base_folder, "dshell")
+    with open(file_path, 'w') as outfd:
         outfd.write('#!/bin/bash\n')
-        outfd.write('/bin/bash --rcfile %s/.dshellrc\n' % (cwd))
+        outfd.write('/bin/bash --rcfile {0}/.dshellrc\n'.format(configuration.base_folder))
 
-    # dshell-decode text
-    with open('dshell-decode', 'w') as outfd:
+
+def _create_dshell_decode(configuration):
+    """ Create Dshell decode launcher and populate it with default content.
+
+    :param configuration: Dshell shell configuration.
+    :type configuration: lib.rc_configuration.RcConfiguration
+    :return: None
+    """
+    file_path = os.path.join(configuration.base_folder, "dshell-decode")
+    with open(file_path, 'w') as outfd:
         outfd.write('#!/bin/bash\n')
-        outfd.write('source %s/.dshellrc\n' % (cwd))
+        outfd.write('source {0}/.dshellrc\n'.format(configuration.base_folder))
         outfd.write('decode "$@"')
+
+
+def _parse_arguments():
+    """ Deal with user arguments in a pythonic way. """
+
+    arg_parser = argparse.ArgumentParser(description="Generate Dshell console "
+                                                     "environment.\n",
+                                         epilog="More info at: "
+                                                "<https://github.com/USArmyResearchLab/Dshell>")
+    arg_parser.add_argument(dest="cwd", metavar="\"Installation folder\"",
+                            type=str, help="Folder where Dshell is installed.")
+    # TODO: This next parameter is ever used?
+    # Actual Makefile does not include a second argument when it calls
+    # generate-dshellrc.py.
+    arg_parser.add_argument("-c", "--with_bash_completion",
+                            dest="with_bash_completion",
+                            action="store_true",
+                            default=False,
+                            help="Make Dshell have bash completion.")
+    return arg_parser.parse_args()
+
+
+def main():
+    _arguments = _parse_arguments()
+    configuration = rc_configuration.RcConfiguration(_arguments.cwd)
+    _create_lib_folders(configuration.base_folder)
+    # TODO: Find out if envdict is really used.
+    # I've kept it here to not to break anything because it was in original
+    # source code, but I think this variable is doing nothing. I'm going
+    # to review the rest of source code and if I don't find any reference
+    # to envdict I'm going to remove it from here.
+    envdict = _load_environment_variables(configuration)
+    _create_bash_files(configuration=configuration,
+                       bash_completion=_arguments.with_bash_completion)
+
+if __name__ == '__main__':
+    main()
