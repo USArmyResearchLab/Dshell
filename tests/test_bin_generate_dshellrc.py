@@ -1,19 +1,12 @@
 __author__ = 'Dante Signal31'
 
-import importlib
 import os.path
 import shutil
 import tempfile
 import unittest
 import uuid
 
-# Naming a python file with an hyphen inside is a bad idea because imports fail
-# with them, so you have to look a workaround to import it in order to test
-# it:
-#       http://stackoverflow.com/questions/7583652/python-module-with-a-dash-or-hyphen-in-its-name
-#       http://stackoverflow.com/questions/8790003/dynamically-import-a-method-in-a-file-from-a-string
-dshellrc = importlib.import_module("generate-dshellrc", "bin")
-
+import bin.generate_dshellrc as dshellrc
 import lib.rc_configuration as rc_configuration
 
 

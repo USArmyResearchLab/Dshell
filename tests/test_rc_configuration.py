@@ -16,7 +16,7 @@ class TestRcConfiguration(unittest.TestCase):
                 pass
 
         @rc_configuration.assert_path_exists
-        def dummy_function(dummy_arg, path):
+        def dummy_function(_, path):
             raise PathExistsException()
 
         existent_path = os.getcwd()
@@ -26,7 +26,6 @@ class TestRcConfiguration(unittest.TestCase):
             dummy_function(None, existent_path)
         with self.assertRaises(rc_configuration.MissingFolderError):
             dummy_function(None, non_existent_path)
-
 
 
 if __name__ == '__main__':

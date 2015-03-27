@@ -28,6 +28,9 @@ def _add_folder_to_python_path(folder):
     """
     sys.path.append(folder)
 
+# Importing sibling packages means messing with path if your script
+# is not called from another script one level up:
+#       http://stackoverflow.com/questions/6323860/sibling-package-imports
 _parent_folder = _get_parent_folder(__file__)
 _add_folder_to_python_path(_parent_folder)
 
@@ -180,7 +183,7 @@ def _parse_arguments():
                             type=str, help="Folder where Dshell is installed.")
     # TODO: This next parameter is ever used?
     # Actual Makefile does not include a second argument when it calls
-    # generate-dshellrc.py.
+    # generate_dshellrc.py.
     arg_parser.add_argument("-c", "--with_bash_completion",
                             dest="with_bash_completion",
                             action="store_true",
