@@ -38,7 +38,7 @@ Key features:
 ## Basic usage
 
 * `decode -l`
-  * This will list all available decoders alongside basic information about them
+  * List all available decoders alongside basic information about them
 * `decode -h`
   * Show generic command-line flags available to most decoders
 * `decode -d <decoder>`
