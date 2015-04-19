@@ -1,5 +1,3 @@
-apt-get update
-service postgresql start
 service Metasploit start
 
 cd /opt/
