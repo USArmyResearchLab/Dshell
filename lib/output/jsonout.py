@@ -79,5 +79,7 @@ class JSONOutput(output.TextOutput):
                         del kw[name]
         self.fh.write(
             json.dumps(kw, ensure_ascii=self.options['ensure_ascii']) + "\n")
+        if self.nobuffer:
+            self.fh.flush()
 
 obj = JSONOutput

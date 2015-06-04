@@ -23,13 +23,13 @@ Key features:
 
 ## Installation
 
-1. Install all of the necessary Python modules listed above. Many of them are available via pip and/or apt-get. Pygeoip is not yet available as a package and must be installed with pip or manually. All except dpkt are available with pip.
- 
+1. Install all of the necessary Python modules listed above. Many of them are available via pip and/or apt-get. Pygeoip is not yet available as a package and must be installed with pip or manually.
+
   1. `sudo apt-get install python-crypto python-dpkt python-ipy python-pypcap`
 
   2. `sudo pip install pygeoip`
 
-2. Configure pygeoip by moving the MaxMind data files (GeoIP.dat, GeoIPv6.dat, GeoIPASNum.dat, GeoIPASNumv6.dat) to <dshell>/share/GeoIP/
+2. Configure pygeoip by moving the MaxMind data files (GeoIP.dat, GeoIPv6.dat, GeoIPASNum.dat, GeoIPASNumv6.dat) to &lt;install-location&gt;/share/GeoIP/
 
 2. Run `make`. This will build Dshell.
 

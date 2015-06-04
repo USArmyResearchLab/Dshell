@@ -21,7 +21,7 @@ class DshellDecoder(dshell.TCPDecoder):
             self.warn(
                 "Cannot have a size that's less than or equal to zero. (size: %s)" % (self.size))
             self.size = 1
-        self.min = 104857 * self.size
+        self.min = 1048576 * self.size
         self.debug("Input: %s,  Final size: %s bytes" % (self.size, self.min))
 
     def connectionHandler(self, conn):
