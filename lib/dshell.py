@@ -509,7 +509,7 @@ class IPDecoder(Decoder):
                 try:
                     smac = "%02x:%02x:%02x:%02x:%02x:%02x" % (struct.unpack("BBBBBB", pkt.src))
                     dmac = "%02x:%02x:%02x:%02x:%02x:%02x" % (struct.unpack("BBBBBB", pkt.dst))
-                except:  # couldn't get MAC address
+                except struct.error:  # couldn't get MAC address
                     smac, dmac = None, None
             # if this is an IPv4 packet, defragment, decode and hand it off
             if type(pkt.data) == dpkt.ip.IP:
