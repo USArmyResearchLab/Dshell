@@ -10,9 +10,7 @@ import socket
 import traceback
 import util
 import os
-import datetime
 import logging
-import binascii
 
 # For IP lookups
 try:
@@ -134,7 +132,7 @@ class Decoder(object):
         if kwargs:
             self.__dict__.update(kwargs)
 
-    '''convenience functions for alert output and logging'''
+    ### convenience functions for alert output and logging ###
 
     def alert(self, *args, **kw):
         '''sends alert to output handler
@@ -426,10 +424,10 @@ class Decoder(object):
             # decode with the L2 decoder (probably Ether)
             pkt = self.l2decoder(pktdata)
             # strip any intermediate layers (PPPoE, etc)
-            for l in xrange(int(self.striplayers)):
+            for _ in xrange(int(self.striplayers)):
                 pkt = pkt.data
-            '''will call self.rawHandler(len,pkt,ts)
-            (hdr,data) is the PCAP header and raw packet data'''
+            # will call self.rawHandler(len,pkt,ts)
+            # (hdr,data) is the PCAP header and raw packet data
             if 'rawHandler' in dir(self):
                 self.rawHandler(pktlen, pkt, ts, **kw)
             else:
@@ -506,6 +504,13 @@ class IPDecoder(Decoder):
         if 6to4, unencaps the IPv6
         If IP/IP6, hands off to IPDecoder via IPHandler()'''
         try:
+            # If this packet has an Ethernet header, try and grab the MAC address
+            if type(pkt) == dpkt.ethernet.Ethernet:
+                try:
+                    smac = "%02x:%02x:%02x:%02x:%02x:%02x" % (struct.unpack("BBBBBB", pkt.src))
+                    dmac = "%02x:%02x:%02x:%02x:%02x:%02x" % (struct.unpack("BBBBBB", pkt.dst))
+                except struct.error:  # couldn't get MAC address
+                    smac, dmac = None, None
             # if this is an IPv4 packet, defragment, decode and hand it off
             if type(pkt.data) == dpkt.ip.IP:
                 if self.defrag:
@@ -533,6 +538,7 @@ class IPDecoder(Decoder):
                                        proto=self.IP_PROTO_MAP.get(
                                            pkt.p, pkt.p),
                                        sipint=sipint, dipint=dipint,
+                                       smac=smac, dmac=dmac,
                                        **kwargs)
             if pkt and type(pkt.data) == dpkt.ip6.IP6:
                 pkt = pkt.data  # no defrag of ipv6
@@ -544,10 +550,17 @@ class IPDecoder(Decoder):
                     sport, dport = pkt.data.sport, pkt.data.dport
                 except:
                     sport, dport = None, None
+                # generate int forms of src/dest ips
+                h, l = struct.unpack("!QQ", pkt.src)
+                sipint = ( (h << 64) | l )
+                h, l = struct.unpack("!QQ", pkt.dst)
+                dipint = ( (h << 64) | l )
                 # call ipv6 handler
                 self.IPHandler(((sip, sport), (dip, dport)), pkt, ts,
                                pkttype=dpkt.ethernet.ETH_TYPE_IP6,
                                proto=self.IP_PROTO_MAP.get(pkt.nxt, pkt.nxt),
+                               sipint=sipint, dipint=dipint,
+                               smac=smac, dmac=dmac,
                                **kwargs)
         except Exception, e:
             self._exc(e)
