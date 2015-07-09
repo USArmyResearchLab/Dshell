@@ -48,15 +48,20 @@ class DshellDecoder(HTTPDecoder):
                            (self.outdir, e))
                 sys.exit(1)
 
+    def splitstrip(self, data, sep, strip=' '):
+        return [lpart.strip(strip) for lpart in data.split(sep)]
+
     def HTTPHandler(self, conn, request, response, requesttime, responsetime):
+        payload = None
         self.debug('%s %s' % (repr(request), repr(response)))
         if (not self.direction or self.direction == 'cs') and request and request.method == 'POST' and request.body:
-            if not self.content_filter or self.content_filter.search(contenttype):
                 payload = request
         elif (not self.direction or self.direction == 'sc') and response and response.status[0] == '2':
-            if not self.content_filter or self.content_filter.search(response.headers['content-type']):
                 payload = response 
-        if 'payload' in locals():        
+        if payload:
+            if not (not self.content_filter or self.content_filter.search(payload.headers['content-type'])):
+                payload = None
+        if payload:        
             # Calculate URL
             host = util.getHeader(request, 'host')
             if host == '':
@@ -70,6 +75,15 @@ class DshellDecoder(HTTPDecoder):
             # New file
             else:
                 filename = request.uri.split('?')[0].split('/')[-1]
+                if 'content-disposition' in payload.headers:
+                    cdparts = self.splitstrip(payload.headers['content-disposition'], ';')
+                    for cdpart in cdparts:
+                        try:
+                            k, v = self.splitstrip(cdpart, '=')
+                            if k == 'filename':
+                                filename = v
+                        except:
+                            pass
                 self.debug("New file with URL: %s" % url)
                 if not self.name_filter or self.name_filter.search(filename):
                     if self.append_conn:
