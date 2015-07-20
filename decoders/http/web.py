@@ -15,26 +15,54 @@ class DshellDecoder(HTTPDecoder):
                              filter='tcp and (port 80 or port 8080 or port 8000)',
                              filterfn=lambda ((sip, sp), (dip, dp)): sp in (
                                  80, 8000, 8080) or dp in (80, 8000, 8080),
-                             author='bg,twp',
+                             author='bg,twp,mrl',
                              optiondict={
                                  'maxurilen': {'type': 'int', 'default': 30, 'help': 'Truncate URLs longer than max len.  Set to 0 for no truncating. (default: 30)'},
-                                 'md5': {'action': 'store_true', 'help': 'calculate MD5 for each response. Available in CSV output.'}
+                                 'md5': {'action': 'store_true', 'help': 'calculate MD5 for each response. Available in CSV output.'},
+                                 'color': {'action': 'store_true', 'help': 'display colored output for various traffic types'}
                              },
                              )
         self.gunzip = False  # Not interested in response body
+
+    def set_color(self, content_type):
+        if (content_type in ("application/zip", 
+            "application/x-rar-compressed", 
+            "application/vnd.ms-cab-compressed")): 
+
+            # For zip file downloads, color output yellow
+            color_code = '\x1b[33m' 
+        
+        elif(content_type in ('application/x-shockwave-flash',
+            'application/octet-stream',
+            'application/octet-stream', 
+            'application/x-www-form-urlencoded')):
+
+            # For flash file downloads, color output cyan
+            color_code = '\x1b[36m'
+
+        elif(content_type == 'application/x-msdownload'):
+            # For executable file downloads, color output red
+            color_code = '\x1b[31m'
+
+        else:
+            # White output for all other traffic
+            color_code = '\x1b[37m'
+        return color_code
+
+    def generate_alert(self, conn, color_code, request_info, response_info, **kwargs):
+        print '%s\r' % color_code,
+        self.alert("%-80s // %s" % (request_info, response_info), kwargs, **conn.info())
+        print '\x1b[37m',
 
     def HTTPHandler(self, conn, request, response, requesttime, responsetime):
         host = ''
         loc = ''
         lastmodified = ''
-
-        #request_time, request, response = self.httpDict[conn.addr]
-
+        
         # extract method,uri,host from response
         host = util.getHeader(request, 'host')
         if host == '':
             host = conn.serverip
-
         try:
             status = response.status
         except:
@@ -54,6 +82,13 @@ class DshellDecoder(HTTPDecoder):
         referer = util.getHeader(request, 'referer')
         useragent = util.getHeader(request, 'user-agent')
         via = util.getHeader(request, 'via')
+        content_type = util.getHeader(response, 'content-type')
+
+        if self.color:
+            color_code = self.set_color(content_type)
+        else:
+            color_code = '\x1b[37m'
+        print color_code,
 
         try:
             responsesize = len(response.body.rstrip('\0'))
@@ -90,8 +125,8 @@ class DshellDecoder(HTTPDecoder):
         else:
             responseInfo = ''
 
-        self.alert("%-80s // %s" % (requestInfo, responseInfo), referer=referer, useragent=useragent, request=requestInfo, response=responseInfo, request_time=requesttime, response_time=responsetime, request_method=request.method, host=host,
-                   uri=request.uri, status=status, reason=reason, lastmodified=lastmodified, md5=md5, responsesize=responsesize, contenttype=util.getHeader(response, 'content-type'), responsefile=responsefile, uploadfile=uploadfile, via=via, **conn.info())
+        self.generate_alert(conn, color_code, requestInfo, responseInfo, referer=referer, useragent=useragent, request=requestInfo, response=responseInfo, request_time=requesttime, response_time=responsetime, request_method=request.method, host=host, uri=request.uri, status=status, reason=reason, lastmodified=lastmodified, md5=md5, responsesize=responsesize, contenttype=util.getHeader(response, 'content-type'), responsefile=responsefile, uploadfile=uploadfile, via=via)
+
         if self.out.sessionwriter:
             self.write(request.data, direction='cs')
             if response:
@@ -136,7 +171,6 @@ class DshellDecoder(HTTPDecoder):
 
     def splitstrip(self, data, sep, strip=' '):
         return [lpart.strip(strip) for lpart in data.split(sep)]
-
 
 if __name__ == '__main__':
     dObj = DshellDecoder()
