@@ -13,9 +13,9 @@ class DshellDecoder(dshell.UDPDecoder):
                             longdescription="""
 The dhcp decoder will extract the Transaction ID, Client Hostname, and 
 Client MAC address from every UDP DHCP packet found in the given pcap
-destined for port 67.  DHCP uses BOOTP as its transport protocol.  
+using port 67.  DHCP uses BOOTP as its transport protocol.  
 BOOTP traffic generally uses ports 67 and 68 for outgoing and incoming traffic.
-This filter pulls DHCP Inform packets destined for the server.
+This filter pulls DHCP Inform packets.
 
 Examples:
 
