@@ -51,82 +51,61 @@ class DshellDecoder(HTTPDecoder):
     def splitstrip(self, data, sep, strip=' '):
         return [lpart.strip(strip) for lpart in data.split(sep)]
 
-    def POSTHandler(self, postdata):
-        next_line_is_data = False
-        for l in postdata.split("\r\n"):
-            if next_line_is_data:
-                break
-            if l == '':
-                next_line_is_data = True  # \r\n\r\n before data
-                continue
-            try:
-                k, v = self.splitstrip(l, ':')
-                if k == 'Content-Type':
-                    contenttype = v
-                if k == 'Content-Disposition':
-                    cdparts = self.splitstrip(v, ';')
+    def HTTPHandler(self, conn, request, response, requesttime, responsetime):
+        payload = None
+        self.debug('%s %s' % (repr(request), repr(response)))
+        if (not self.direction or self.direction == 'cs') and request and request.method == 'POST' and request.body:
+                payload = request
+        elif (not self.direction or self.direction == 'sc') and response and response.status[0] == '2':
+                payload = response 
+        if payload:
+            if not (not self.content_filter or self.content_filter.search(payload.headers['content-type'])):
+                payload = None
+        if payload:        
+            # Calculate URL
+            host = util.getHeader(request, 'host')
+            if host == '':
+                host = conn.serverip
+            url = host + request.uri
+            # File already open
+            if url in self.openfiles:
+                self.debug("Adding response section to %s" % url)
+                (s, e) = self.openfiles[url].handleresponse(response)
+                self.write(" --> Range: %d - %d\n" % (s, e))
+            # New file
+            else:
+                filename = request.uri.split('?')[0].split('/')[-1]
+                if 'content-disposition' in payload.headers:
+                    cdparts = self.splitstrip(payload.headers['content-disposition'], ';')
                     for cdpart in cdparts:
                         try:
-                            k, v = self.splitstrip(cdpart, '=', '"')
+                            k, v = self.splitstrip(cdpart, '=')
                             if k == 'filename':
                                 filename = v
                         except:
                             pass
-            except:
-                pass
-        return contenttype, filename, l
-
-    def HTTPHandler(self, conn, request, response, requesttime, responsetime):
-        self.debug('%s %s' % (repr(request), repr(response)))
-        if (not self.direction or self.direction == 'cs') and request and request.method == 'POST' and request.body:
-            contenttype, filename, data = self.POSTHandler(request.body)
-            if not self.content_filter or self.content_filter.search(contenttype):
+                self.debug("New file with URL: %s" % url)
                 if not self.name_filter or self.name_filter.search(filename):
                     if self.append_conn:
-                        filename += '_%s-%s' % (conn.clientip, conn.serverip)
+                        filename += '_%s-%s' % (conn.serverip,
+                                                conn.clientip)
                     if self.append_ts:
                         filename += '_%d' % (conn.ts)
-                    self.debug(os.path.join(self.outdir, filename))
-                    f = open(os.path.join(self.outdir, filename), 'w')
-                    f.write(data)
-                    f.close()
-        elif (not self.direction or self.direction == 'sc') and response and response.status[0] == '2':
-            if not self.content_filter or self.content_filter.search(response.headers['content-type']):
-                # Calculate URL
-                host = util.getHeader(request, 'host')
-                if host == '':
-                    host = conn.serverip
-                url = host + request.uri
-                # File already open
-                if url in self.openfiles:
-                    self.debug("Adding response section to %s" % url)
-                    (s, e) = self.openfiles[url].handleresponse(response)
+                    if not len(filename):
+                        filename = '%s-%s_index.html' % (
+                            conn.serverip, conn.clientip)
+                    while os.path.exists(os.path.join(self.outdir, filename)):
+                        filename += '_'
+                    self.alert("New file: %s (%s)" %
+                               (filename, url), conn.info())
+                    self.openfiles[url] = httpfile(
+                        os.path.join(self.outdir, filename), self)
+                    (s, e) = self.openfiles[url].handleresponse(payload)
                     self.write(" --> Range: %d - %d\n" % (s, e))
-                # New file
-                else:
-                    filename = request.uri.split('?')[0].split('/')[-1]
-                    self.debug("New file with URL: %s" % url)
-                    if not self.name_filter or self.name_filter.search(filename):
-                        if self.append_conn:
-                            filename += '_%s-%s' % (conn.serverip,
-                                                    conn.clientip)
-                        if self.append_ts:
-                            filename += '_%d' % (conn.ts)
-                        if not len(filename):
-                            filename = '%s-%s_index.html' % (
-                                conn.serverip, conn.clientip)
-                        while os.path.exists(os.path.join(self.outdir, filename)):
-                            filename += '_'
-                        self.alert("New file: %s (%s)" %
-                                   (filename, url), conn.info())
-                        self.openfiles[url] = httpfile(
-                            os.path.join(self.outdir, filename), self)
-                        (s, e) = self.openfiles[url].handleresponse(response)
-                        self.write(" --> Range: %d - %d\n" % (s, e))
-                if self.openfiles[url].done():
-                    self.alert("File done: %s (%s)" %
-                               (self.openfiles[url].filename, url), conn.info())
-                    del self.openfiles[url]
+            if self.openfiles[url].done():
+                self.alert("File done: %s (%s)" %
+                           (self.openfiles[url].filename, url), conn.info())
+                del self.openfiles[url]
 
 
 class httpfile:
