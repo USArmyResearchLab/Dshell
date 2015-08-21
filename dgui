@@ -1,94 +1,50 @@
-class Dgui: 
-  def __init__(self, root):
-    frame = Frame(root)
-    frame.pack()
-    self.button = Button(frame, 
-                         text="QUIT", fg="red",
-                         command=frame.quit)
-    self.button.pack(side=LEFT)
-    self.slogan = Button(frame,
-                         text="Start Decompilers",
-                         command=self.write_slogan)
-    self.slogan.pack(side=LEFT)
-  def write_slogan(self):
-     print "Dshell"
-
-     def root (LPAREN): 
-         LPAREN = (root)
-     root.mainloop()
-     root = IntVar()
-     v.set(1)
-     
-Menu = [
+class frame(object):
+    pass
+class Dgui:
+    def __init__(self, root):
+        root.frame 
+def Button ():
+    Button.frame = []
 ("Decompilers",1),
 ("Decompilers",2),
 ("Decompilers",3),
 ("Decompilers",4),
 ("Decompilers",5)
-]
-
+Button
+command=frame.Button
+frame.slogan = Button
+frame, text="Start Decompilers"
+def root (LPAREN):
+    LPAREN = (root)
+    root.mainloop()
+    root = LPAREN()
+root.mainloop(1)
 def show_choice():
-    print v.get()
-Label(root, 
-      text="""Select Decompiler:""",
-      justify = LEFT,
-      padx = 20).pack()
-for txt, val in tools:
-    Radiobutton(root, 
-                text=txt,
-                padx = 20, 
-                variable=v, 
-                command=ShowChoice,
-                value=val).pack(anchor=W)
-mainloop()
-class Checkbar(Frame):
-   def __init__(self, parent=None, picks=[], side=LEFT, anchor=W):
-      Frame.__init__(self, parent)
-      self.vars = []
-      for pick in picks:
-         var = IntVar()
-         chk = Checkbutton(self, text=pick, variable=var)
-         chk.pack(side=side, anchor=anchor, expand=YES)
-         self.vars.append(var)
-   def state(self):
-      return map((lambda var: var.get()), self.vars)
+        print show_choice()
+        root,text == "Select Decompiler"
+        class Checkbar(self):
+            def __init__(self, parent=None, picks=[]):
+                def Checkbar(pick):
+                    Checkbar.chk = pick()
+            def state(self):
+                return map((lambda var: var.get()), self.vars)
 if __name__ == '__main__':
-   root = Tk()
-   lng = Checkbar(root, ['1', '2', '3', '4'])
-   tgl = Checkbar(root, ['pygeoip','pypcap'])
-   lng.pack(side=TOP,  fill=X)
-   tgl.pack(side=LEFT)
-   lng.config(relief=GROOVE, bd=2)
-
-   def allstates(): 
-      print(list(lng.state()), list(tgl.state()))
-   Button(root, text='Quit', command=root.quit).pack(side=RIGHT)
-   Button(root, text='Peek', command=allstates).pack(side=RIGHT)
-   root.mainloop()
-fields = 'Port', 'Protocol', 'IPA', 'GEOaddress'
-def fetch(entries):
-   for entry in entries:
-      field = entry[0]
-      text  = entry[1].get()
-      print('%s: "%s"' % (field, text)) 
-def makeform(root, fields):
-   entries = []
-   for field in fields:
-      row = Frame(root)
-      lab = Label(row, width=15, text=field, anchor='w')
-      ent = Entry(row)
-      row.pack(side=TOP, fill=X, padx=5, pady=5)
-      lab.pack(side=LEFT)
-      ent.pack(side=RIGHT, expand=YES, fill=X)
-      entries.append((field, ent))
-   return entries
-if __name__ == '__main__':
-   root = App()
-   ents = makeform(root, fields)
-   root.bind('<Return>', (lambda event, e=ents: fetch(e)))   
-   b1 = Button(root, text='Show',
-          command=(lambda e=ents: fetch(e)))
-   b1.pack(side=LEFT, padx=5, pady=5)
-   b2 = Button(root, text='Quit', command=root.quit)
-   b2.pack(side=LEFT, padx=5, pady=5)
-   root.mainloop()
+    def allstates():
+        root.mainloop()
+def options():
+    options(object)
+    object('Port', 'Protocol', 'IPA', 'GEOaddress')
+    def fetch(entries):
+            for entry in entries:
+                field = entry[0]
+                text  = entry[1].get()
+                print('%s: "%s"' % (field, text))
+                def makeform(root, fields):
+                    entries = []
+                    for field in fields:
+                        entries.append((field, entries))
+                        return entries
+                    if __name__ == '__main__':
+                        root.mainloop()
+                        root.bind('<Return>')
+root.mainloop()
