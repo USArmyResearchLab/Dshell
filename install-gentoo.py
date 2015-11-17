@@ -9,12 +9,7 @@ dependencies = {
     "IPy": "dev-python/ipy",
     "pcap": "dev-python/pypcap"
     "pygeoip" : "dev-python/pygeoip"
- 
- 
-
-  
- doc? (dev-python/epydoc)"
-}
+ }
 
 installed, missing_pkgs = [pkg[1] for pkg in iter_modules()], []
 
@@ -26,7 +21,7 @@ for module, pkg in dependencies.items():
         print("{} is installed".format(module))
 
 if missing_pkgs:
-    cmd = ["emerge-sync emerge -v",] + missing_pkgs  # -av
+    cmd = ["emerge-sync emerge -v",] + missing_pkgs  #  Emerge -av --ask --verbose else emerge foo --quiet to shut up build/emerge messages
 
     print(" ".join(cmd))
     call(cmd)
