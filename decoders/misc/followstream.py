@@ -63,7 +63,8 @@ Example:
     def preModule(self):
         self.connectionCount = 0
         # Reset the color mode, in case a file is specified
-        self.out.setColorMode()
+        if 'setColorMode' in dir(self.out):
+            self.out.setColorMode()
         # Used to indicate when data is missing or overlapping
         self.data_missing_message = ''
         # overwrite the output module's default error handler
