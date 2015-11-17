@@ -33,7 +33,8 @@ if missing_pkgs:
 
 call(["make", "rc"]) ## Gentoo way is hell NO! , make all but docs, 
 call(["make", "initpy"]) ## Gentoo way is hell NO! , make all but docs, 
- = input('Would You Like DSHELL DOCS?')
+### Give user Choice Add the dependency for Pydocs epyoc , Fine package controls Is the Gentoo way, 
+ Docs= input('Would You Like DSHELL DOCS?')
 if Docs == 'yes' or 'Yes':
     dependencies = {
         "pydoc":"dev-python/epydoc"
