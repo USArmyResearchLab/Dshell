@@ -2,9 +2,12 @@
 @author: amm
 '''
 
+import dshell
+import dfile
 import output
 import datetime
 import json
+import base64
 
 
 class JSONOutput(output.TextOutput):
@@ -48,6 +51,14 @@ class JSONOutput(output.TextOutput):
         output.TextOutput.__init__(self, **kwargs)
 
     def alert(self, *args, **kw):
+        self.fh.write(
+            json.dumps(self._filter_data(kw), ensure_ascii=self.options['ensure_ascii']) + "\n")
+        if self.nobuffer:
+            self.fh.flush()
+
+
+    # Reusable function to filter data in alerts and writes
+    def _filter_data(self, kw):
 
         # User specified field list??
         if self.jsonfields != None:
@@ -77,9 +88,48 @@ class JSONOutput(output.TextOutput):
                 for name in ('servercountrycode', 'clientcountrycode', 'sipcc', 'dipcc', 'clientasn', 'serverasn', 'dipasn', 'sipasn'):
                     if name in kw:
                         del kw[name]
-        self.fh.write(
-            json.dumps(kw, ensure_ascii=self.options['ensure_ascii']) + "\n")
-        if self.nobuffer:
-            self.fh.flush()
+
+        outdata = {}
+        for n,v in kw.iteritems():
+            if not isinstance(v, dfile.dfile):
+              outdata[n] = v
+
+        return outdata
+
+
+    def write(self,*args,**kw):
+  
+      # Iterate *args
+      for a in args:
+        if type(a) == dshell.Blob:
+          self.fh.write(json.dumps(self._blob_to_dict(blob), ensure_ascii=self.options['ensure_ascii']) + "\n")
+        elif type(a) == dshell.Connection:
+          outdata = self._filter_data(a.info())
+          outdata['type'] = 'conn'
+          outdata['data'] = []
+          for blob in a:
+            #self._write_blob(blob, kw)
+            outdata['data'].append(self._blob_to_dict(blob))
+          self.fh.write(json.dumps(outdata, ensure_ascii=self.options['ensure_ascii']) + "\n")
+        else:
+          d = self._filter_data(kw)
+          d['type'] = 'raw'
+          if type(a) == unicode:
+            d['data'] = base64.b64encode(a.encode('utf-8'))
+          else:
+            d['data'] = base64.b64encode(a)
+          self.fh.write(json.dumps(d, ensure_ascii=self.options['ensure_ascii']) + "\n")
+  
+    # Custom error handler for data reassembly --- ignores all errors
+    def errorH(self, **x):
+      return True
+  
+    def _blob_to_dict(self, blob):
+      d = self._filter_data(blob.info())
+      d['type'] = 'blob'
+      d['data'] = base64.b64encode(blob.data(errorHandler=self.errorH))
+      return d
+
+
 
 obj = JSONOutput
