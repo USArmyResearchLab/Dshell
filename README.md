@@ -46,6 +46,12 @@ Key features:
 * `decode -d <decoder> <pcap>`
   * Run the selected decoder on a pcap file
 
+## Partners
+
+Below are repositories from partners Dshell has worked together with.
+
+* [DeKrych/Dshell-plugins](https://github.com/DeKrych/Dshell-plugins)
+
 ## Usage Examples
 
 Showing DNS lookups in [sample traffic](http://wiki.wireshark.org/SampleCaptures#General_.2F_Unsorted)
