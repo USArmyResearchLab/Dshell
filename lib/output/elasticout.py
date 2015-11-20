@@ -22,8 +22,9 @@ class elasticout(output.TextOutput):
 
             options
             -------
-            host:         <host>:<ip> of an Elasticsearch search node
-            index:        Elasticsearch index
+            host:         <host>:<ip> of an Elasticsearch search node  (REQUIRED)
+            index:        Elasticsearch index  (REQUIRED)
+            doc_type:     Elasticsearch document type for indexed documents
             geoip:        If set to Y, output module won't discard geoip tags
             notrim:       If set to Y, do not trim any fields from the output
             message:      If set to Y, add the decoder output message (args[0])
