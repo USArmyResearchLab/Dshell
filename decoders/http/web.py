@@ -81,7 +81,7 @@ class DshellDecoder(HTTPDecoder):
             uploadfile = None
 
         requestInfo = '%s %s%s HTTP/%s' % (request.method,
-                                           host,
+                                           host if host != request.uri else '',  # With CONNECT method, the URI is or contains the host, making this redudant
                                            request.uri[:self.maxurilen] + '[truncated]' if self.maxurilen > 0 and len(
                                                request.uri) > self.maxurilen else request.uri,
                                            request.version)
