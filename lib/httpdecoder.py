@@ -36,13 +36,13 @@ class HTTPDecoder(dshell.TCPDecoder):
 
     def blobHandler(self, conn, blob):
         '''buffer the request blob and call the handler once we have the response blob'''
-        if blob.direction == 'cs':
+        if conn not in self.requests:
             try:
                 self.requests[conn] = (
                     blob.starttime, dpkt.http.Request(blob.data(self.errorH)))
             except Exception, e:
                 self.UnpackError(e)
-        elif blob.direction == 'sc' and conn in self.requests:
+        else:
             try:
                 if 'HTTPHandler' in dir(self):
                     response = dpkt.http.Response(blob.data(self.errorH))
