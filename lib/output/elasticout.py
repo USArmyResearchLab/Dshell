@@ -32,6 +32,7 @@ class elasticout(output.TextOutput):
 
     ELASTIC_HOST_LIST = []
     ELASTIC_INDEX = None
+    _DOC_TYPE = None
 
     # Fields to format as timestamp string
     _TIMESTAMP_FIELDS = (
@@ -68,7 +69,8 @@ class elasticout(output.TextOutput):
         #
         # Document Type
         #
-        self.doc_type = 'general'  # fallback.  should be set by the decoder.
+        if 'doc_type' in kwargs:
+        	self._DOC_TYPE = kwargs['doc_type']
 
         #
         # Handle boolean options
@@ -105,9 +107,13 @@ class elasticout(output.TextOutput):
         #
         # DocType
         #
-        if 'decoder' in kw:
-            self.doc_type = kw['decoder']
-            del kw['decoder']
+        if self._DOC_TYPE:
+        	doc_type = self._DOC_TYPE
+        elif 'decoder' in kw:
+          doc_type = kw['decoder']
+          del kw['decoder']
+        else:
+        	doc_type = 'dshell'
 
         #
         # Remove Common Redundant Fields
@@ -190,10 +196,10 @@ class elasticout(output.TextOutput):
             docid = kw['_id']
             del kw['_id']
             es_response = self.es.index(
-                index=self.ELASTIC_INDEX, id=docid, doc_type=self.doc_type, body=kw)
+                index=self.ELASTIC_INDEX, id=docid, doc_type=doc_type, body=kw)
         else:
             es_response = self.es.index(
-                index=self.ELASTIC_INDEX, doc_type=self.doc_type, body=kw)
+                index=self.ELASTIC_INDEX, doc_type=doc_type, body=kw)
         if es_response['created']:
             return (True, es_response)
         else:
