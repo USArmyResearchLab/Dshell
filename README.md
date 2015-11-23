@@ -20,6 +20,7 @@ Key features:
 * [dpkt](https://code.google.com/p/dpkt/), New BSD License
 * [IPy](https://github.com/haypo/python-ipy), BSD 2-Clause License
 * [pypcap](https://code.google.com/p/pypcap/), New BSD License
+* [elasticsearch-py](https://www.elastic.co/guide/en/elasticsearch/client/python-api/current/index.html), Apache License, Version 2.0 - optional, used only with Dshell's elasticout output module
 
 ## Installation
 
