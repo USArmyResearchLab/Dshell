@@ -26,6 +26,8 @@ ctrl_c_Received = False
 '''
 main
 '''
+
+
 def main():
     global options, ctrl_c_Received
 
@@ -34,9 +36,10 @@ def main():
     parser = OptionParser(
         usage="usage: %prog [options] file", version="%prog: PCAP Slicer")
     parser.add_option('-f', '--bpf', dest='bpf', help='BPF input filter')
-    parser.add_option('-o', '--outdir', dest='outdir', default='.', help='directory to write output files (Default: current directory)')
+    parser.add_option('-o', '--outdir', dest='outdir', default='.',
+                      help='directory to write output files (Default: current directory)')
     parser.add_option('--no-vlan', dest='novlan', action="store_true",
-                     help='do not examine traffic which has VLAN headers present')
+                      help='do not examine traffic which has VLAN headers present')
     parser.add_option('--debug', action='store_true', dest='debug')
     (options, args) = parser.parse_args(sys.argv[1:])
 
@@ -121,6 +124,8 @@ flow class
   instantiated for each bi-directional flow of data
   maintains pcapwriter for each open session
 '''
+
+
 class flow:
 
     def __init__(self, addr):
@@ -151,6 +156,8 @@ class flow:
 '''
 flowstore class
 '''
+
+
 class flowstore:
     global flowtimeout
 
@@ -185,13 +192,13 @@ def warn(text):
 
 def normalizedIP(packed):
     if len(packed) == 16:
-    	return socket.inet_ntop(socket.AF_INET6, packed)
+        return socket.inet_ntop(socket.AF_INET6, packed)
     else:
-      ip = socket.inet_ntoa(packed)
-      if '.' in ip:
-          parts = ip.split('.')
-          return '.'.join(['%03d' % int(p) for p in parts])
-      return ip
+        ip = socket.inet_ntoa(packed)
+        if '.' in ip:
+            parts = ip.split('.')
+            return '.'.join(['%03d' % int(p) for p in parts])
+        return ip
 
 
 def localfilename(addr):
@@ -205,13 +212,13 @@ def localfilename(addr):
     # Convert packed IPs to Text
     nameparts = [proto, normalizedIP(sip), normalizedIP(dip)]
     try:
-    	  nameparts.append('%05d' % int(sport))
+        nameparts.append('%05d' % int(sport))
     except:
-    	  pass
+        pass
     try:
-    	  nameparts.append('%05d' % int(dport))
+        nameparts.append('%05d' % int(dport))
     except:
-    	  pass
+        pass
     # Filename
     fname = '_'.join(nameparts)
     inc = 0
@@ -225,6 +232,8 @@ def localfilename(addr):
 '''
 handle interupt events
 '''
+
+
 def ctrlchandler(signum, frame):
     global ctrl_c_Received
     ctrl_c_Received = True
