@@ -69,15 +69,19 @@ def main():
             try:
                 pkt = dpkt.ethernet.Ethernet(spkt)
                 # Only handle IP4/6
-                if type(pkt.data) != dpkt.ip.IP and type(pkt.data) != dpkt.ip6.IP6:
+                if type(pkt.data) == dpkt.ip.IP:
+                    proto = pkt.data.p
+                elif type(pkt.data) == dpkt.ip6.IP6:
+                    proto = pkt.data.nxt
+                else:
                     continue
                 # Populate addr tuple
                 # (proto, sip, sport, dip, dport)
-                if pkt.data.p == dpkt.ip.IP_PROTO_TCP or pkt.data.p == dpkt.ip.IP_PROTO_UDP:
+                if proto == dpkt.ip.IP_PROTO_TCP or proto == dpkt.ip.IP_PROTO_UDP:
                     addr = (
-                        pkt.data.p, pkt.data.src, pkt.data.data.sport, pkt.data.dst, pkt.data.data.dport)
+                        proto, pkt.data.src, pkt.data.data.sport, pkt.data.dst, pkt.data.data.dport)
                 else:
-                    addr = (pkt.data.p, pkt.data.src, None, pkt.data.dst, None)
+                    addr = (proto, pkt.data.src, None, pkt.data.dst, None)
             except:
                 continue  # Skip Packet if unable to parse
             pcount += 1
@@ -180,11 +184,14 @@ def warn(text):
 
 
 def normalizedIP(packed):
-    ip = socket.inet_ntoa(packed)
-    if '.' in ip:
-        parts = ip.split('.')
-        return '.'.join(['%03d' % int(p) for p in parts])
-    return ip
+    if len(packed) == 16:
+    	return socket.inet_ntop(socket.AF_INET6, packed)
+    else:
+      ip = socket.inet_ntoa(packed)
+      if '.' in ip:
+          parts = ip.split('.')
+          return '.'.join(['%03d' % int(p) for p in parts])
+      return ip
 
 
 def localfilename(addr):
@@ -196,12 +203,17 @@ def localfilename(addr):
     else:
         proto = '%05d' % int(proto)
     # Convert packed IPs to Text
-    sip = normalizedIP(sip)
-    dip = normalizedIP(dip)
-    sport = '%05d' % int(sport)
-    dport = '%05d' % int(dport)
+    nameparts = [proto, normalizedIP(sip), normalizedIP(dip)]
+    try:
+    	  nameparts.append('%05d' % int(sport))
+    except:
+    	  pass
+    try:
+    	  nameparts.append('%05d' % int(dport))
+    except:
+    	  pass
     # Filename
-    fname = '_'.join((proto, sip, sport, dip, dport))
+    fname = '_'.join(nameparts)
     inc = 0
     while True:
         fullname = os.path.join(options.outdir, '%s_%03d.pcap' % (fname, inc))
