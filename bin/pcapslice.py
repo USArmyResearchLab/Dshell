@@ -34,6 +34,7 @@ def main():
     parser = OptionParser(
         usage="usage: %prog [options] file", version="%prog: PCAP Slicer")
     parser.add_option('-f', '--bpf', dest='bpf', help='BPF input filter')
+    parser.add_option('-o', '--outdir', dest='outdir', default='.', help='directory to write output files (Default: current directory)')
     parser.add_option('--no-vlan', dest='novlan', action="store_true",
                      help='do not examine traffic which has VLAN headers present')
     parser.add_option('--debug', action='store_true', dest='debug')
@@ -187,7 +188,7 @@ def normalizedIP(packed):
 
 
 def localfilename(addr):
-    global IPprotocols
+    global IPprotocols, options
     (proto, sip, sport, dip, dport) = addr
     # Convert Numeric Protocol to Text
     if proto in IPprotocols:
@@ -203,7 +204,7 @@ def localfilename(addr):
     fname = '_'.join((proto, sip, sport, dip, dport))
     inc = 0
     while True:
-        fullname = '%s_%03d.pcap' % (fname, inc)
+        fullname = os.path.join(options.outdir, '%s_%03d.pcap' % (fname, inc))
         if not os.path.exists(fullname):
             return fullname
         inc += 1
