@@ -151,6 +151,7 @@ class DshellDecoder(dshell.TCPDecoder):
                 else: (command, param) = data.rstrip().split(' ', 1)
                 command = command.upper()
                 info['lastcommand'] = command
+                info['request_time'] = blob.starttime
             except:
                 return
 
@@ -184,6 +185,7 @@ class DshellDecoder(dshell.TCPDecoder):
 
         # Responses
         else:
+            info['response_time'] = blob.endtime
             #
             # Rollback directory change unless 2xx response
             #
@@ -207,6 +209,9 @@ class DshellDecoder(dshell.TCPDecoder):
                     info.update(conn.info())
                     msg = 'User: %s, Pass: %s, %s File: %s' % (info['user'], info['pass'], info['file'][0], os.path.join(*info['file'][1:3]))
                     if data[0] not in ('1','2'): msg += ' (%s)' % data.rstrip()
+                info['ts'] = info['response_time']
+                (info['Direction'], info['Path'], info['Filename']) = info['file']
+                del info['file']
                 self.alert(msg, **info)
                 info['file'] = None
             #
