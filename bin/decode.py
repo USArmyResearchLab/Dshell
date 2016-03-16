@@ -309,7 +309,7 @@ def initDecoderOptions(decoder, out, options, decoder_args, decoder_options):
         # global
         # provide global output module under alternate name
         decoder.globalout = out
-        # decoder.out.__init__(fh=out.fh) #re-init the decoder
+        decoder.out.__init__(fh=out.fh) #re-init the decoder
         try:
             # If the decoder's default output doesn't have a filehandle set,
             # use the user provided one
