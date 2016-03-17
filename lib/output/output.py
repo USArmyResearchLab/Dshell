@@ -197,6 +197,14 @@ class Output(object):
         if m == 'dump':
             self.dump(*args, **kwargs)
 
+    def setup(self):
+        """
+        Perform any additional setup outside of the standard __init__.
+        Runs after command-line arguments are parsed, but before decoders are run.
+        For example, printing header data to the outfile.
+        """
+        pass
+
 
 class FileOutput(Output):
 
