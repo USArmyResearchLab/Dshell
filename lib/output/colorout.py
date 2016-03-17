@@ -110,11 +110,6 @@ class ColorOutput(output.TextOutput):
         # Call parent init
         output.TextOutput.__init__(self, format=fmtstr, **kwargs)
 
-        self.setColorMode()
-
-        # Write Header
-        if self._COLORMODE == 'HTML':
-            self._htmlwrite(self._HTMLHeader(self.title))
 
         # In HTML mode, if we get any single call
         # to write() with the time option set, we will set
@@ -122,6 +117,14 @@ class ColorOutput(output.TextOutput):
         # on initial page load.  Otherwise, timestamps will be hidden
         # until toggled by the user
         self._htmldisplaytimes = False
+
+    def setup(self):
+        # Write Header
+        self.setColorMode()
+
+        if self._COLORMODE == 'HTML':
+            self._htmlwrite(self._HTMLHeader(self.title))
+
 
     def setColorMode(self):
         # Determine output mode

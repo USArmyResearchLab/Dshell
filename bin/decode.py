@@ -309,7 +309,6 @@ def initDecoderOptions(decoder, out, options, decoder_args, decoder_options):
         # global
         # provide global output module under alternate name
         decoder.globalout = out
-        # decoder.out.__init__(fh=out.fh) #re-init the decoder
         try:
             # If the decoder's default output doesn't have a filehandle set,
             # use the user provided one
@@ -324,6 +323,9 @@ def initDecoderOptions(decoder, out, options, decoder_args, decoder_options):
             decoder.out.pcapwriter = out.pcapwriter
     # set the logger
     decoder.out.logger = logging.getLogger(decoder.name)
+
+    # perform any output module setup before processing data
+    decoder.out.setup()
 
     # set output format string, or reset to default
     # do not override --oformat specified string

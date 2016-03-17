@@ -29,10 +29,10 @@ class CSVOutput(output.TextOutput):
         args will have the name of the module as args[0], anything else after
         '''
         # start with a set of default fields
-        fields = self._DEFAULT_FIELDS
+        self.fields = self._DEFAULT_FIELDS
 
         if 'format' in kwargs:
-            fields = []
+            self.fields = []
             fmtstr = kwargs['format']
             del kwargs['format']  # don't let base class process this
         else:
@@ -40,11 +40,13 @@ class CSVOutput(output.TextOutput):
 
         # set delimiter
         if 'delim' in kwargs:
-            delim = kwargs['delim']
-            if delim.lower() == 'tab':
-                delim = "\t"
+            self.delim = kwargs['delim']
+            if self.delim.lower() == 'tab':
+                self.delim = "\t"
         else:
-            delim = self._DEFAULT_DELIM
+            self.delim = self._DEFAULT_DELIM
+
+        self.noheader = 'noheader' in kwargs
 
         # parse args as fields
         if len(args):
@@ -53,19 +55,21 @@ class CSVOutput(output.TextOutput):
                     f, t = a.split(':')  # split on field:type
                 except:
                     f, t = a, 's'  # default to string type
-                fields.append((f, t))
+                self.fields.append((f, t))
 
         # build format string to pass to textoutput
         if fmtstr:
-            fmtstr += delim
-        fmtstr += delim.join(['%%(%s)%s' % (f, t) for f, t in fields])
+            fmtstr += self.delim
+        fmtstr += self.delim.join(['%%(%s)%s' % (f, t) for f, t in self.fields])
 
         # everything else is exactly like the text output module
         output.TextOutput.__init__(self, format=fmtstr, **kwargs)
 
+
+    def setup(self):
         # print header if not suppressed
-        if self.fh and 'noheader' not in kwargs:
-            self.fh.write('#' + delim.join([f[0] for f in fields]) + "\n")
+        if self.fh and not self.noheader:
+            self.fh.write('#' + self.delim.join([f[0] for f in self.fields]) + "\n")
 
 '''NOTE: output modules return obj=reference to the CLASS
     instead of a dObj=instance so we can init with args'''
