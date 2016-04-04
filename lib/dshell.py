@@ -423,6 +423,14 @@ class Decoder(object):
                 raise Exception('packet truncated', pktlen, pktdata)
             # decode with the L2 decoder (probably Ether)
             pkt = self.l2decoder(pktdata)
+            # attempt to collect MAC addresses
+            if type(pkt) == dpkt.ethernet.Ethernet:
+                try:
+                    smac = "%02x:%02x:%02x:%02x:%02x:%02x" % (struct.unpack("BBBBBB", pkt.src))
+                    dmac = "%02x:%02x:%02x:%02x:%02x:%02x" % (struct.unpack("BBBBBB", pkt.dst))
+                except struct.error:  # couldn't get MAC address
+                    smac, dmac = None, None
+                kw.update(smac=smac, dmac=dmac)
             # strip any intermediate layers (PPPoE, etc)
             for _ in xrange(int(self.striplayers)):
                 pkt = pkt.data
@@ -504,13 +512,6 @@ class IPDecoder(Decoder):
         if 6to4, unencaps the IPv6
         If IP/IP6, hands off to IPDecoder via IPHandler()'''
         try:
-            # If this packet has an Ethernet header, try and grab the MAC address
-            if type(pkt) == dpkt.ethernet.Ethernet:
-                try:
-                    smac = "%02x:%02x:%02x:%02x:%02x:%02x" % (struct.unpack("BBBBBB", pkt.src))
-                    dmac = "%02x:%02x:%02x:%02x:%02x:%02x" % (struct.unpack("BBBBBB", pkt.dst))
-                except struct.error:  # couldn't get MAC address
-                    smac, dmac = None, None
             # if this is an IPv4 packet, defragment, decode and hand it off
             if type(pkt.data) == dpkt.ip.IP:
                 if self.defrag:
@@ -538,7 +539,6 @@ class IPDecoder(Decoder):
                                        proto=self.IP_PROTO_MAP.get(
                                            pkt.p, pkt.p),
                                        sipint=sipint, dipint=dipint,
-                                       smac=smac, dmac=dmac,
                                        **kwargs)
             if pkt and type(pkt.data) == dpkt.ip6.IP6:
                 pkt = pkt.data  # no defrag of ipv6
@@ -560,7 +560,6 @@ class IPDecoder(Decoder):
                                pkttype=dpkt.ethernet.ETH_TYPE_IP6,
                                proto=self.IP_PROTO_MAP.get(pkt.nxt, pkt.nxt),
                                sipint=sipint, dipint=dipint,
-                               smac=smac, dmac=dmac,
                                **kwargs)
         except Exception, e:
             self._exc(e)
