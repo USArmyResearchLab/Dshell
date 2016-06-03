@@ -907,17 +907,20 @@ class Connection(Packet):
     def update(self, ts, direction, data, offset=None):
         # if we have no blobs or direction changes, start a new blob
         lastblob = None
-        if direction != self.direction:
-            self.direction = direction
-            # if we have a finished blob, return it
-            if self.blobs:
-                lastblob = self.blobs[-1]
-            # for tracking offsets across blobs (TCP) set the startoffset of this blob to what we know it should be
-            # this may not necessarily be the offset of THIS data if packets
-            # are out of order
-            self.blobs.append(
-                Blob(ts, direction, startoffset=self.nextoffset[direction]))
-        self.blobs[-1].update(ts, data, offset=offset)  # update latest blob
+        if len(self.blobs) > 1 and self.blobs[-2].startoffset <= offset < self.blobs[-2].endoffset:
+            self.blobs[-2].update(ts,data,offset=offset)
+        else:
+            if direction != self.direction:
+                self.direction = direction
+                # if we have a finished blob, return it
+                if self.blobs:
+                    lastblob = self.blobs[-1]
+                # for tracking offsets across blobs (TCP) set the startoffset of this blob to what we know it should be
+                # this may not necessarily be the offset of THIS data if packets
+                # are out of order
+                self.blobs.append(
+                    Blob(ts, direction, startoffset=self.nextoffset[direction]))
+            self.blobs[-1].update(ts, data, offset=offset)  # update latest blob
         if direction == 'cs':
             self.clientpackets += 1
             self.clientbytes += len(data)
