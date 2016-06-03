@@ -981,7 +981,7 @@ class Blob(Data):
         if ts > self.endtime:
             self.endtime = ts
         # update the end offset if this packet goes at the end
-        if offset >= self.endoffset:
+        if (offset + len(data)) & self.MAX_OFFSET >= self.endoffset:
             self.endoffset = (offset + len(data)) & self.MAX_OFFSET
 
     def __repr__(self):
