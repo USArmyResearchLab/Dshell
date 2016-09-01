@@ -52,7 +52,7 @@ class DshellDecoder(dshell.TCPDecoder):
             self.threshold = 3.0
         elif not self.threshold:
             self.warn(
-                "Displaying all client-server transmissions (threshold: {0})".format%(self.threshold))
+                "Displaying all client-server transmissions (threshold: {0})".format(self.threshold))
 
     def connectionHandler(self, conn):
         if conn.clientbytes < self.minimum:
