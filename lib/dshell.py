@@ -681,6 +681,8 @@ class TCPDecoder(UDPDecoder):
         IPDecoder.__init__(self, **kwargs)
         self.optiondict['ignore_handshake'] = {
             'action': 'store_true', 'help': 'ignore TCP handshake'}
+        self.serverclosed = False
+        self.clientclosed = False
 
     def IPHandler(self, addr, pkt, ts, **kwargs):
         '''IPv4 dispatch'''
@@ -697,14 +699,25 @@ class TCPDecoder(UDPDecoder):
 
         try:
             # close connection
-            if tcp.flags & (dpkt.tcp.TH_FIN | dpkt.tcp.TH_RST):
-                conn = self.find(addr)
+            conn = self.find(addr)
+            if tcp.flags & (dpkt.tcp.TH_FIN | dpkt.tcp.TH_RST) and conn:
+                if conn.direction == 'sc':
+                    self.serverclosed = True
+                elif conn.direction == 'cs':
+                    self.clientclosed = True
+
+            if self.serverclosed and self.clientclosed:
                 if conn:
                     # we might occasionally have data in a FIN packet
                     self.track(addr, str(tcp.data), ts, offset=tcp.seq)
                     self.close(conn, ts)
+                self.serverclosed = False
+                self.clientclosed = False
             # init connection, set TCP ISN
-            elif not self.ignore_handshake and tcp.flags == dpkt.tcp.TH_SYN:
+            elif not self.ignore_handshake and (tcp.flags == dpkt.tcp.TH_SYN or tcp.flags == dpkt.tcp.TH_SYN | dpkt.tcp.TH_CWR | dpkt.tcp.TH_ECE):
+                if conn:
+                    self.track(addr, str(tcp.data), ts, offset=tcp.seq)
+                    self.close(conn, ts)
                 conn = self.track(addr, ts=ts, state='init', **kwargs)
                 if conn:
                     conn.nextoffset['cs'] = tcp.seq + 1
