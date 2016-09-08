@@ -9,7 +9,7 @@ class DshellDecoder(dshell.UDPDecoder):
     def __init__(self):
         dshell.UDPDecoder.__init__(self,
                             name='dhcp',
-                            description='extract client information from DHCP messages',
+                            description='Extract client information from DHCP messages',
                             longdescription="""
 The dhcp decoder will extract the Transaction ID, Client Hostname, and 
 Client MAC address from every UDP DHCP packet found in the given pcap
