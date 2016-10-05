@@ -102,34 +102,11 @@ Examples:
                                 filter='',
                                 author='mm', asdatetime=True,
                                 optiondict={
-                                    'port':{'type':'string',
-                                            'default':'5060',
+                                    'port':{'type':'int',
+                                            'default': 5060,
                                             'help':'SIP Port used (Default: 5060)'}
                                 }
                                 )
-
-    def mac_addr(self, address):
-        """Convert a MAC address to a readable/printable string
-           Args:
-               address (str): a MAC address in hex form (e.g. '\x01\x02\x03\x04\x05\x06')
-           Returns:
-               str: Printable/readable MAC address
-        """
-        return ':'.join('%02x' % ord(b) for b in address)
-
-
-    def layer5_header(self, layer_received, header):
-        """Return packet header information
-            Args:
-                header: Packet header
-            Returns:
-                str: Packet layer 5 header
-        """
-        try:
-            return layer_received.headers[header]
-        except Exception:
-            return ""
-
 
     def rawHandler(self, dlen, data, ts, **kw):
         """Packet handle function
@@ -154,8 +131,7 @@ Examples:
             ethethernet = dpkt.ethernet.Ethernet(str(data))
             layer3 = ethsll.data
             layer4 = layer3.data
-        
-        except Exception:
+        except AttributeError:
             eth = "Ethernet"
             ethethernet = dpkt.ethernet.Ethernet(str(data))    
             # Check if string to discard
@@ -169,113 +145,71 @@ Examples:
                 # ARP, IPv6
                 packetype = "ARP or Non IP"
         else:
-            try:
-                if not (ethethernet.data.__class__.__name__ == "IP"):
-                    # ARP, IPv6
-                    packetype = "ARP or Non IP"
-            except Exception:
-                packetype = "ARP or Non IP" 
+            if not (ethethernet.data.__class__.__name__ == "IP"):
+                # ARP, IPv6
+                packetype = "ARP or Non IP"
         
         # Discard IGMP and ICMP packets
         try:
             if isinstance(layer3.data, dpkt.igmp.IGMP):
                 packetype = "IGMP"
-        except Exception:
+        except AttributeError:
             pass
 
         try:
             if isinstance(layer3.data, dpkt.icmp.ICMP):
                 packetype = "ICMP"
-        except Exception:
+        except AttributeError:
             pass
 
         # Process packets with Layer 5 data and port defined for SIP
         if (packetype == "VoIP"):
-            try:
-                src = socket.inet_ntoa(layer3.src)
-                dst = socket.inet_ntoa(layer3.dst)
-            except Exception:
-                pass
-
-            sipport = int(self.port)
+            src = socket.inet_ntoa(layer3.src)
+            dst = socket.inet_ntoa(layer3.dst)
+            sipport = self.port
             dictinfo = {'sip': src, 'dip': dst, 'sport': layer4.sport, 'dport': layer4.dport}
 
-            # SIP REQUEST
+            # SIP REQUEST and SIP RESPONSE
             if (layer4.dport==sipport or layer4.sport==sipport) and len(layer4.data) > 0:
+                sip_packet = False
                 try:
                     layer5 = dpkt.sip.Request(layer4.data)
                     sip_type = "SIP Request"
+                    sip_packet = True
                 except dpkt.UnpackError, e:
-                    pass
-
-                else:
-                    user_agent = self.layer5_header(layer5, 'user-agent')
-                    allow = self.layer5_header(layer5, 'allow')
-                    l5_from = self.layer5_header(layer5, 'from')
-                    l5_to = self.layer5_header(layer5, 'to')
-                    l5_callid  = self.layer5_header(layer5, 'call-id')
-                    via = self.layer5_header(layer5, 'via')
-                    cseq = self.layer5_header(layer5, 'cseq')
-
                     try:
+                        layer5 = dpkt.sip.Response(layer4.data)
+                        sip_type = "SIP Response"
+                        sip_packet = True
+                    except dpkt.UnpackError, e:
+                        pass
+
+                finally:
+                    if (sip_packet):
+                        user_agent = layer5.headers.get('user-agent')
+                        allow = layer5.headers.get('allow')
+                        l5_from = layer5.headers.get('from')
+                        l5_to = layer5.headers.get('to')
+                        l5_callid  = layer5.headers.get('call-id')
+                        via = layer5.headers.get('via')
+                        cseq = layer5.headers.get('cseq')
                         rate = ""
                         codec = ""
                         for x in range(layer5.body.find(' ',layer5.body.find('a='))+1,layer5.body.find('/',layer5.body.find('a='))):
                             codec += layer5.body[x]
                         for x in range(layer5.body.find(' ',layer5.body.find('a='))+6,layer5.body.find('/',layer5.body.find('a='))+5):
                             rate+=layer5.body[x]
-                    except:
-                        pass
-                    
-                    if src and dst and layer5.headers:
-                        if not allow:
-                            self.alert('\n\t--> {0} <--\n\tFrom: {1} ({2}) to {3} ({4}) \n\tSequence and Method: {5}\n\tVia: {6}\n\tSIP call: {7} --> {8} \n\tWith: {9}\n\tCall ID: {10}\n'.format(sip_type, src,
-                                self.mac_addr(ethethernet.src), dst, self.mac_addr(ethethernet.dst), cseq, via, l5_from,
-                                l5_to, user_agent, l5_callid), ts=ts, **dictinfo)
-                        else:
-                            self.alert('\n\t--> {0} <--\n\tFrom: {1} ({2}) to {3} ({4}) \n\tSequence and Method: {5}\n\tVia: {6}\n\tSIP call: {7} --> {8} \n\tWith: {9}\n\tCall ID: {10}\n\tAllow: {11}\n\tCodec: {12}\n\tRate: {13} Hz\n'.format(sip_type, src,
-                                self.mac_addr(ethethernet.src), dst, self.mac_addr(ethethernet.dst), cseq, via, l5_from,
-                                l5_to, user_agent, l5_callid, allow, codec, rate), ts=ts, **dictinfo)
+                        
+                        if src and dst and layer5.headers:
+                            if not allow:
+                                self.alert('\n\t--> {0} <--\n\tFrom: {1} ({2}) to {3} ({4}) \n\tSequence and Method: {5}\n\tVia: {6}\n\tSIP call: {7} --> {8} \n\tWith: {9}\n\tCall ID: {10}\n'.format(sip_type, src,
+                                    kw['smac'], dst, kw['dmac'], cseq, via, l5_from,
+                                    l5_to, user_agent, l5_callid), ts=ts, **dictinfo)
+                            else:
+                                self.alert('\n\t--> {0} <--\n\tFrom: {1} ({2}) to {3} ({4}) \n\tSequence and Method: {5}\n\tVia: {6}\n\tSIP call: {7} --> {8} \n\tWith: {9}\n\tCall ID: {10}\n\tAllow: {11}\n\tCodec: {12}\n\tRate: {13} Hz\n'.format(sip_type, src,
+                                    kw['smac'], dst, kw['dmac'], cseq, via, l5_from,
+                                    l5_to, user_agent, l5_callid, allow, codec, rate), ts=ts, **dictinfo)
 
-      
-            # SIP RESPONSE
-            if (layer4.sport==sipport or layer4.dport==sipport) and len(layer4.data) > 0:
-                try :
-                    layer5 = dpkt.sip.Response(layer4.data)
-                    sip_type = "SIP Response"
-                except dpkt.UnpackError, e:
-                    pass
-                else:
-                    user_agent = self.layer5_header(layer5, 'user-agent')
-                    allow = self.layer5_header(layer5, 'allow')
-                    l5_from = self.layer5_header(layer5, 'from')
-                    l5_to = self.layer5_header(layer5, 'to')
-                    l5_callid  = self.layer5_header(layer5, 'call-id')
-                    via = self.layer5_header(layer5, 'via')
-                    cseq = self.layer5_header(layer5, 'cseq')
-
-                    try:
-                        rate = ""
-                        codec = ""
-                        for x in range(layer5.body.find(' ',layer5.body.find('a='))+1,layer5.body.find('/',layer5.body.find('a='))):
-                            codec += layer5.body[x]
-                        for x in range(layer5.body.find(' ',layer5.body.find('a='))+6,layer5.body.find('/',layer5.body.find('a='))+5):
-                            rate+=layer5.body[x]
-                    except:
-                        pass
-                    
-                    if src and dst and layer5.headers:
-                        if not allow:
-                            self.alert('\n\t--> {0} <--\n\tFrom: {1} ({2}) to {3} ({4}) \n\tSequence and Method: {5}\n\tVia: {6}\n\tSIP call: {7} --> {8} \n\tWith: {9}\n\tCall ID: {10}\n'.format(sip_type, src,
-                                self.mac_addr(ethethernet.src), dst, self.mac_addr(ethethernet.dst), cseq, via, l5_from,
-                                l5_to, user_agent, l5_callid), ts=ts, **dictinfo)
-                        else:
-
-                            self.alert('\n\t--> {0} <--\n\tFrom: {1} ({2}) to {3} ({4}) \n\tSequence and Method: {5}\n\tVia: {6}\n\tSIP call: {7} --> {8} \n\tWith: {9}\n\tCall ID: {10}\n\tAllow: {11}\n\tCodec: {12}\n\tRate: {13} Hz\n'.format(sip_type, src,
-                                self.mac_addr(ethethernet.src), dst, self.mac_addr(ethethernet.dst), cseq, via, l5_from,
-                                l5_to, user_agent, l5_callid, allow, codec, rate), ts=ts, **dictinfo)
-
-                    
 if __name__ == '__main__':
     dObj = DshellDecoder()
     print dObj
