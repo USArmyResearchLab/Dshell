@@ -11,26 +11,17 @@
 # https://tools.ietf.org/html/rfc4855
 # https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml
 #
-# VoIP - Per Call Bandwidth:
-# http://www.cisco.com/c/en/us/support/docs/voice/voice-quality/7934-bwidth-consume.html
-
 
 import dshell
-import output
-import util
 import dpkt
 import datetime
-from struct import unpack
-import socket
 
-
-
-class DshellDecoder(dshell.Decoder):
+class DshellDecoder(dshell.UDPDecoder):
 
     def __init__(self):
-        dshell.Decoder.__init__(self,
+        dshell.UDPDecoder.__init__(self,
                                 name='rtp',
-                                description='real-time transport protocol (RTP) capture decoder',
+                                description='Real-time transport protocol (RTP) capture decoder',
                                 longdescription="""
 The real-time transport protocol (RTP) decoder will extract the Hosts, Payload Type, Synchronization source, 
 Sequence Number, Padding, Marker and Client MAC address from every RTP packet found in the given pcap.
@@ -38,6 +29,7 @@ Sequence Number, Padding, Marker and Client MAC address from every RTP packet fo
 General usage:
 
     decode -d rtp <pcap> 
+    decode -d rtp --no-vlan --layer2=sll.SLL <pcap> 
 
 Examples:
 
@@ -46,31 +38,32 @@ Examples:
 
     decode -d rtp rtp_example.pcap
 
-    Output:
+Output:
     
-    rtp 2002-07-26 07:19:10        10.1.6.18:2006  --       10.1.3.143:5000  ** 
-        From: 10.1.6.18 (00:08:21:91:64:60) to 10.1.3.143 (00:04:76:22:20:17) 
-        Payload Type (7 bits): PCMA - Audio - 8000 Hz - 1 Channel
-        Sequence Number (16 bits): 9825
-        Timestamp (32 bits): 54240 
-        Synchronization source (32 bits): 4090175489
-        Arrival Time: 1027664350.17
+    rtp 2016-09-21 23:44:40   50.197.16.141:1195  --     192.168.9.12:44352 ** 
+        From: 50.197.16.141 (00:02:31:11:a5:97) to 192.168.9.12 (45:20:01:31:45:40) 
+        Payload Type (7 bits): Dynamic
+        Sequence Number (16 bits): 58635
+        Timestamp (32 bits): 1331328074 
+        Synchronization source (32 bits): 1948709792
+        Arrival Time: 1474497880.6 --> 2016-09-21 22:44:40.604135
+        Contributing source (32 bits): 1, Padding (1 bit): 1, Extension (1 bit): 1, Marker (1 bit): 0
+     **
+    rtp 2016-09-21 23:44:40         10.5.1.8:5086  --         10.5.1.7:5070  ** 
+        From: 10.5.1.8 (00:02:81:11:a0:d7) to 10.5.1.7 (45:00:20:c8:a3:26) 
+        Payload Type (7 bits): PCMU - Audio - 8000 Hz - 1 Channel
+        Sequence Number (16 bits): 17664
+        Timestamp (32 bits): 98240 
+        Synchronization source (32 bits): 1671095215
+        Arrival Time: 1474497880.6 --> 2016-09-21 22:44:40.604160
         Contributing source (32 bits): 0, Padding (1 bit): 0, Extension (1 bit): 0, Marker (1 bit): 0
-    **
-    rtp 2002-07-26 07:19:10       10.1.3.143:5000  --        10.1.6.18:2006  ** 
-        From: 10.1.3.143 (00:04:76:22:20:17) to 10.1.6.18 (00:d0:50:10:01:66) 
-        Payload Type (7 bits): PCMA - Audio - 8000 Hz - 1 Channel
-        Sequence Number (16 bits): 59364
-        Timestamp (32 bits): 55680 
-        Synchronization source (32 bits): 3739283087
-        Arrival Time: 1027664350.2
-        Contributing source (32 bits): 0, Padding (1 bit): 0, Extension (1 bit): 0, Marker (1 bit): 0
-    **
-
+     **
   """,
-                                filter='',
+                                filter='udp',
                                 author='mm', asdatetime=True,
                                 )
+        self.smac = None
+        self.dmac = None
 
     def preModule(self):
         self.payload_type = {0: "PCMU - Audio - 8000 Hz - 1 Channel", 1: "Reserved", 2: "Reserved", 3: "GSM - Audio - 8000 Hz - 1 Channel",
@@ -92,80 +85,34 @@ Examples:
         for i in range(96,128):
             self.payload_type[i] = "Dynamic"
 
+    def packetHandler(self, udp, data):
 
-    def rawHandler(self, dlen, data, ts, **kw):
-        """Packet handle function
-            Args:
-                dlen: length
-                data: packet
-                ts: timestamp
-                kw: kwargs - keyword arguments
-        """
-
-        if self.verbose:
-            self.log("%.06f %d\n%s" % (ts, dlen, util.hexPlusAscii(str(data))))
-
-        packetype = "VoIP" # by default :)
+        # Get MAC addr for layer2 packets
+        try:
+            self.smac = udp.info()['smac']
+        except LookupError:
+            ethernet = dpkt.ethernet.Ethernet(data) 
+            self.smac = ':'.join('%02x' % ord(b) for b in ethernet.src)
 
         try:
-            # If Ethernet is being replaced by Linux Cooked Capture
-            # the traces are encapsulated similarly but we need to use dpkt.sll.SLL(data)
-            # rather than dpkt.ethernet.Ethernet(data)
-            eth = "SLL"
-            ethsll = dpkt.sll.SLL(str(data))
-            ethethernet = dpkt.ethernet.Ethernet(str(data))
-            layer3 = ethsll.data
-            layer4 = layer3.data
-        
-        except AttributeError:
-            eth = "Ethernet"
-            ethethernet = dpkt.ethernet.Ethernet(str(data))    
-            # Check if string to discard
-            if not isinstance(ethethernet.data, basestring):
-                layer3 = ethethernet.data
-                layer4 = layer3.data
-
-        # Make sure the Ethernet data contains an IP packet        
-        if (eth == "SLL"):
-            if not (ethsll.data.__class__.__name__ == "IP"):
-                # ARP, IPv6
-                packetype = "ARP or Non IP"
-        else:
-            if not (ethethernet.data.__class__.__name__ == "IP"):
-                # ARP, IPv6
-                packetype = "ARP or Non IP"
-        
-        # Discard IGMP and ICMP packets
-        try:
-            if isinstance(layer3.data, dpkt.igmp.IGMP):
-                packetype = "IGMP"
-        except AttributeError:
-            pass
+            self.dmac = udp.info()['dmac']
+        except LookupError:
+            ethernet = dpkt.ethernet.Ethernet(data) 
+            self.dmac = ':'.join('%02x' % ord(b) for b in ethernet.dst)
 
         try:
-            if isinstance(layer3.data, dpkt.icmp.ICMP):
-                packetype = "ICMP"
-        except AttributeError:
-            pass
+            if dpkt.rtp.RTP(str(data)):
+                rtppkt = dpkt.rtp.RTP(data)
+                pt = self.payload_type.get(rtppkt.pt)
 
-        # Process packets with Layer 5 data and RTP type
-        if (packetype == "VoIP"):
-
-            src = socket.inet_ntoa(layer3.src)
-            dst = socket.inet_ntoa(layer3.dst)
-            dictinfo = {'sip': src, 'dip': dst, 'sport': layer4.sport, 'dport': layer4.dport}
-
-            if len(layer4.data) > 0:
-                try:
-                    layer5 = dpkt.rtp.RTP(layer4.data)
-                except dpkt.UnpackError, e:
-                    pass
-                else:
-                    pt = self.payload_type.get(layer5.pt)                 
-                    if src and dst:
-                        self.alert('\n\tFrom: {0} ({1}) to {2} ({3}) \n\tPayload Type (7 bits): {4}\n\tSequence Number (16 bits): {5}\n\tTimestamp (32 bits): {6} \n\tSynchronization source (32 bits): {7}\n\tArrival Time: {8}\n\tContributing source (32 bits): {9}, Padding (1 bit): {10}, Extension (1 bit): {11}, Marker (1 bit): {12}\n'.format(
-                            src, kw['smac'], dst, kw['dmac'], pt, layer5.seq, layer5.ts,layer5.ssrc, ts, layer5.cc, layer5.p, layer5.x, layer5.m), ts=ts, **dictinfo)
+                self.alert('\n\tFrom: {0} ({1}) to {2} ({3}) \n\tPayload Type (7 bits): {4}\n\tSequence Number (16 bits): {5}\n\tTimestamp (32 bits): {6} \n\tSynchronization source (32 bits): {7}\n\tArrival Time: {8} --> {9}\n\tContributing source (32 bits): {10}, Padding (1 bit): {11}, Extension (1 bit): {12}, Marker (1 bit): {13}\n'.format(
+                            udp.info()['sip'], self.smac, udp.info()['dip'], self.dmac, pt, rtppkt.seq, rtppkt.ts, rtppkt.ssrc, udp.info()['ts'], datetime.datetime.utcfromtimestamp(
+                            udp.info()['ts']), rtppkt.cc, rtppkt.p, rtppkt.x, rtppkt.m), **udp.info())
                     
+        except dpkt.UnpackError, e:
+            pass
+        
+
 if __name__ == '__main__':
     dObj = DshellDecoder()
     print dObj

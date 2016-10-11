@@ -2,13 +2,15 @@
 # Author: MM - https://github.com/1modm
 #
 # The Session Initiation Protocol (SIP) is the IETF protocol for VOIP and other text and multimedia sessions
-# and is a communications protocol for signaling and controlling
+# and is a communications protocol for signaling and controlling. 
+# SIP is independent from the underlying transport protocol. It runs on the Transmission Control Protocol (TCP), 
+# the User Datagram Protocol (UDP) or the Stream Control Transmission Protocol (SCTP)
 #
 # Rate and codec calculation thanks to https://git.ucd.ie/volte-and-of/voip-pcapy
 #
 # RFC: https://www.ietf.org/rfc/rfc3261.txt
 #
-# SIP is a text-based protocol with syntax similar to that of HTTP. 
+# SIP is a text-based protocol with syntax similar to that of HTTudp. 
 # There are two different types of SIP messages: requests and responses.
 # - Requests initiate a SIP transaction between two SIP entities for establishing, controlling, and terminating sessions. 
 # - Responses are send by the user agent server indicating the result of a received request.
@@ -39,33 +41,35 @@
 #         |                                                  |
 #
 
-
-
 import dshell
-import output
-import util
 import dpkt
 import datetime
-from struct import unpack
-import socket
+import colorout
 
-
-class DshellDecoder(dshell.Decoder):
+class DshellDecoder(dshell.UDPDecoder):
 
     def __init__(self):
-        dshell.Decoder.__init__(self,
+        dshell.UDPDecoder.__init__(self,
                                 name='sip',
                                 description='Session Initiation Protocol (SIP) capture decoder',
                                 longdescription="""
 The Session Initiation Protocol (SIP) decoder will extract the Call ID, User agent, Codec, Method, 
-SIP call, Host, and Client MAC address from every SIP request or response packet found 
-in the given pcap using by default the port 5060.  
+SIP call, Host, and Client MAC address from every SIP request or response packet found in the given pcap.  
 
 General usage:
-
     decode -d sip <pcap> 
-    or 
-    decode -d sip --sip_port=5062 <pcap>
+
+Detailed usage:
+    decode -d sip --sip_showpkg <pcap> 
+
+Layer2 sll usage:
+    decode -d sip --no-vlan --layer2=sll.SLL <pcap> 
+
+SIP over TCP:
+    decode -d sip --bpf 'tcp' <pcap> 
+
+SIP is a text-based protocol with syntax similar to that of HTTP, so you can use followstream decoder:
+    decode -d followstream --ebpf 'port 5060' --bpf 'udp' <pcap>
 
 Examples:
 
@@ -75,140 +79,152 @@ Examples:
     decode -d sip metasploit-sip-invite-spoof.pcap
     decode -d sip Sample_SIP_call_with_RTP_in_G711.pcap
 
-    Output:
+Output:
 
-    sip 2016-09-21 23:44:20         10.5.1.7:5060  --       10.1.30.60:5060  ** 
-        --> SIP Request <--
-        From: 10.5.1.7 (81:89:23:d6:c2:a1) to 10.1.30.60 (a1:03:fc:f2:01:bc) 
-        Sequence and Method: 414 PUBLISH
-        Via: SIP/2.0/UDP 10.5.1.7:5060;branch=z9hG1bK8e35adab-ba7e-e611-937f-68a3c4f0d5ce;rport
-        SIP call: <sip:demo-alice@10.1.30.60> --> <sip:demo-alice@10.1.30.60> 
-        With: Ekiga/4.0.1
-        Call ID: ee8ace41-ab7e-e511-917f-64a3a4f0d5ce@ProBook
-     **
-    sip 2016-09-21 23:44:27         10.5.1.7:5060  --         10.5.1.8:5060  ** 
-        --> SIP Response <--
-        From: 10.5.1.7 (00:00:00:00:00:00) to 10.5.1.8 (a1:03:fc:f2:02:bc) 
-        Sequence and Method: 1 INVITE
-        Via: SIP/2.0/UDP 10.5.1.8:5060;branch=z2hG4bK25a8d5a4-8a13-1920-9d58-04002772a5e9;rport=5060;received=10.5.1.8
-        SIP call: "M" <sip:M@10.5.1.8>;tag=0ba2d5c4-8a13-1910-9d55-08002772a6e9 --> "miguel" <sip:demo-alice@10.5.1.7>;tag=84548c9d-ba7e-e611-937f-68a3c4f0d5ce 
-        With: Ekiga/4.0.1
-        Call ID: 0ba2d7c4-8a13-1940-9d57-08002372a6e9@M-PC
-        Allow: INVITE,ACK,OPTIONS,BYE,CANCEL,SUBSCRIBE,NOTIFY,REFER,MESSAGE,INFO,PING,PRACK
-        Codec: PCMU
-        Rate: 8000 Hz
-     **
-  """,
-                                filter='',
+    <-- SIP Request --> 
+    Timestamp: 2016-09-21 22:44:28.220185 UTC - Protocol: UDP - Size: 435 bytes
+    Sequence and Method: 1 ACK
+    From: 10.5.1.8:5060 (00:20:80:a1:13:db) to 10.5.1.7:5060 (15:2a:01:b4:0f:47)
+    Via: SIP/2.0/UDP 10.5.1.8:5060;branch=z9hG4bK940bdac4-8a13-1410-9e58-08002772a6e9;rport
+    SIP call: "M" <sip:M@10.5.1.8>;tag=0ba2d5c4-8a13-1910-9d56-08002772a6e9  -->  "miguel" <sip:demo-alice@10.5.1.7>;tag=84538c9d-ba7e-e611-937f-68a3c4f0d6ce
+    Call ID: 0ba2d5c4-8a13-1910-9d57-08002772a6e9@M-PC
+
+    --> SIP Response <-- 
+    Timestamp: 2016-09-21 22:44:27.849761 UTC - Protocol: UDP - Size: 919 bytes
+    Sequence and Method: 1 INVITE
+    From: 10.5.1.7:5060 (02:0a:40:12:30:23) to 10.5.1.8:5060 (d5:02:03:94:31:1b)
+    Via: SIP/2.0/UDP 10.5.1.8:5060;branch=z9hG4bK26a8d5c4-8a13-1910-9d58-08002772a6e9;rport=5060;received=10.5.1.8
+    SIP call: "M" <sip:M@10.5.1.8>;tag=0ba2d5c4-8a13-1910-9d56-08002772a6e9  -->  "miguel" <sip:demo-alice@10.5.1.7>;tag=84538c9d-ba7e-e611-937f-68a3c4f0d6ce
+    Call ID: 0ba2d5c4-8a13-1910-9d57-08002772a6e9@M-PC
+    Codec selected: PCMU 
+    Rate selected: 8000 
+
+Detailed Output:
+
+    --> SIP Response <-- 
+    Timestamp: 2016-09-21 22:44:25.360974 UTC - Protocol: UDP - Size: 349 bytes
+    From: 10.5.1.7:5060 (15:2a:01:b4:0f:47) to 10.5.1.8:5060 (00:20:80:a1:13:db) 
+    SIP/2.0 100 Trying
+    content-length: 0
+    via: SIP/2.0/UDP 10.5.1.8:5060;branch=z9hG4bK26a8d5c4-8a13-1910-9d58-08002772a6e9;rport=5060;received=10.5.1.8
+    from: "M" <sip:M@10.5.1.8>;tag=0ba2d5c4-8a13-1910-9d56-08002772a6e9
+    to: <sip:demo-alice@10.5.1.7>
+    cseq: 1 INVITE
+    call-id: 0ba2d5c4-8a13-1910-9d57-08002772a6e9@M-PC
+
+    --> SIP Response <-- 
+    Timestamp: 2016-09-21 22:44:25.387780 UTC - Protocol: UDP - Size: 585 bytes
+    From: 10.5.1.7:5060 (15:2a:01:b4:0f:47) to 10.5.1.8:5060 (00:20:80:a1:13:db)
+    SIP/2.0 180 Ringing
+    content-length: 0
+    via: SIP/2.0/UDP 10.5.1.8:5060;branch=z9hG4bK26a8d5c4-8a13-1910-9d58-08002772a6e9;rport=5060;received=10.5.1.8
+    from: "M" <sip:M@10.5.1.8>;tag=0ba2d5c4-8a13-1910-9d56-08002772a6e9
+    require: 100rel
+    rseq: 694867676
+    user-agent: Ekiga/4.0.1
+    to: "miguel" <sip:demo-alice@10.5.1.7>;tag=84538c9d-ba7e-e611-937f-68a3c4f0d6ce
+    contact: "miguel" <sip:miguel@10.5.1.7>
+    cseq: 1 INVITE
+    allow: INVITE,ACK,OPTIONS,BYE,CANCEL,SUBSCRIBE,NOTIFY,REFER,MESSAGE,INFO,PING,PRACK
+    call-id: 0ba2d5c4-8a13-1910-9d57-08002772a6e9@M-PC
+""",
+                                filter='udp',
                                 author='mm', asdatetime=True,
                                 optiondict={
-                                    'port':{'type':'int',
-                                            'default': 5060,
-                                            'help':'SIP Port used (Default: 5060)'}
+                                    'showpkt': {'action': 'store_true', 'default': False, 'help': 'Display the full SIP response or request body.'}
                                 }
-                                )
-
-    def rawHandler(self, dlen, data, ts, **kw):
-        """Packet handle function
-            Args:
-                dlen: length
-                data: packet
-                ts: timestamp
-                kw: kwargs - keyword arguments
-        """
-
-        if self.verbose:
-            self.log("%.06f %d\n%s" % (ts, dlen, util.hexPlusAscii(str(data))))
-
-        packetype = "VoIP" # by default :)
-
-        try:
-            # If Ethernet is being replaced by Linux Cooked Capture
-            # the traces are encapsulated similarly but we need to use dpkt.sll.SLL(data)
-            # rather than dpkt.ethernet.Ethernet(data)
-            eth = "SLL"
-            ethsll = dpkt.sll.SLL(str(data))
-            ethethernet = dpkt.ethernet.Ethernet(str(data))
-            layer3 = ethsll.data
-            layer4 = layer3.data
-        except AttributeError:
-            eth = "Ethernet"
-            ethethernet = dpkt.ethernet.Ethernet(str(data))    
-            # Check if string to discard
-            if not isinstance(ethethernet.data, basestring):
-                layer3 = ethethernet.data
-                layer4 = layer3.data
-
-        # Make sure the Ethernet data contains an IP packet        
-        if (eth == "SLL"):
-            if not (ethsll.data.__class__.__name__ == "IP"):
-                # ARP, IPv6
-                packetype = "ARP or Non IP"
-        else:
-            if not (ethethernet.data.__class__.__name__ == "IP"):
-                # ARP, IPv6
-                packetype = "ARP or Non IP"
+        )
         
-        # Discard IGMP and ICMP packets
+        self.out = colorout.ColorOutput()
+        self.rate = None
+        self.codec = None
+        self.smac = None
+        self.dmac = None
+        self.direction = None
+        self.output = None
+
+    def preModule(self):
+        if 'setColorMode' in dir(self.out):
+            self.out.setColorMode()
+
+    def packetHandler(self, udp, data):
+
+        # Initialize
+        self.output = False
+        self.rate = str()
+        self.codec = str()
+        self.direction = str()
+
+        # Check if exists SIP Request
         try:
-            if isinstance(layer3.data, dpkt.igmp.IGMP):
-                packetype = "IGMP"
-        except AttributeError:
+            if dpkt.sip.Request(data):
+                siptxt = "<-- SIP Request -->"
+                sippkt = dpkt.sip.Request(data)
+                self.direction = "sc"
+                self.output = True
+        except dpkt.UnpackError, e:
             pass
 
+        # Check if exists SIP Response
         try:
-            if isinstance(layer3.data, dpkt.icmp.ICMP):
-                packetype = "ICMP"
-        except AttributeError:
+            if dpkt.sip.Response(data):
+                siptxt = "--> SIP Response <--"
+                sippkt = dpkt.sip.Response(data)
+                self.direction = "cs"
+                self.output = True
+        except dpkt.UnpackError, e:
             pass
 
-        # Process packets with Layer 5 data and port defined for SIP
-        if (packetype == "VoIP"):
-            src = socket.inet_ntoa(layer3.src)
-            dst = socket.inet_ntoa(layer3.dst)
-            sipport = self.port
-            dictinfo = {'sip': src, 'dip': dst, 'sport': layer4.sport, 'dport': layer4.dport}
+        # If a SIP request or SIP response exists, print the results
+        if self.output:
+            # Get MAC addr for layer2 packets
+            try:
+                self.smac = udp.info()['smac']
+            except LookupError:
+                ethernet = dpkt.ethernet.Ethernet(data) 
+                self.smac = ':'.join('%02x' % ord(b) for b in ethernet.src)
 
-            # SIP REQUEST and SIP RESPONSE
-            if (layer4.dport==sipport or layer4.sport==sipport) and len(layer4.data) > 0:
-                sip_packet = False
-                try:
-                    layer5 = dpkt.sip.Request(layer4.data)
-                    sip_type = "SIP Request"
-                    sip_packet = True
-                except dpkt.UnpackError, e:
-                    try:
-                        layer5 = dpkt.sip.Response(layer4.data)
-                        sip_type = "SIP Response"
-                        sip_packet = True
-                    except dpkt.UnpackError, e:
-                        pass
+            try:
+                self.dmac = udp.info()['dmac']
+            except LookupError:
+                ethernet = dpkt.ethernet.Ethernet(data) 
+                self.dmac = ':'.join('%02x' % ord(b) for b in ethernet.dst)
 
-                finally:
-                    if (sip_packet):
-                        user_agent = layer5.headers.get('user-agent')
-                        allow = layer5.headers.get('allow')
-                        l5_from = layer5.headers.get('from')
-                        l5_to = layer5.headers.get('to')
-                        l5_callid  = layer5.headers.get('call-id')
-                        via = layer5.headers.get('via')
-                        cseq = layer5.headers.get('cseq')
-                        rate = ""
-                        codec = ""
-                        for x in range(layer5.body.find(' ',layer5.body.find('a='))+1,layer5.body.find('/',layer5.body.find('a='))):
-                            codec += layer5.body[x]
-                        for x in range(layer5.body.find(' ',layer5.body.find('a='))+6,layer5.body.find('/',layer5.body.find('a='))+5):
-                            rate+=layer5.body[x]
-                        
-                        if src and dst and layer5.headers:
-                            if not allow:
-                                self.alert('\n\t--> {0} <--\n\tFrom: {1} ({2}) to {3} ({4}) \n\tSequence and Method: {5}\n\tVia: {6}\n\tSIP call: {7} --> {8} \n\tWith: {9}\n\tCall ID: {10}\n'.format(sip_type, src,
-                                    kw['smac'], dst, kw['dmac'], cseq, via, l5_from,
-                                    l5_to, user_agent, l5_callid), ts=ts, **dictinfo)
-                            else:
-                                self.alert('\n\t--> {0} <--\n\tFrom: {1} ({2}) to {3} ({4}) \n\tSequence and Method: {5}\n\tVia: {6}\n\tSIP call: {7} --> {8} \n\tWith: {9}\n\tCall ID: {10}\n\tAllow: {11}\n\tCodec: {12}\n\tRate: {13} Hz\n'.format(sip_type, src,
-                                    kw['smac'], dst, kw['dmac'], cseq, via, l5_from,
-                                    l5_to, user_agent, l5_callid, allow, codec, rate), ts=ts, **dictinfo)
+            # Common output
+            self.out.write("\n{0} \nTimestamp: {1} UTC - Protocol: {2} - Size: {3} bytes\n".format(siptxt, datetime.datetime.utcfromtimestamp(
+                            udp.info()['ts']), udp.info()['proto'], udp.info()['bytes']), formatTag="H2", direction=self.direction)
+            self.out.write("From: {0}:{1} ({2}) to {3}:{4} ({5}) \n".format(udp.info()['sip'], udp.info()['sport'], self.smac,
+                            udp.info()['dip'], udp.info()['dport'], self.dmac), formatTag="H2", direction=self.direction)
+
+            # Show full SIP packet detail
+            if self.showpkt:                
+                self.out.write("{0}\n".format(sippkt), formatTag="H2", direction=self.direction)
+
+            # Show minimum SIP Requests or Responses headers
+            else:
+                user_agent = sippkt.headers.get('user-agent')
+                allow = sippkt.headers.get('allow')
+                sip_from = sippkt.headers.get('from')
+                sip_to = sippkt.headers.get('to')
+                sip_callid  = sippkt.headers.get('call-id')
+                via = sippkt.headers.get('via')
+                cseq = sippkt.headers.get('cseq')
+
+                if cseq:
+                    self.out.write("Sequence and Method: {0}\n".format(cseq), formatTag="H2", direction=self.direction)
+
+                if via:
+                    self.out.write("Via: {0}\nSIP call: {1}  -->  {2}\nCall ID: {3}\n".format(via, 
+                                    sip_from, sip_to, sip_callid), formatTag="H2", direction=self.direction)
+                
+                # codec and rate negotiated
+                for x in range(sippkt.body.find(' ',sippkt.body.find('a='))+1,sippkt.body.find('/',sippkt.body.find('a='))):
+                    self.codec += sippkt.body[x]
+                for x in range(sippkt.body.find(' ',sippkt.body.find('a='))+6,sippkt.body.find('/',sippkt.body.find('a='))+5):
+                    self.rate +=sippkt.body[x]
+
+                if (self.codec and self.rate):
+                    self.out.write("Codec selected: {0} \nRate selected: {1} \n".format(self.codec, self.rate), formatTag="H2", direction=self.direction)
 
 if __name__ == '__main__':
     dObj = DshellDecoder()
