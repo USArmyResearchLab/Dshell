@@ -60,7 +60,7 @@ General usage:
     decode -d sip <pcap> 
 
 Detailed usage:
-    decode -d sip --sip_showpkg <pcap> 
+    decode -d sip --sip_showpkt <pcap> 
 
 Layer2 sll usage:
     decode -d sip --no-vlan --layer2=sll.SLL <pcap> 
