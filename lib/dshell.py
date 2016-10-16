@@ -431,6 +431,14 @@ class Decoder(object):
                 except struct.error:  # couldn't get MAC address
                     smac, dmac = None, None
                 kw.update(smac=smac, dmac=dmac)
+            elif type(pkt) == dpkt.sll.SLL:
+                if pkt.type in (0, 4) and pkt.hrd == 1:
+                    try:
+                        smac = "%02x:%02x:%02x:%02x:%02x:%02x" % (struct.unpack("BBBBBB", pkt.hdr[:pkt.hlen]))
+                        dmac = None
+                    except struct.error:
+                        smac, dmac = None, None
+                    kw.update(smac=smac, dmac=None)
             # strip any intermediate layers (PPPoE, etc)
             for _ in xrange(int(self.striplayers)):
                 pkt = pkt.data
@@ -700,7 +708,6 @@ class TCPDecoder(UDPDecoder):
             conn = self.find(addr)
             if tcp.flags & (dpkt.tcp.TH_FIN | dpkt.tcp.TH_RST) and conn:
                 conn.closeIP(addr[0]) #track if FIN has been seen in connection
-                    
             if conn and conn.connectionClosed():
                 # we might occasionally have data in a FIN packet
                 self.track(addr, str(tcp.data), ts, offset=tcp.seq)
@@ -915,7 +922,7 @@ class Connection(Packet):
 
     def connectionClosed(self):
         return self.serverclosed and self.clientclosed
-        
+
     def closeIP(self, tuple):
         '''
             Track if we have seen a FIN packet from given tuple
