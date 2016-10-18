@@ -10,7 +10,6 @@
 # https://tools.ietf.org/html/rfc2198
 # https://tools.ietf.org/html/rfc4855
 # https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml
-#
 
 import dshell
 import dpkt
@@ -60,10 +59,8 @@ Output:
      **
   """,
                                 filter='udp',
-                                author='mm', asdatetime=True,
+                                author='mm'
                                 )
-        self.smac = None
-        self.dmac = None
 
     def preModule(self):
         self.payload_type = {0: "PCMU - Audio - 8000 Hz - 1 Channel", 1: "Reserved", 2: "Reserved", 3: "GSM - Audio - 8000 Hz - 1 Channel",
@@ -86,33 +83,19 @@ Output:
             self.payload_type[i] = "Dynamic"
 
     def packetHandler(self, udp, data):
-
-        # Get MAC addr for layer2 packets
         try:
-            self.smac = udp.info()['smac']
-        except LookupError:
-            ethernet = dpkt.ethernet.Ethernet(data) 
-            self.smac = ':'.join('%02x' % ord(b) for b in ethernet.src)
-
-        try:
-            self.dmac = udp.info()['dmac']
-        except LookupError:
-            ethernet = dpkt.ethernet.Ethernet(data) 
-            self.dmac = ':'.join('%02x' % ord(b) for b in ethernet.dst)
-
-        try:
-            if dpkt.rtp.RTP(str(data)):
+            if dpkt.rtp.RTP(data):
                 rtppkt = dpkt.rtp.RTP(data)
                 pt = self.payload_type.get(rtppkt.pt)
 
                 self.alert('\n\tFrom: {0} ({1}) to {2} ({3}) \n\tPayload Type (7 bits): {4}\n\tSequence Number (16 bits): {5}\n\tTimestamp (32 bits): {6} \n\tSynchronization source (32 bits): {7}\n\tArrival Time: {8} --> {9}\n\tContributing source (32 bits): {10}, Padding (1 bit): {11}, Extension (1 bit): {12}, Marker (1 bit): {13}\n'.format(
-                            udp.info()['sip'], self.smac, udp.info()['dip'], self.dmac, pt, rtppkt.seq, rtppkt.ts, rtppkt.ssrc, udp.info()['ts'], datetime.datetime.utcfromtimestamp(
-                            udp.info()['ts']), rtppkt.cc, rtppkt.p, rtppkt.x, rtppkt.m), **udp.info())
-                    
+                            udp.sip, udp.smac, udp.dip, udp.dmac, pt, rtppkt.seq, rtppkt.ts, rtppkt.ssrc, 
+                            udp.ts, datetime.datetime.utcfromtimestamp(udp.ts),
+                            rtppkt.cc, rtppkt.p, rtppkt.x, rtppkt.m), **udp.info())
+
         except dpkt.UnpackError, e:
             pass
         
-
 if __name__ == '__main__':
     dObj = DshellDecoder()
     print dObj

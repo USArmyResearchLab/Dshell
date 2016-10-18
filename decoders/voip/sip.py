@@ -10,7 +10,7 @@
 #
 # RFC: https://www.ietf.org/rfc/rfc3261.txt
 #
-# SIP is a text-based protocol with syntax similar to that of HTTudp. 
+# SIP is a text-based protocol with syntax similar to that of HTTP. 
 # There are two different types of SIP messages: requests and responses.
 # - Requests initiate a SIP transaction between two SIP entities for establishing, controlling, and terminating sessions. 
 # - Responses are send by the user agent server indicating the result of a received request.
@@ -129,7 +129,7 @@ Detailed Output:
     call-id: 0ba2d5c4-8a13-1910-9d57-08002772a6e9@M-PC
 """,
                                 filter='udp',
-                                author='mm', asdatetime=True,
+                                author='mm',
                                 optiondict={
                                     'showpkt': {'action': 'store_true', 'default': False, 'help': 'Display the full SIP response or request body.'}
                                 }
@@ -138,8 +138,6 @@ Detailed Output:
         self.out = colorout.ColorOutput()
         self.rate = None
         self.codec = None
-        self.smac = None
-        self.dmac = None
         self.direction = None
         self.output = None
 
@@ -148,7 +146,6 @@ Detailed Output:
             self.out.setColorMode()
 
     def packetHandler(self, udp, data):
-
         # Initialize
         self.output = False
         self.rate = str()
@@ -177,30 +174,17 @@ Detailed Output:
 
         # If a SIP request or SIP response exists, print the results
         if self.output:
-            # Get MAC addr for layer2 packets
-            try:
-                self.smac = udp.info()['smac']
-            except LookupError:
-                ethernet = dpkt.ethernet.Ethernet(data) 
-                self.smac = ':'.join('%02x' % ord(b) for b in ethernet.src)
-
-            try:
-                self.dmac = udp.info()['dmac']
-            except LookupError:
-                ethernet = dpkt.ethernet.Ethernet(data) 
-                self.dmac = ':'.join('%02x' % ord(b) for b in ethernet.dst)
-
             # Common output
             self.out.write("\n{0} \nTimestamp: {1} UTC - Protocol: {2} - Size: {3} bytes\n".format(siptxt, datetime.datetime.utcfromtimestamp(
-                            udp.info()['ts']), udp.info()['proto'], udp.info()['bytes']), formatTag="H2", direction=self.direction)
-            self.out.write("From: {0}:{1} ({2}) to {3}:{4} ({5}) \n".format(udp.info()['sip'], udp.info()['sport'], self.smac,
-                            udp.info()['dip'], udp.info()['dport'], self.dmac), formatTag="H2", direction=self.direction)
+                            udp.ts), udp.proto, udp.info()['bytes']), formatTag="H2", direction=self.direction)
+            self.out.write("From: {0}:{1} ({2}) to {3}:{4} ({5}) \n".format(udp.sip, udp.sport, udp.smac,
+                            udp.dip, udp.dport, udp.dmac), formatTag="H2", direction=self.direction)
 
             # Show full SIP packet detail
             if self.showpkt:                
                 self.out.write("{0}\n".format(sippkt), formatTag="H2", direction=self.direction)
 
-            # Show minimum SIP Requests or Responses headers
+            # Show essential SIP Requests or Responses headers
             else:
                 user_agent = sippkt.headers.get('user-agent')
                 allow = sippkt.headers.get('allow')
