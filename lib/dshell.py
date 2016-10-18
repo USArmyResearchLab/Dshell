@@ -432,13 +432,14 @@ class Decoder(object):
                     smac, dmac = None, None
                 kw.update(smac=smac, dmac=dmac)
             elif type(pkt) == dpkt.sll.SLL:
-                if pkt.type in (0, 4) and pkt.hrd == 1:
-                    try:
-                        smac = "%02x:%02x:%02x:%02x:%02x:%02x" % (struct.unpack("BBBBBB", pkt.hdr[:pkt.hlen]))
-                        dmac = None
-                    except struct.error:
-                        smac, dmac = None, None
-                    kw.update(smac=smac, dmac=None)
+                try:
+                    # Sometimes MAC address will show up as 00:00:00:00:00:00
+                    # TODO decide if it should be set to None or kept as-is
+                    smac = "%02x:%02x:%02x:%02x:%02x:%02x" % (struct.unpack("BBBBBB", pkt.hdr[:pkt.hlen]))
+                    dmac = None
+                except struct.error:
+                    smac, dmac = None, None
+                kw.update(smac=smac, dmac=dmac)
             # strip any intermediate layers (PPPoE, etc)
             for _ in xrange(int(self.striplayers)):
                 pkt = pkt.data
