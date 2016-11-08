@@ -1,0 +1,74 @@
+default: all
+
+all: rc dshell 
+
+install:
+DESTDIR=/opt/Dshell
+# $(PWD) changed to were ever cloned to ie /usr/src/Dhsell for Install. /home/$User/Downloads etc. 
+## global system Wide Install of Dshell. 
+
+	mkdir -p $(DESTDIR)
+	mkdir -p $(DESTDIR)/doc
+	mkdir -p $(DESTDIR)/bin
+	mkdir -p $(DESTDIR)/lib
+	mkdir -p $(DESTDIR)/share/GeoIP/
+  ## copy DShell into /opt/Dshell ; Permitt Dshell to Install as it normally would. 
+	cp  * $(PWD) /opt/dshell/
+	cp  * $(PWD)/bin /opt/dshell/bin
+	cp  * $(PWD)/bin /opt/dshell/bin
+	cp  * $(PWD)/share/GeoIP/ /opt/dshell/share/GeoIP/
+	### distrobution Symbolic Links can be added by Linux Distrobuion specific  packagers.,  
+	## ie: Gentoo, Arch Debian Redhat. teams as required. can add the symlink to the zip or tarball inside. 
+
+
+dshell: install rc initpy pydoc install_Symlinks
+
+rc:
+	# Generating .dshellrc and dshell files 
+	python $(DESTDIR)/bin/generate-dshellrc.py $(PWD)
+	chmod 755 $(DESTDIR)/dshell
+	chmod 755 $(DESTDIR)/dshell-decode
+	chmod 755 $(DESTDIR)/bin/decode.py
+	ln -s $(DESTDIR)/bin/decode.py $(PWD)/bin/decode
+
+initpy:
+	find $(DESTDIR)/decoders -type d -not -path \*.svn\* -print -exec touch {}/__init__.py \;
+
+pydoc:
+	(cd $(DESTDIR)/doc && ./generate-doc.sh $(DESTDIR) ) 
+
+clean: clean_pyc 
+
+distclean: clean clean_py clean_pydoc clean_rc uninstall
+	
+clean_rc:
+	rm -fv $(DESTDIR)/dshell
+	rm -fv $(DESTDIR)/dshell-decode
+	rm -fv $(DESTDIR)/.dshellrc
+	rm -fv $(DESTDIR)/bin/decode 
+
+clean_py:
+	find $(DESTDIR))/decoders -name '__init__.py' -exec rm -v {} \;
+
+clean_pyc:
+	find $(DESTDIR)/decoders -name '*.pyc' -exec rm -v {} \;
+	find $(DESTDIR)/lib -name '*.pyc' -exec rm -v {} \;
+
+clean_pydoc:
+	find $(DESTDIR)/doc -name '*.htm*' -exec rm -v {} \;
+	
+uninstall
+rm -r $(DESTDIR)/*
+
+	
+install_Symlinks:
+ln-s /opt/Dshell/doc/  /usr/share/doc/Dshell/
+## Link docs Generated.. 
+ln-s $(DESTDIR)/dshell /usr/bin/dshell
+ln-s $(DESTDIR)/dshell-decode /usr/bin/dshell-decode
+
+	
+clean_symlinks:
+rm /usr/share/doc/Dshell/
+rm -fv /usr/bin/dshell
+rm -fv /usr/bin/dshell-decode
