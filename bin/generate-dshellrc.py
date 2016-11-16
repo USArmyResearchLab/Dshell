@@ -2,44 +2,31 @@
 
 import os
 import sys
+from collections import OrderedDict
 
 if __name__ == '__main__':
     cwd = sys.argv[1]
 
     # environment variables used by shell and modules
-    envvars = {
-        'DSHELL': '%s' % (cwd),
-        'DECODERPATH': '%s/decoders' % (cwd),
-        'BINPATH': '%s/bin' % (cwd),
-        'LIBPATH': '%s/lib' % (cwd),
-        'DATAPATH': '%s/share' % (cwd),
-    }
-    # further shell environment setup
-    envsetup = {
-        'LD_LIBRARY_PATH': '$LIBPATH:$LD_LIBRARY_PATH',
-        'PATH': '$BINPATH:$PATH',
-        'PYTHONPATH': '$DSHELL:$LIBPATH:$LIBPATH/output:' + os.path.join('$LIBPATH', 'python' + '.'.join(sys.version.split('.', 3)[:2]).split(' ')[0], 'site-packages') + ':$PYTHONPATH'}
+    env_vars = OrderedDict()
+    env_vars['DSHELL'] = "%s" % (cwd)
+    env_vars['DECODERPATH'] = "%s/decoders" % (cwd)
+    env_vars['BINPATH'] = "%s/bin" % (cwd)
+    env_vars['LIBPATH'] = "%s/lib" % (cwd)
+    env_vars['DATAPATH'] = "%s/share" % (cwd)
+    env_vars['LD_LIBRARY_PATH'] = "$LIBPATH:$LD_LIBRARY_PATH"
+    env_vars['PATH'] = "$BINPATH:$PATH"
+    env_vars['PYTHONPATH'] = "$DSHELL:$LIBPATH:$LIBPATH/output:$PYTHONPATH"
 
-    try:
-        os.mkdir(os.path.join(
-            cwd, 'lib', 'python' + '.'.join(sys.version.split('.', 3)[:2]).split(' ')[0]))
-        os.mkdir(os.path.join(cwd, 'lib', 'python' +
-                              '.'.join(sys.version.split('.', 3)[:2]).split(' ')[0], 'site-packages'))
-    except Exception, e:
-        print e
+    env = (['export PS1="`whoami`@`hostname`:\w Dshell> "'] +
+        ['export %s=%s' % (k, v) for k, v in env_vars.iteritems()])
 
-    envdict = {}
-    envdict.update(envvars)
-    envdict.update(envsetup)
-
-    #.dshellrc text
-    env = ['export PS1="`whoami`@`hostname`:\w Dshell> "'] + ['export %s=%s' %
-                                                              (k, v) for k, v in envvars.items()] + ['export %s=%s' % (k, v) for k, v in envsetup.items()]
-    outfd = open('.dshellrc', 'w')
+    outfile = os.path.join(cwd, '.dshellrc')
+    outfd = open(outfile, 'w')
     outfd.write("\n".join(env))
+
     if len(sys.argv) > 2 and sys.argv[2] == 'with_bash_completion':
         outfd.write('''
-
 
 if [ `echo $BASH_VERSION | cut -d'.' -f1` -ge '4' ]; then
 if [ -f ~/.bash_aliases ]; then
@@ -80,13 +67,6 @@ case "${cur}" in
 --*)
     find_decoder
     local options=""
-#           if [ -n "$decoders" ]; then
-#               for decoder in "${decoders[@]}"
-#               do
-#                 options+=`/usr/bin/python $BINPATH/gen_decoder_options.py $decoder`
-#                 options+=" "
-#               done
-#           fi
 
     options+=$dashdashcommands
     COMPREPLY=( $(compgen -W "${options}" -- ${cur}) )
@@ -134,13 +114,15 @@ fi
     outfd.close()
 
     # dshell text
-    outfd = open('dshell', 'w')
+    outfile = os.path.join(cwd, "dshell")
+    outfd = open(outfile, 'w')
     outfd.write('#!/bin/bash\n')
     outfd.write('/bin/bash --rcfile %s/.dshellrc\n' % (cwd))
     outfd.close()
 
     # dshell-decode text
-    outfd = open('dshell-decode', 'w')
+    outfile = os.path.join(cwd, "dshell-decode")
+    outfd = open(outfile, 'w')
     outfd.write('#!/bin/bash\n')
     outfd.write('source %s/.dshellrc\n' % (cwd))
     outfd.write('decode "$@"')

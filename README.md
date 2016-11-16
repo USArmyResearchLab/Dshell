@@ -32,9 +32,11 @@ Key features:
 
 2. Configure pygeoip by moving the MaxMind data files (GeoIP.dat, GeoIPv6.dat, GeoIPASNum.dat, GeoIPASNumv6.dat) to &lt;install-location&gt;/share/GeoIP/
 
-2. Run `make`. This will build Dshell.
+2. Run `make`. This will build and install Dshell.
 
-3. Run `./dshell`. This is Dshell. If you get a Dshell> prompt, you're good to go!
+  * As root, running `make install` is an alternative. It will install Dshell in /opt/dshell and create symlinks in /usr/bin that allow Dshell to run systemwide.
+
+3. Run `dshell` or `./dshell`, depending on where it installed. This is Dshell. If you get a Dshell> prompt, you're good to go!
 
 ## Basic usage
 
