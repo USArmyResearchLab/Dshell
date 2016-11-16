@@ -70,6 +70,9 @@ Example:
         # overwrite the output module's default error handler
         self.out.errorH = self.__errorHandler
 
+    def postModule(self):
+        self.out.close()
+
     def connectionHandler(self, connection):
 
         try:
