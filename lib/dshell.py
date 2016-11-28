@@ -431,6 +431,15 @@ class Decoder(object):
                 except struct.error:  # couldn't get MAC address
                     smac, dmac = None, None
                 kw.update(smac=smac, dmac=dmac)
+            elif type(pkt) == dpkt.sll.SLL:
+                try:
+                    # Sometimes MAC address will show up as 00:00:00:00:00:00
+                    # TODO decide if it should be set to None or kept as-is
+                    smac = "%02x:%02x:%02x:%02x:%02x:%02x" % (struct.unpack("BBBBBB", pkt.hdr[:pkt.hlen]))
+                    dmac = None
+                except struct.error:
+                    smac, dmac = None, None
+                kw.update(smac=smac, dmac=dmac)
             # strip any intermediate layers (PPPoE, etc)
             for _ in xrange(int(self.striplayers)):
                 pkt = pkt.data
@@ -697,14 +706,18 @@ class TCPDecoder(UDPDecoder):
 
         try:
             # close connection
-            if tcp.flags & (dpkt.tcp.TH_FIN | dpkt.tcp.TH_RST):
-                conn = self.find(addr)
+            conn = self.find(addr)
+            if tcp.flags & (dpkt.tcp.TH_FIN | dpkt.tcp.TH_RST) and conn:
+                conn.closeIP(addr[0]) #track if FIN has been seen in connection
+            if conn and conn.connectionClosed():
+                # we might occasionally have data in a FIN packet
+                self.track(addr, str(tcp.data), ts, offset=tcp.seq)
+                self.close(conn, ts)
+            # init connection, set TCP ISN
+            elif not self.ignore_handshake and (tcp.flags == dpkt.tcp.TH_SYN or tcp.flags == dpkt.tcp.TH_SYN | dpkt.tcp.TH_CWR | dpkt.tcp.TH_ECE):
                 if conn:
-                    # we might occasionally have data in a FIN packet
                     self.track(addr, str(tcp.data), ts, offset=tcp.seq)
                     self.close(conn, ts)
-            # init connection, set TCP ISN
-            elif not self.ignore_handshake and tcp.flags == dpkt.tcp.TH_SYN:
                 conn = self.track(addr, ts=ts, state='init', **kwargs)
                 if conn:
                     conn.nextoffset['cs'] = tcp.seq + 1
@@ -844,6 +857,7 @@ class Connection(Packet):
             {client|server}countrycode, {client|server}asn: aliases of sip/dip country codes and ASNs
             clientpackets, serverpackets: counts of packets from client and server
             clientbytes, serverbytes: total bytes from client and server
+            clientclosed, serverclosed: flag indicating if a direction has closed the connection
             starttime,endtime: timestamps of start and end (or last packet) time of connection.
             direction: indicates direction of last traffic:
                     'init' : established, no traffic
@@ -855,6 +869,7 @@ class Connection(Packet):
             stop: if True, stopped following stream
 
     """
+    
     MAX_OFFSET = 0xffffffff  # max offset before wrap, default is MAXINT32 for TCP sequence numbers
 
     def __init__(self, decoder, addr, ts=None, **kwargs):
@@ -875,6 +890,8 @@ class Connection(Packet):
         self.serverpackets = 0
         self.clientbytes = 0
         self.serverbytes = 0
+        self.clientclosed = False
+        self.serverclosed = False
         self.starttime = self.ts        # datetime Obj containing start time
         self.endtime = self.ts
         # first update will change this, creating first blob
@@ -904,6 +921,19 @@ class Connection(Packet):
             (util.mktime(self.endtime) - util.mktime(self.starttime)),
             self.state)
 
+    def connectionClosed(self):
+        return self.serverclosed and self.clientclosed
+
+    def closeIP(self, tuple):
+        '''
+            Track if we have seen a FIN packet from given tuple
+            tuple should be of form (ip, port)
+        '''
+        if tuple == (self.clientip, self.clientport):
+            self.clientclosed = True
+        if tuple == (self.serverip, self.serverport):
+            self.serverclosed = True
+
     def update(self, ts, direction, data, offset=None):
         # if we have no blobs or direction changes, start a new blob
         lastblob = None
@@ -930,7 +960,7 @@ class Connection(Packet):
         self.endtime = ts
         # if we are tracking offsets, expect the next blob to be where this one
         # ends so far
-        if offset != None and offset >= self.nextoffset[direction]:
+        if offset != None and ((offset + len(data)) & self.MAX_OFFSET) >= self.nextoffset[direction]:
             self.nextoffset[direction] = (offset + len(data)) & self.MAX_OFFSET
         return lastblob
 
