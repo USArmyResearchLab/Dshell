@@ -730,6 +730,18 @@ class TCPDecoder(UDPDecoder):
 
             # all other states, or always if ignoring handshake
             if self.ignore_handshake or self.find(addr, state='established'):
+                # When ignoring handshakes, we can be tolerant of unknown nextoffsets and set them by inference
+                if self.ignore_handshake:
+                    if not conn:
+                        conn = self.track(addr, ts=ts, state='init', **kwargs)
+                    if addr == conn.addr:
+                        # Direction for this packet is CS
+                        if conn.nextoffset['cs'] == None:
+                            conn.nextoffset['cs'] = tcp.seq + 1
+                    else:
+                        # Direction for this packet is SC
+                        if conn.nextoffset['sc'] == None:
+                            conn.nextoffset['sc'] = tcp.seq + 1
                 self.track(addr, str(tcp.data), ts,
                            state='established', offset=tcp.seq, **kwargs)
 
@@ -875,7 +887,7 @@ class Connection(Packet):
     def __init__(self, decoder, addr, ts=None, **kwargs):
         self.state = None
         # the offset we expect for the next blob in this direction
-        self.nextoffset = {'cs': 0, 'sc': 0}
+        self.nextoffset = {'cs': None, 'sc': None}
         # init IP-level data
         Packet.__init__(self, decoder, addr, ts=ts, **kwargs)
         self.clientip, self.clientport, self.serverip, self.serverport = (
