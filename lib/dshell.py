@@ -637,6 +637,10 @@ class UDPDecoder(IPDecoder):
                 return self.packetHandler(udp=Packet(self, addr, pkt=pkt, ts=ts, **kwargs), data=data)
 
             # if no PacketHandler, we need to track state
+            if not self.find(addr):
+                conn = self.track(addr, ts=ts, state='init', **kwargs)
+                conn.nextoffset['cs'] = 0
+                conn.nextoffset['sc'] = 0
             self.track(addr, data, ts, **kwargs)
 
         except Exception, e:
@@ -705,45 +709,49 @@ class TCPDecoder(UDPDecoder):
         self.count += 1
 
         try:
-            # close connection
+            # attempt to find an existing connection for this address
             conn = self.find(addr)
-            if tcp.flags & (dpkt.tcp.TH_FIN | dpkt.tcp.TH_RST) and conn:
-                conn.closeIP(addr[0]) #track if FIN has been seen in connection
-            if conn and conn.connectionClosed():
-                # we might occasionally have data in a FIN packet
-                self.track(addr, str(tcp.data), ts, offset=tcp.seq)
-                self.close(conn, ts)
-            # init connection, set TCP ISN
-            elif not self.ignore_handshake and (tcp.flags == dpkt.tcp.TH_SYN or tcp.flags == dpkt.tcp.TH_SYN | dpkt.tcp.TH_CWR | dpkt.tcp.TH_ECE):
-                if conn:
-                    self.track(addr, str(tcp.data), ts, offset=tcp.seq)
-                    self.close(conn, ts)
-                conn = self.track(addr, ts=ts, state='init', **kwargs)
-                if conn:
-                    conn.nextoffset['cs'] = tcp.seq + 1
-            # SYN ACK
-            elif not self.ignore_handshake and tcp.flags == (dpkt.tcp.TH_SYN | dpkt.tcp.TH_ACK):
-                conn = self.find(addr, state='init')
-                if conn and tcp.ack == conn.nextoffset['cs']:
-                    conn.nextoffset['sc'] = tcp.seq + 1
-                    conn.state = 'established'
 
-            # all other states, or always if ignoring handshake
-            if self.ignore_handshake or self.find(addr, state='established'):
-                # When ignoring handshakes, we can be tolerant of unknown nextoffsets and set them by inference
-                if self.ignore_handshake:
-                    if not conn:
-                        conn = self.track(addr, ts=ts, state='init', **kwargs)
-                    if addr == conn.addr:
-                        # Direction for this packet is CS
-                        if conn.nextoffset['cs'] == None:
-                            conn.nextoffset['cs'] = tcp.seq + 1
-                    else:
-                        # Direction for this packet is SC
-                        if conn.nextoffset['sc'] == None:
-                            conn.nextoffset['sc'] = tcp.seq + 1
+            if self.ignore_handshake:
+                # if we are ignoring handshakes, we will track all connections,
+                # even if we did not see the initialization handshake.
+                if not conn:
+                    conn = self.track(addr, ts=ts, state='init', **kwargs)
+                # align the sequence numbers when we first see a connection
+                if conn.nextoffset['cs'] is None and addr == conn.addr:
+                    conn.nextoffset['cs'] = tcp.seq + 1
+                elif conn.nextoffset['sc'] is None and addr != conn.addr:
+                    conn.nextoffset['sc'] = tcp.seq + 1
                 self.track(addr, str(tcp.data), ts,
-                           state='established', offset=tcp.seq, **kwargs)
+                    state='established', offset=tcp.seq, **kwargs)
+
+            else:
+                # otherwise, only track connections if we see a TCP handshake
+                if (tcp.flags == dpkt.tcp.TH_SYN
+                    or tcp.flags == dpkt.tcp.TH_SYN | dpkt.tcp.TH_CWR | dpkt.tcp.TH_ECE):
+                    # SYN
+                    if conn:
+                        # if a connection already exists for the addr,
+                        # close the old one to start fresh
+                        self.close(conn, ts)
+                    conn = self.track(addr, ts=ts, state='init', **kwargs)
+                    if conn:
+                        conn.nextoffset['cs'] = tcp.seq + 1
+                elif tcp.flags == (dpkt.tcp.TH_SYN | dpkt.tcp.TH_ACK):
+                    # SYN ACK
+                    if conn and tcp.ack == conn.nextoffset['cs']:
+                        conn.nextoffset['sc'] = tcp.seq + 1
+                        conn.state = 'established'
+                if conn and conn.state == 'established':
+                    self.track(addr, str(tcp.data), ts,
+                        state='established', offset=tcp.seq, **kwargs)
+
+            # close connection
+            if conn and tcp.flags & (dpkt.tcp.TH_FIN | dpkt.tcp.TH_RST):
+                # flag that an IP is closing a connection with FIN or RST
+                conn.closeIP(addr[0])
+            if conn and conn.connectionClosed():
+                self.close(conn, ts)
 
         except Exception, e:
             self._exc(e)
