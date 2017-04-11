@@ -386,14 +386,7 @@ class Decoder(object):
             else:
                 direction = 'sc'
 
-            # check direction and blob count.
-            # If we have switched direction but already have max blobs
-            # close connection and replace it with a new one
-            if self.maxblobs and (direction != conn.direction) and (len(conn.blobs) == self.maxblobs):
-                self.close(conn)  # close and call handlers
-                # recurse to create a new connection for the next
-                # request/response
-                return self.track(addr, data, ts)
+            original_direction = conn.direction
 
             # update the connection to update current blob or start a new one
             # and return the last one
@@ -401,6 +394,16 @@ class Decoder(object):
             blob = conn.update(ts, direction, data, offset=offset)
             if blob and self.isBlobHandlerPresent:
                 self.blobHandler(conn, blob)
+
+            # check direction and blob count.
+            # If we have switched direction but already have max blobs
+            # close connection and replace it with a new one
+            if self.maxblobs and (direction != original_direction) and (len(conn.blobs) >= self.maxblobs):
+                self.close(conn)  # close and call handlers
+                # recurse to create a new connection for the next
+                # request/response
+                return self.track(addr, ts=ts, **kwargs)
+
             # we can discard all but the last blob
             if not self.isConnectionHandlerPresent:
                 while len(conn.blobs) > 1:
@@ -637,9 +640,12 @@ class UDPDecoder(IPDecoder):
                 return self.packetHandler(udp=Packet(self, addr, pkt=pkt, ts=ts, **kwargs), data=data)
 
             # if no PacketHandler, we need to track state
-            if not self.find(addr):
+            conn = self.find(addr)
+            if not conn:
                 conn = self.track(addr, ts=ts, state='init', **kwargs)
+            if conn.nextoffset['cs'] is None:
                 conn.nextoffset['cs'] = 0
+            if conn.nextoffset['sc'] is None:
                 conn.nextoffset['sc'] = 0
             self.track(addr, data, ts, **kwargs)
 
