@@ -52,7 +52,8 @@ Example:
     def __errorHandler(self, blob, expected, offset, caller):
         # Custom error handler that is called when data in a blob is missing or
         # overlapping
-        if offset > expected:  # data is missing
+        if offset > expected and expected != 0:  # data is missing
+        	  # Do not report when expected sequence is zero as this is possible but unlikely
             self.data_missing_message += "[%d missing bytes]" % (
                 offset - expected)
         elif offset < expected:  # data is overlapping
