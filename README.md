@@ -47,6 +47,9 @@ Key features:
 * `decode -d <decoder> <pcap>`
   * Run the selected decoder on a pcap file
 
+## Development
+* [Using Dshell With PyCharm](doc/UsingDshellWithPyCharm.md)
+
 ## Partners
 
 Below are repositories from partners Dshell has worked together with.
