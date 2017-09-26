@@ -50,6 +50,7 @@ class DshellDecoder(dshell.TCPDecoder):
     def connectionInitHandler(self, conn):
         # need to set up a custom connection tracker to handle
         self.xorconn[conn.addr] = dshell.Connection(self, conn.addr, conn.ts)
+        self.xorconn[conn.addr].nextoffset = conn.nextoffset
         # self.xorconn[conn.addr]=conn
 
     #
