@@ -52,7 +52,7 @@ class DshellDecoder(SMBDecoder):
                            )
         self.legacy = True
         # self.out=colorout.ColorOutput(title='psexec')
-        self.output = 'colorout'
+        self.out = colorout.ColorOutput()
 
     def sessIndexFromPID(self, conn, pid):
         return ':'.join((str(conn.starttime), conn.sip, str(conn.sport), conn.dip, str(conn.dport), pid))
