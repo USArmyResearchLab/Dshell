@@ -743,7 +743,8 @@ class TCPDecoder(UDPDecoder):
                     conn = self.track(addr, ts=ts, state='init', **kwargs)
                     if conn:
                         conn.nextoffset['cs'] = tcp.seq + 1
-                elif tcp.flags == (dpkt.tcp.TH_SYN | dpkt.tcp.TH_ACK):
+                elif (tcp.flags == dpkt.tcp.TH_SYN | dpkt.tcp.TH_ACK
+                      or tcp.flags == dpkt.tcp.TH_SYN | dpkt.tcp.TH_ACK | dpkt.tcp.TH_ECE):
                     # SYN ACK
                     if conn and tcp.ack == conn.nextoffset['cs']:
                         conn.nextoffset['sc'] = tcp.seq + 1
