@@ -15,7 +15,7 @@ Key features:
 * Linux (developed on Ubuntu 12.04)
 * Python 2.7
 * [pygeoip](https://github.com/appliedsec/pygeoip), GNU Lesser GPL
-  * [MaxMind GeoIP Legacy datasets](http://dev.maxmind.com/geoip/legacy/geolite/)
+  * [MaxMind GeoIP Legacy datasets](http://dev.maxmind.com/geoip/legacy/geolite/).
 * [PyCrypto](https://pypi.python.org/pypi/pycrypto), custom license
 * [dpkt](https://code.google.com/p/dpkt/), New BSD License
 * [IPy](https://github.com/haypo/python-ipy), BSD 2-Clause License
