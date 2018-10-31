@@ -1,6 +1,6 @@
 # Dshell
 
-An  extensible network forensic analysis framework.  Enables rapid development of plugins to support the dissection of network packet captures.
+An extensible network forensic analysis framework.  Enables rapid development of plugins to support the dissection of network packet captures.
 
 Key features:
 
