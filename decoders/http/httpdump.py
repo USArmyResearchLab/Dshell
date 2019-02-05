@@ -3,6 +3,7 @@ import util
 import hashlib
 import urllib
 import re
+import colorout
 
 from httpdecoder import HTTPDecoder
 
@@ -25,7 +26,7 @@ class DshellDecoder(HTTPDecoder):
                                  'urlfilter': {'type': 'string', 'default': None, 'help': 'Filter to URLs matching this regex'},
                              },
                              )
-        self.output = 'colorout'
+        self.out = colorout.ColorOutput()
         # Disable auto-gunzip as we want to indicate content that was
         # compressed in the output
         self.gunzip = False

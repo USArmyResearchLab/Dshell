@@ -743,7 +743,8 @@ class TCPDecoder(UDPDecoder):
                     conn = self.track(addr, ts=ts, state='init', **kwargs)
                     if conn:
                         conn.nextoffset['cs'] = tcp.seq + 1
-                elif tcp.flags == (dpkt.tcp.TH_SYN | dpkt.tcp.TH_ACK):
+                elif (tcp.flags == dpkt.tcp.TH_SYN | dpkt.tcp.TH_ACK
+                      or tcp.flags == dpkt.tcp.TH_SYN | dpkt.tcp.TH_ACK | dpkt.tcp.TH_ECE):
                     # SYN ACK
                     if conn and tcp.ack == conn.nextoffset['cs']:
                         conn.nextoffset['sc'] = tcp.seq + 1
@@ -1050,7 +1051,7 @@ class Blob(Data):
         '''returns segments of blob as string'''
         return self.data(padding='')
 
-    def data(self, errorHandler=None, padding=None, overlap=True, caller=None, dup=-1):
+    def data(self, errorHandler=None, padding=None, overlap=True, caller=None):
         '''returns segments of blob reassembled into a string
            if next segment offset is not the expected offset
            errorHandler(blob,expected,offset) will be called
@@ -1067,6 +1068,7 @@ class Blob(Data):
             dup: how to handle duplicate segments:
                 0: use first segment seen
                 -1 (default): use last segment seen
+            changing duplicate segment handling to always take largest segment
         '''
         d = ''
         nextoffset = self.startoffset
@@ -1086,12 +1088,17 @@ class Blob(Data):
                         raise KeyError(nextoffset)
                 elif segoffset < nextoffset and not overlap:
                     continue  # skip if not allowing overlap
+            #find most data in segments
+            seg = ''
+            for x in self.segments[segoffset]:
+                if len(x) > len(seg):
+                    seg = x
             # advance next expected offset
             nextoffset = (
-                segoffset + len(self.segments[segoffset][dup])) & self.MAX_OFFSET
+                segoffset + len(seg)) & self.MAX_OFFSET
             # append or splice data
             d = d[:segoffset - self.startoffset] + \
-                self.segments[segoffset][dup] + \
+                seg + \
                 d[nextoffset - self.startoffset:]
         return d
 

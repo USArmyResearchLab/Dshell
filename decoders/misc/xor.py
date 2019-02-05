@@ -50,7 +50,9 @@ class DshellDecoder(dshell.TCPDecoder):
     def connectionInitHandler(self, conn):
         # need to set up a custom connection tracker to handle
         self.xorconn[conn.addr] = dshell.Connection(self, conn.addr, conn.ts)
-        # self.xorconn[conn.addr]=conn
+        self.xorconn[conn.addr].nextoffset = conn.nextoffset
+        self.xorconn[conn.addr].proto = conn.proto
+        self.xorconn[conn.addr].info(proto=conn.proto)
 
     #
     # Each blob will be xor'ed and the "newblob" data will be added to the connection
