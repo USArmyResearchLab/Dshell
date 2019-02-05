@@ -23,15 +23,18 @@ class DshellDecoder(dshell.Decoder):
         '''
         self.file = None
         dshell.Decoder.__init__(self,
-                                name='writer',
-                                description='pcap/session writer',
-                                author='twp',
-                                raw=True,
-                                optiondict=dict(filename=dict(default='%(clientip)s:%(clientport)s-%(serverip)s:%(serverport)s-%(direction)s.txt'),
-                                                )
-                                )
+            name='writer',
+            description='pcap/session writer',
+            author='twp',
+            raw=True,
+            optiondict=dict(
+                filename=dict(
+                    default='%(clientip)s:%(clientport)s-%(serverip)s:%(serverport)s-%(direction)s.txt'
+                ),
+            )
+        )
 
-    def rawHandler(self, pktlen, pkt, ts):
+    def rawHandler(self, pktlen, pkt, ts, **kwargs):
         self.decodedbytes += pktlen
         self.count += 1
         self.dump(pktlen, pkt, ts)  # pktlen may be wrong if we stripped vlan
