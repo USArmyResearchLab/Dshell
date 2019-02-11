@@ -1,1 +1,1 @@
-GeoIP Legacy data sets go here.
+GeoIP data sets go here.
