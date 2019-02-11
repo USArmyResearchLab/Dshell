@@ -14,7 +14,7 @@ import logging
 
 # For IP lookups
 try:
-    import pygeoip
+    import geoip2.database
 except:
     pass
 
@@ -106,25 +106,18 @@ class Decoder(object):
         self.cleanupts = 0
 
         # instantiate and save references to lookup function
+        geoip_dir = os.path.join(os.environ['DATAPATH'], "GeoIP")
         try:
-            self.geoccdb = [pygeoip.GeoIP(os.environ[
-                                          'DATAPATH'] + '/GeoIP/GeoIP.dat', pygeoip.MEMORY_CACHE).country_code_by_addr]
-            try:
-                self.geoccdb.append(pygeoip.GeoIP(os.environ[
-                                    'DATAPATH'] + '/GeoIP/GeoIPv6.dat', pygeoip.MEMORY_CACHE).country_code_by_addr)
-            except:
-                pass
+            self.geoccdb = geoip2.database.Reader(
+                os.path.join(geoip_dir, "GeoLite2-Country.mmdb")
+            ).country
         except:
             self.geoccdb = None
 
         try:
-            self.geoasndb = [pygeoip.GeoIP(
-                os.environ['DATAPATH'] + '/GeoIP/GeoIPASNum.dat', pygeoip.MEMORY_CACHE).org_by_addr]
-            try:
-                self.geoasndb.append(pygeoip.GeoIP(os.environ[
-                                     'DATAPATH'] + '/GeoIP/GeoIPASNumv6.dat', pygeoip.MEMORY_CACHE).org_by_addr)
-            except:
-                pass
+            self.geoasndb = geoip2.database.Reader(
+                os.path.join(geoip_dir, "GeoLite2-ASN.mmdb")
+            ).asn
         except:
             self.geoasndb = None
 
@@ -250,41 +243,48 @@ class Decoder(object):
         if self.name in options:
             self.parseOptions(options[self.name])
 
-    def getGeoIP(self, ip, db=[], notfound='--'):
+    def getGeoIP(self, ip, db=None, notfound='--'):
         """
-        Get record associated with an IP
-        requires GeoIP
+        Get country code associated with an IP.
+        Requires GeoIP library (geoip2) and data files.
         """
-        o = None
-        if db == []:
-            db = self.geoccdb  # default to self.geoccdb
-        for d in db:
-            try:
-                o = d(ip)
-            except:
-                # traceback.print_exc()  # removed by bg on 20121203
-                continue  # passing ipv6 address to ipv4 lookup or v/v
-            if o:
-                return o  # stop when we get a result
-        return notfound
+        if not db:
+            db = self.geoccdb
+        try:
+            # Get country code based on order of importance
+            # 1st: Country that owns an IP address registered in another
+            #      location (e.g. military bases in foreign countries)
+            # 2nd: Country in which the IP address is registered
+            # 3rd: Physical country where IP address is located
+            # https://dev.maxmind.com/geoip/geoip2/whats-new-in-geoip2/#Country_Registered_Country_and_Represented_Country
+            location = db(ip)
+            country = (
+                location.represented_country.iso_code or
+                location.registered_country.iso_code or
+                location.country.iso_code or
+                notfound
+            )
+            return country
+        except Exception:
+            # Many expected exceptions can occur here. Ignore them all and
+            # return default value.
+            return notfound
 
-    def getASN(self, ip, db=[], notfound='--'):
+    def getASN(self, ip, db=None, notfound='--'):
         """
-        Get record associated with an IP
-        requires GeoIP
+        Get ASN associated with an IP.
+        Requires GeoIP library (geoip2) and data files.
         """
-        o = None
-        if db == []:
-            db = self.geoasndb  # default to self.geoccdb
-        for d in db:
-            try:
-                o = d(ip)
-            except:
-                # traceback.print_exc()  # removed by bg on 20121203
-                continue  # passing ipv6 address to ipv4 lookup or v/v
-            if o:
-                return o  # stop when we get a result
-        return notfound
+        if not db:
+            db = self.geoasndb
+        try:
+            template = "AS{0.autonomous_system_number} {0.autonomous_system_organization}"
+            asn = template.format( db(ip) )
+            return asn
+        except Exception:
+            # Many expected exceptions can occur here. Ignore them all and
+            # return default value.
+            return notfound
 
     def close(self, conn, ts=None):
         '''for connection based decoders
@@ -851,9 +851,9 @@ class Packet(Data):
         # cache
         try:
             self.info(sipcc=decoder.getGeoIP(self.sip, db=decoder.geoccdb),
-                      sipasn=decoder.getGeoIP(self.sip, db=decoder.geoasndb),
+                      sipasn=decoder.getASN(self.sip, db=decoder.geoasndb),
                       dipcc=decoder.getGeoIP(self.dip, db=decoder.geoccdb),
-                      dipasn=decoder.getGeoIP(self.dip, db=decoder.geoasndb))
+                      dipasn=decoder.getASN(self.dip, db=decoder.geoasndb))
         except:
             self.sipcc, self.sipasn, self.dipcc, self.dipasn = None, None, None, None
 

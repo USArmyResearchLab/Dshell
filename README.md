@@ -14,8 +14,8 @@ Key features:
 
 * Linux (developed on Ubuntu 12.04)
 * Python 2.7
-* [pygeoip](https://github.com/appliedsec/pygeoip), GNU Lesser GPL
-  * [MaxMind GeoIP Legacy datasets](http://dev.maxmind.com/geoip/legacy/geolite/)
+* [geoip2](https://github.com/maxmind/GeoIP2-python), Apache License, Version 2.0
+  * [MaxMind GeoIP datasets](https://dev.maxmind.com/geoip/geoip2/geolite2/)
 * [PyCrypto](https://pypi.python.org/pypi/pycrypto), custom license
 * [dpkt](https://code.google.com/p/dpkt/), New BSD License
 * [IPy](https://github.com/haypo/python-ipy), BSD 2-Clause License
@@ -24,13 +24,11 @@ Key features:
 
 ## Installation
 
-1. Install all of the necessary Python modules listed above. Many of them are available via pip and/or apt-get. Pygeoip is not yet available as a package and must be installed with pip or manually.
+1. Install all of the necessary Python modules listed above. Many of them are available via pip and/or apt-get.
 
-  1. `sudo apt-get install python-crypto python-dpkt python-ipy python-pypcap`
+  * `sudo pip install geoip2 pycrypto dpkt IPy pypcap`
 
-  2. `sudo pip install pygeoip`
-
-2. Configure pygeoip by moving the MaxMind data files (GeoIP.dat, GeoIPv6.dat, GeoIPASNum.dat, GeoIPASNumv6.dat) to &lt;install-location&gt;/share/GeoIP/
+2. Configure GeoIP by moving the MaxMind data files (GeoLite2-Country.mmdb, GeoLite2-ASN.mmdb) to &lt;install-location&gt;/share/GeoIP/
 
 2. Run `make`. This will build Dshell.
 
@@ -49,6 +47,10 @@ Key features:
 
 ## Development
 * [Using Dshell With PyCharm](doc/UsingDshellWithPyCharm.md)
+
+## Recent Major Updates
+
+* Feb 2019 - Removed deprecated pygeoip dependency, and replaced it with geoip2. This requires the use of new GeoIP data files, listed in the Prerequisites and Installation sections above.
 
 ## Partners
 
