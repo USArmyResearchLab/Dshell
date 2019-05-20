@@ -105,7 +105,7 @@ Example:
             return 'neither ' + self.code
         if self.both and conn.clientcountrycode == self.code and conn.servercountrycode == self.code:
             return 'both ' + self.code
-        if self.notboth and (conn.clientcountrycode == self.code ^ conn.servercountrycode == self.code):
+        if self.notboth and ((conn.clientcountrycode == self.code) ^ (conn.servercountrycode == self.code)):
             return 'not both ' + self.code
         if not self.both and conn.clientcountrycode == self.code:
             return 'client ' + self.code
