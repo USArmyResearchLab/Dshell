@@ -3,7 +3,6 @@
 '''
 
 import dshell
-import util
 import netflowout
 
 
@@ -19,9 +18,9 @@ class DshellDecoder(dshell.TCPDecoder):
         self.alerts = False
         self.file = None
         dshell.TCPDecoder.__init__(self,
-                                   name='country',
-                                   description='filter connections on geolocation (country code)',
-                                   longdescription="""
+            name='country',
+            description='filter connections on geolocation (country code)',
+            longdescription="""
 country: filter connections on geolocation (country code)
 
 Chainable decoder to filter TCP/UDP streams on geolocation data.  If no
@@ -55,28 +54,30 @@ Example:
   decode -d country traffic.pcap -W USonly.pcap --country_code US
   decode -d country+followstream traffic.pcap --country_code US --country_notboth
 """,
-                                   filter="ip or ip6",
-                                   author='twp',
-                                   optiondict={
-                                        'code': {'type': 'string', 'help': 'two-char country code'},
-                                        'neither': {'action': 'store_true', 'help': 'neither (client/server) is in specified country'},
-                                        'both': {'action': 'store_true', 'help': 'both (client/server) ARE in specified country'},
-                                        'notboth': {'action': 'store_true', 'help': 'specified country is not both client and server'},
-                                        'alerts': {'action': 'store_true'}})
-        '''instantiate an decoder that will call back to us once the IP decoding is done'''
+            filter="ip or ip6",
+            author='twp',
+            optiondict={
+                'code': {'type': 'string', 'help': 'two-char country code'},
+                'neither': {'action': 'store_true', 'help': 'neither (client/server) is in specified country'},
+                'both': {'action': 'store_true', 'help': 'both (client/server) ARE in specified country'},
+                'notboth': {'action': 'store_true', 'help': 'specified country is not both client and server'},
+                'alerts': {'action': 'store_true'}
+            }
+        )
+        # instantiate a decoder that will call back to us once the IP decoding is done
         self.__decoder = dshell.IPDecoder()
         self.out = netflowout.NetflowOutput()
         self.chainable = True
 
     def decode(self, *args):
         if len(args) is 3:
-            pktlen, pktdata, ts = args  # orig_len,packet,ts format (pylibpcap)
-        else:  # ts,pktdata (pypcap)
+            pktlen, pktdata, ts = args
+        else:
             ts, pktdata = args
             pktlen = len(pktdata)
-        '''do normal decoder stack to track session '''
+        # do normal decoder stack to track session
         dshell.TCPDecoder.decode(self, pktlen, pktdata, ts)
-        '''our hook to decode the ip/ip6 addrs, then dump the addrs and raw packet to our callback'''
+        # our hook to decode the ip/ip6 addrs, then dump the addrs and raw packet to our callback
         self.__decoder.IPHandler = self.__callback  # set private decoder to our callback
         self.__decoder.decode(pktlen, pktdata, ts, raw=pktdata)
 
@@ -97,18 +98,18 @@ Example:
 
     def __countryTest(self, conn):
         # If no country code specified, pass all traffic through
-        if self.code == None or not len(self.code):
+        if not self.code:
             return True
         # check criteria
         if self.neither and conn.clientcountrycode != self.code and conn.servercountrycode != self.code:
             return 'neither ' + self.code
         if self.both and conn.clientcountrycode == self.code and conn.servercountrycode == self.code:
             return 'both ' + self.code
-        if self.notboth and (conn.clientcountrycode != self.code or conn.servercountrycode != self.code):
+        if self.notboth and ((conn.clientcountrycode == self.code) ^ (conn.servercountrycode == self.code)):
             return 'not both ' + self.code
-        if conn.clientcountrycode == self.code:
+        if not self.both and conn.clientcountrycode == self.code:
             return 'client ' + self.code
-        if conn.servercountrycode == self.code:
+        if not self.both and conn.servercountrycode == self.code:
             return 'server ' + self.code
         # no match
         return None
