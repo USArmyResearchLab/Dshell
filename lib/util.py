@@ -259,6 +259,8 @@ def getopts(args, options,
 
 
 def getHeader(request_or_response, header_name):
+    if request_or_response == None:
+        return ''
     try:
         httpHdr = request_or_response.headers[header_name]
     except:
@@ -269,7 +271,10 @@ def getHeader(request_or_response, header_name):
         # return unique list joined by ','
         return ', '.join(set(httpHdr))
     else:
-        return ''
+        try:
+          return unicode(httpHdr).encode('utf-8')
+        except:
+          return ''
 
 # HTTPlastmodified - Extracts last-modified (or date) header from
 #                    HTTP response headers and normalizes date string format
