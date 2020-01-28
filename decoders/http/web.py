@@ -24,48 +24,87 @@ class DshellDecoder(HTTPDecoder):
         self.gunzip = False  # Not interested in response body
 
     def HTTPHandler(self, conn, request, response, requesttime, responsetime):
-        host = ''
+
+        #
+        # Establish kw_items dictionary for extracted details from tcp/ip layer and request/response
+        #
+        kw_items = conn.info()
+        
+        #
+        # Extract useful information from HTTP *request*
+        #
+        for h in request.headers.keys():
+          kw_items[h] = util.getHeader(request, h)
+        # Rename user-agent for backward compatability
+        if 'user-agent' in kw_items:
+          kw_items['useragent'] = kw_items.pop('user-agent')
+        
+        # Override non-existent host header with server IP address
+        if kw_items['host'] == '':
+            kw_items['host'] = conn.serverip
+
+        # request info string for standard output
+        requestInfo = '%s %s%s HTTP/%s' % (request.method,
+                                           kw_items['host'] if kw_items['host'] != request.uri else '',  # With CONNECT method, the URI is or contains the host, making this redudant
+                                           request.uri[:self.maxurilen] + '[truncated]' if self.maxurilen > 0 and len(
+                                               request.uri) > self.maxurilen else request.uri,
+                                           request.version)
+
+        #
+        # Extract useful information from HTTP *response* (if available)
+        #
+        status = ''
+        reason = ''
+        responsesize = 0
         loc = ''
         lastmodified = ''
+        md5 = ''
+        if response!=None:
 
-        #request_time, request, response = self.httpDict[conn.addr]
+            try:
+                responsesize = len(response.body.rstrip('\0'))
+            except:
+                responsesize = 0
 
-        # extract method,uri,host from response
-        host = util.getHeader(request, 'host')
-        if host == '':
-            host = conn.serverip
+            if self.md5:
+                md5 = self._bodyMD5(response)
+            else:
+                md5 = ''
 
-        try:
-            status = response.status
-        except:
-            status = ''
-        try:
-            reason = response.reason
-        except:
-            reason = ''
+            try:
+                status = response.status
+            except:
+                status = ''
+            try:
+                reason = response.reason
+            except:
+                reason = ''
 
-        loc = ''
-        if status[:2] == '30':
-            loc = util.getHeader(response, 'location')
-            if len(loc):
-                loc = '-> ' + loc
+            for h in response.headers.keys():
+              if not h in kw_items:
+                  kw_items[h] = util.getHeader(response, h)
+              else:
+                  kw_items['server_'+h] = util.getHeader(response, h)
+            if 'content-type' in kw_items:
+              kw_items['contenttype'] = kw_items.pop('content-type')
 
-        lastmodified = util.HTTPlastmodified(response)
-        referer = util.getHeader(request, 'referer')
-        useragent = util.getHeader(request, 'user-agent')
-        via = util.getHeader(request, 'via')
+            loc = ''
+            if status[:2] == '30':
+                loc = util.getHeader(response, 'location')
+                if len(loc):
+                    loc = '-> ' + loc
+    
+            lastmodified = util.HTTPlastmodified(response)
+            
+            # response info string for standard output
+            responseInfo = '%s %s %s %s' % (status, reason, loc, lastmodified)
 
-        try:
-            responsesize = len(response.body.rstrip('\0'))
-        except:
-            responsesize = 0
-
-        if self.md5:
-            md5 = self._bodyMD5(response)
         else:
-            md5 = ''
+            responseInfo = ''
 
+        #
         # File objects
+        #
         try:
             if len(response.body) > 0:
                 responsefile = dfile.dfile(
@@ -80,18 +119,14 @@ class DshellDecoder(HTTPDecoder):
         else:
             uploadfile = None
 
-        requestInfo = '%s %s%s HTTP/%s' % (request.method,
-                                           host if host != request.uri else '',  # With CONNECT method, the URI is or contains the host, making this redudant
-                                           request.uri[:self.maxurilen] + '[truncated]' if self.maxurilen > 0 and len(
-                                               request.uri) > self.maxurilen else request.uri,
-                                           request.version)
-        if response:
-            responseInfo = '%s %s %s %s' % (status, reason, loc, lastmodified)
-        else:
-            responseInfo = ''
+				#
+				# Call alert with text info and kw values
+				#
+        self.alert("%-80s // %s" % (requestInfo, responseInfo), request=requestInfo, response=responseInfo,
+        					 request_time=requesttime, response_time=responsetime, request_method=request.method,
+                   uri=request.uri, status=status, reason=reason, lastmodified=lastmodified,
+                   md5=md5, responsesize=responsesize, responsefile=responsefile, uploadfile=uploadfile, **kw_items)
 
-        self.alert("%-80s // %s" % (requestInfo, responseInfo), referer=referer, useragent=useragent, request=requestInfo, response=responseInfo, request_time=requesttime, response_time=responsetime, request_method=request.method, host=host,
-                   uri=request.uri, status=status, reason=reason, lastmodified=lastmodified, md5=md5, responsesize=responsesize, contenttype=util.getHeader(response, 'content-type'), responsefile=responsefile, uploadfile=uploadfile, via=via, **conn.info())
         if self.out.sessionwriter:
             self.write(request.data, direction='cs')
             if response:
