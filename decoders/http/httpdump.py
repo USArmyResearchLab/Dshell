@@ -76,6 +76,9 @@ class DshellDecoder(HTTPDecoder):
                 request.method, response.status, host, uri_location, util.getHeader(response, 'content-type'))
         urlParams = util.URLDataToParameterDict(uri_data)
         postParams = util.URLDataToParameterDict(request.body)
+        # If URLData parser only returns a single element with null value, it's probably an eroneous evaluation.  Most likely base64 encoded payload ending in an '=' character.
+        if len(postParams)==1 and postParams[postParams.keys()[0]] == '\x00':
+        	postParams = None
 
         clientCookies = self._parseCookies(util.getHeader(request, 'cookie'))
         serverCookies = self._parseCookies(
