@@ -22,11 +22,13 @@ class DshellDecoder(DNSDecoder):
         queried = ""
         if dns.qd[0].type == dpkt.dns.DNS_A:
             queried = queried + "A? %s" % (dns.qd[0].name)
-        if dns.qd[0].type == dpkt.dns.DNS_CNAME:
+        elif dns.qd[0].type == dpkt.dns.DNS_CNAME:
             queried = queried + "CNAME? %s" % (dns.qd[0].name)
-        if dns.qd[0].type == dpkt.dns.DNS_AAAA:
+        elif dns.qd[0].type == dpkt.dns.DNS_AAAA:
             queried = queried + "AAAA? %s" % (dns.qd[0].name)
-        if dns.qd[0].type == dpkt.dns.DNS_PTR:
+        elif dns.qd[0].type == dpkt.dns.DNS_SOA:
+            queried = queried + "SOA? %s" % (dns.qd[0].name)
+        elif dns.qd[0].type == dpkt.dns.DNS_PTR:
             if dns.qd[0].name.endswith('.in-addr.arpa'):
                 query_name = '.'.join(
                     reversed(dns.qd[0].name.split('.in-addr.arpa')[0].split('.')))
@@ -39,11 +41,11 @@ class DshellDecoder(DNSDecoder):
 
         if dns.qd[0].type == dpkt.dns.DNS_NS:
             queried = queried + "NS? %s" % (dns.qd[0].name)
-        if dns.qd[0].type == dpkt.dns.DNS_MX:
+        elif dns.qd[0].type == dpkt.dns.DNS_MX:
             queried = queried + "MX? %s" % (dns.qd[0].name)
-        if dns.qd[0].type == dpkt.dns.DNS_TXT:
+        elif dns.qd[0].type == dpkt.dns.DNS_TXT:
             queried = queried + "TXT? %s" % (dns.qd[0].name)
-        if dns.qd[0].type == dpkt.dns.DNS_SRV:
+        elif dns.qd[0].type == dpkt.dns.DNS_SRV:
             queried = queried + "SRV? %s" % (dns.qd[0].name)
 
         return queried
@@ -65,7 +67,7 @@ class DshellDecoder(DNSDecoder):
                 conn.info(query=self.decode_q(dns))
 
             # DNS Answer with data and no errors
-            elif (dns.qr == dpkt.dns.DNS_A and dns.rcode == dpkt.dns.DNS_RCODE_NOERR and len(dns.an) > 0):
+            elif (dns.rcode == dpkt.dns.DNS_RCODE_NOERR and len(dns.an) > 0):
 
                 queried = self.decode_q(dns)
 
@@ -107,6 +109,16 @@ class DshellDecoder(DNSDecoder):
 
                 if queried != '':
                     anstext = 'NXDOMAIN'
+
+            #SOA response
+            elif dns.qd[0].type == dpkt.dns.DNS_SOA and len(dns.ns):
+                queried = self.decode_q(dns)
+                answers = []
+                for ns in dns.ns:
+                    if ns.type == dpkt.dns.DNS_SOA:
+                        answers.append('SOA: '+ ns.mname)
+                anstext = ", ".join(answers)
+
 
         # did we get an answer?
         if anstext and not self.only_noanswer and not self.only_norequest:
