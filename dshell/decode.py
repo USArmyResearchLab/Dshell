@@ -19,35 +19,15 @@ reading in user arguments, setting filters, opening files/interfaces, etc. All
 of this largely takes place in the main() function.
 """
 
-# set up logging first, since some third-party libraries would try to
-# configure things their own way
-import logging
-logging.basicConfig(format="%(levelname)s (%(name)s) - %(message)s")
-logger = logging.getLogger("decode.py")
-
-# since pypacker handles its own exceptions (loudly), this attempts to keep
-# it quiet
-from pypacker import pypacker
-pypacker.logger.setLevel(logging.CRITICAL)
-
-import dshell.core
-from dshell.dshelllist import get_plugins, get_output_modules
-from dshell.dshellargparse import DshellArgumentParser
-from dshell.output.output import QueueOutputWrapper
-from dshell.util import get_output_path
-
-import pcapy
-
 # standard Python library imports
 import bz2
-import copy
 import faulthandler
 import gzip
 import multiprocessing
+import logging
 import operator
 import os
 import queue
-#import signal
 import sys
 import tempfile
 import zipfile
@@ -55,12 +35,30 @@ from collections import OrderedDict
 from getpass import getpass
 from glob import glob
 from importlib import import_module
+from typing import Iterable
+
+import pcapy
+from pypacker.layer12 import ethernet, ppp, pppoe, ieee80211, linuxcc, radiotap, can
+from pypacker.layer3 import ip, ip6
+
+import dshell.core
+from dshell.api import get_plugin_information
+from dshell.core import Packet
+from dshell.dshelllist import get_plugins, get_output_modules
+from dshell.dshellargparse import DshellArgumentParser
+from dshell.output.output import QueueOutputWrapper
+from dshell.util import get_output_path
+from tabulate import tabulate
+
+logger = logging.getLogger(__name__)
+
 
 # plugin_chain will eventually hold the user-selected plugins that packets
 # will trickle through.
 plugin_chain = []
 
-def feed_plugin_chain(plugin_index, packet_tuple):
+
+def feed_plugin_chain(plugin_index: int, packet: Packet):
     """
     Every packet fed into Dshell goes through this function.
     Its goal is to pass each packet down the chain of selected plugins.
@@ -68,60 +66,19 @@ def feed_plugin_chain(plugin_index, packet_tuple):
     plugin, i.e. act as a filter.
     """
     global plugin_chain
-    (pktlen, pkt, ts) = packet_tuple
+
     current_plugin = plugin_chain[plugin_index]
     next_plugin_index = plugin_index + 1
     if next_plugin_index >= len(plugin_chain):
         next_plugin_index = None
 
-    # Check the plugin's filter to see if this packet should go any further
-    if current_plugin.compiled_bpf and not current_plugin.compiled_bpf.filter(pkt):
-        return
+    # Pass packet into plugin for processing.
+    current_plugin.consume_packet(packet)
 
-    # Begin stepping through the plugin and feeding each handler function in
-    # order:
-    # raw_handler --> packet_handler -?-> connection_handler (init/blob_handler/close)
-    current_plugin._raw_handler(pktlen, pkt, ts)
-
-    # feed any available raw packets to the packet_handler
-    while len(current_plugin.raw_packet_queue) > 0:
-        rawpacket = current_plugin.raw_packet_queue.pop(0)
-        current_plugin._packet_handler(*rawpacket)
-
-    # Check if this plugin handles connections
-    # If it doesn't, we can just pass the packet to the next plugin now
-    if "_connection_handler" not in current_plugin.members:
-        if next_plugin_index:
-            while len(current_plugin.packet_queue) > 0:
-                packet = current_plugin.packet_queue.pop(0)
-                feed_plugin_chain(next_plugin_index, packet.packet_tuple)
-        return
-
-    # Connection handlers are a little different.
-    # They only enqueue anything when a connection closes or times out.
-    while len(current_plugin.packet_queue) > 0:
-        packet = current_plugin.packet_queue.pop(0)
-        current_plugin._connection_handler(packet)
-
-    # Connections are "passed" to the next plugin by popping off their blobs,
-    # then passing all of the packets within.
-    # Afterwards, the connection is cleared from the plugin's cache.
-    while len(current_plugin.connection_queue) > 0:
-        connection = current_plugin.connection_queue.pop(0)
-        if next_plugin_index:
-            for blob in connection.blobs:
-                if not blob.hidden:
-                    for packet in blob.all_packets:
-                        feed_plugin_chain(next_plugin_index, packet.packet_tuple)
-        conn_key = tuple(sorted(connection.addr))
-        try:
-            # Attempt to clear out the connection, now that it has been handled.
-            del current_plugin.connection_tracker[conn_key]
-        except KeyError:
-            # If the plugin messed with the connection's address, it might
-            # fail to clear it.
-            # TODO find some way to better handle this scenario
-            pass
+    # Process produced packets.
+    if next_plugin_index:
+        for _packet in current_plugin.produce_packets():
+            feed_plugin_chain(next_plugin_index, _packet)
 
 
 def clean_plugin_chain(plugin_index):
@@ -135,19 +92,12 @@ def clean_plugin_chain(plugin_index):
     if next_plugin_index >= len(plugin_chain):
         next_plugin_index = None
 
-    # Check if the plugin handles connections
-    # If it does, close out its open connections and pass the stored packets
-    # down the chain.
-    if "_connection_handler" in current_plugin.members:
-        for connection_handler_out in current_plugin._cleanup_connections():
-            if not connection_handler_out:
-                continue
-            if next_plugin_index:
-                for blob in connection_handler_out.blobs:
-                    if not blob.hidden:
-                        for packet in blob.all_packets:
-                            feed_plugin_chain(next_plugin_index, packet.packet_tuple)
+    # need to flush even if there are no more plugins in the chain to ensure all packets are processed.
+    current_plugin.flush()
+
     if next_plugin_index:
+        for _packet in current_plugin.produce_packets():
+            feed_plugin_chain(next_plugin_index, _packet)
         clean_plugin_chain(next_plugin_index)
 
 
@@ -179,41 +129,47 @@ def decompress_file(filepath, extension, unzipdir):
 
     tempfiles = []
     for openfile in openfiles:
-        try:
-            # check if this file is actually something decompressable
-            openfile.peek(1)
-        except OSError as e:
-            logger.error("Could not process compressed file {!r}. {!s}".format(filepath, e))
-            openfile.close()
-            continue
-        tfile = tempfile.NamedTemporaryFile(dir=unzipdir, delete=False, prefix=filename)
-        for piece in openfile:
-            tfile.write(piece)
-        tempfiles.append(tfile.name)
-        openfile.close()
-        tfile.close()
+        with openfile:
+            try:
+                # check if this file is actually something decompressable
+                openfile.peek(1)
+            except OSError as e:
+                logger.error("Could not process compressed file {!r}. {!s}".format(filepath, e))
+                continue
+            with tempfile.NamedTemporaryFile(dir=unzipdir, delete=False, prefix=filename) as tfile:
+                for piece in openfile:
+                    tfile.write(piece)
+                tempfiles.append(tfile.name)
     return tempfiles
 
 
-
 def print_plugins(plugins):
-    "Print list of plugins with additional info"
-    row = "{:<40} {:15} {:<20} {:<20} {:<10} {}"
-    print(row.format('module', 'name', 'title', 'type', 'author', 'description'))
-    print('-' * 121)
-    for name, module in plugins.items():
-        print(row.format(module.__module__,
-                         name,
-                         module.name,
-                         module.__class__.__bases__[0].__name__,
-                         module.author,
-                         module.description))
+    """
+    Print list of plugins with additional info.
+    """
+    headers = ['module', 'name', 'title', 'type', 'author', 'description']
+    rows = []
+    for name, module in sorted(plugins.items()):
+        rows.append([
+            module.__module__,
+            name,
+            module.name,
+            module.__class__.__bases__[0].__name__,
+            module.author,
+            module.description,
+        ])
 
-def main(plugin_args={}, **kwargs):
+    print(tabulate(rows, headers=headers))
+
+
+def main(plugin_args=None, **kwargs):
     global plugin_chain
 
+    if not plugin_args:
+        plugin_args = {}
+
     # dictionary of all available plugins: {name: module path}
-    plugin_map = get_plugins(logger)
+    plugin_map = get_plugins()
 
     # Attempt to catch segfaults caused when certain linktypes (e.g. 204) are
     # given to pcapy
@@ -225,35 +181,26 @@ def main(plugin_args={}, **kwargs):
 
     plugin_chain[0].defrag_ip = kwargs.get("defrag", False)
 
+    # Setup logging
+    log_format = "%(levelname)s (%(name)s) - %(message)s"
     if kwargs.get("verbose", False):
-        logger.setLevel(logging.INFO)
-        dshell.core.logger.setLevel(logging.INFO)
-        dshell.core.geoip.logger.setLevel(logging.INFO)
-        # Activate verbose mode in each of the plugins
-        for plugin in plugin_chain:
-            plugin.out.set_level(logging.INFO)
+        log_level = logging.INFO
+    elif kwargs.get("debug", False):
+        log_level = logging.DEBUG
+    elif kwargs.get("quiet", False):
+        log_level = logging.CRITICAL
+    else:
+        log_level = logging.WARNING
+    logging.basicConfig(format=log_format, level=log_level)
+
+    # since pypacker handles its own exceptions (loudly), this attempts to keep
+    # it quiet
+    logging.getLogger("pypacker").setLevel(logging.CRITICAL)
 
     if kwargs.get("allcc", False):
         # Activate all country code (allcc) mode to display all 3 GeoIP2 country
         # codes
         dshell.core.geoip.acc = True
-
-    if kwargs.get("debug", False):
-        pypacker.logger.setLevel(logging.WARNING)
-        logger.setLevel(logging.DEBUG)
-        dshell.core.logger.setLevel(logging.DEBUG)
-        dshell.core.geoip.logger.setLevel(logging.DEBUG)
-        # Activate debug mode in each of the plugins
-        for plugin in plugin_chain:
-            plugin.out.set_level(logging.DEBUG)
-
-    if kwargs.get("quiet", False):
-        logger.disabled = True
-        dshell.core.logger.disabled = True
-        dshell.core.geoip.logger.disabled = True
-        # Disable logging for each of the plugins
-        for plugin in plugin_chain:
-            plugin.out.logger.disabled = True
 
     dshell.core.geoip.check_file_dates()
 
@@ -270,17 +217,12 @@ def main(plugin_args={}, **kwargs):
                 else:
                     oargs[oarg] = True
         try:
+            # TODO: Create a factory classmethod in the base Output class (e.g. "from_name()") instead.
             omodule = import_module("dshell.output."+kwargs["omodule"])
             omodule = omodule.obj
             for plugin in plugin_chain:
-                oargs['label'] = plugin.__module__
+                # TODO: Should we have a single instance of the Output module used by all plugins?
                 oomodule = omodule(**oargs)
-                if kwargs.get("verbose", False):
-                    oomodule.set_level(logging.INFO)
-                if kwargs.get("debug", False):
-                    oomodule.set_level(logging.DEBUG)
-                if kwargs.get("quiet", False):
-                    oomodule.logger.disabled = True
                 plugin.out = oomodule
         except ImportError as e:
             logger.error("Could not import module named '{}'. Use --list-output flag to see available modules".format(kwargs["omodule"]))
@@ -289,15 +231,7 @@ def main(plugin_args={}, **kwargs):
     # If writing to a file, set for each output module here
     if kwargs.get("outfile", None):
         for plugin in plugin_chain:
-            try:
-                plugin.out.reset_fh(filename=kwargs["outfile"])
-            # Try and catch common exceptions to avoid lengthy tracebacks
-            except OSError as e:
-                if not self.debug:
-                    logger.error(str(e))
-                    sys.exit(1)
-                else:
-                    raise e
+            plugin.out.reset_fh(filename=kwargs["outfile"])
 
     # Set nobuffer mode if that's what the user wants
     if kwargs.get("nobuffer", False):
@@ -383,7 +317,7 @@ def main(plugin_args={}, **kwargs):
         processes = []
         for i in inputs:
             processes.append(
-                multiprocessing.Process(target=process_files, args=([i]), kwargs=kwargs)
+                multiprocessing.Process(target=process_files, args=(i,), kwargs=kwargs)
             )
 
         # Spawn processes, and keep track of which ones are running
@@ -421,17 +355,142 @@ def main(plugin_args={}, **kwargs):
         plugin._postmodule()
 
 
+# Maps datalink type reported by pcapy to a pypacker packet class.
+datalink_map = {
+    1: ethernet.Ethernet,
+    9: ppp.PPP,
+    51: pppoe.PPPoE,
+    105: ieee80211.IEEE80211,
+    113: linuxcc.LinuxCC,
+    127: radiotap.Radiotap,
+    204: ppp.PPP,
+    227: can.CAN,
+    228: ip.IP,
+    229: ip6.IP6,
+}
+
+
+def read_packets(input: str, interface=False, bpf=None, count=None) -> Iterable[dshell.Packet]:
+    """
+    Yields packets from input pcap file or device.
+
+    :param str input: device or pcap file path
+    :param bool interface: Whether input is a device.
+    :param str bpf: Optional bpf filter.
+    :param int count: Optional max count of packets to read before exiting.
+
+    :yields: packets defined by pypacker.
+        NOTE: Timestamp and frame id are added to packet for convenience.
+    """
+
+    if interface:
+        # Listen on an interface if the option is set
+        try:
+            capture = pcapy.open_live(input, 65536, True, 0)
+        except pcapy.PcapError as e:
+            # User probably doesn't have permission to listen on interface
+            # In any case, print just the error without traceback
+            logger.error(str(e))
+            return
+    else:
+        # Otherwise, read from pcap file(s)
+        try:
+            capture = pcapy.open_offline(input)
+        except pcapy.PcapError as e:
+            logger.error("Could not open '{}': {!s}".format(input, e))
+            return
+
+    # TODO: We may want to allow all packets to go through and then allow the plugin to filter
+    #   them out in feed_plugin_chain().
+    #   That way our frame_id won't be out of sync from skipped packets.
+    # Try and use the first plugin's BPF as the initial filter
+    # The BPFs for other plugins will be applied along the chain as needed
+    try:
+        if bpf:
+            capture.setfilter(bpf)
+    except pcapy.PcapError as e:
+        if str(e).startswith("no VLAN support for data link type"):
+            logger.error("Cannot use VLAN filters for {!r}. Recommend running with --no-vlan argument.".format(input))
+            return
+        elif "syntax error" in str(e) or "link layer applied in wrong context" == str(e):
+            logger.error("Could not compile BPF: {!s} ({!r})".format(e, bpf))
+            return
+        elif "802.11 link-layer types supported only on 802.11" == str(e):
+            logger.error("BPF incompatible with pcap file: {!s}".format(e))
+            return
+        else:
+            raise e
+
+    # Set the datalink layer for each plugin, based on the pcapy capture.
+    # Also compile a pcapy BPF object for each.
+    datalink = capture.datalink()
+    for plugin in plugin_chain:
+        # TODO Find way around libpcap bug that segfaults when certain BPFs
+        #      are used with certain datalink types
+        #      (e.g. datalink=204, bpf="ip")
+        plugin.link_layer_type = datalink
+        plugin.recompile_bpf()
+
+    # Get correct pypacker class based on datalink layer.
+    packet_class = datalink_map.get(datalink, ethernet.Ethernet)
+
+    logger.info(f"Datalink: {datalink} - {packet_class.__name__}")
+
+    # Iterate over the file/interface and yield Packet objects.
+    frame = 1  # Start with 1 because Wireshark starts with 1.
+    while True:
+        try:
+            header, packet_data = capture.next()
+            if header is None and not packet_data:
+                # probably the end of the capture
+                break
+            if count and frame - 1 >= count:
+                # we've reached the maximum number of packets to process
+                break
+
+            # Add timestamp and frame id to packet object for convenience.
+            pktlen = header.getlen()
+            s, us = header.getts()
+            ts = s + us / 1000000.0
+
+            # Wrap packet in dshell's Packet class.
+            packet = dshell.Packet(pktlen, packet_class(packet_data), ts, frame=frame)
+            frame += 1
+
+            yield packet
+
+        except pcapy.PcapError as e:
+            estr = str(e)
+            eformat = "Error processing '{i}' - {e}"
+            if estr.startswith("truncated dump file"):
+                logger.error(eformat.format(i=input, e=estr))
+                logger.debug(e, exc_info=True)
+            elif estr.startswith("bogus savefile header"):
+                logger.error(eformat.format(i=input, e=estr))
+                logger.debug(e, exc_info=True)
+            else:
+                raise
+            break
+
+
+# TODO: The use of kwargs makes it difficult to understand what arguments the function accept
+#   and difficult to follow the code flow.
 def process_files(inputs, **kwargs):
     # Iterate over each of the input files
     # For live capture, the "input" would just be the name of the interface
     global plugin_chain
+    interface = kwargs.get("interface", False)
+    count = kwargs.get("count", None)
+    # Try and use the first plugin's BPF as the initial filter
+    # The BPFs for other plugins will be applied along the chain as needed
+    bpf = plugin_chain[0].bpf
 
     while len(inputs) > 0:
         input0 = inputs.pop(0)
 
         # Check if file needs to be decompressed by its file extension
         extension = os.path.splitext(input0)[-1]
-        if extension in (".gz", ".bz2", ".zip") and not "interface" in kwargs:
+        if extension in (".gz", ".bz2", ".zip") and "interface" not in kwargs:
             tempfiles = decompress_file(input0, extension, kwargs.get("unzipdir", tempfile.gettempdir()))
             inputs = tempfiles + inputs
             continue
@@ -439,79 +498,8 @@ def process_files(inputs, **kwargs):
         for plugin in plugin_chain:
             plugin._prefile(input0)
 
-        if kwargs.get("interface", None):
-            # Listen on an interface if the option is set
-            try:
-                capture = pcapy.open_live(input0, 65536, True, 0)
-            except pcapy.PcapError as e:
-                # User probably doesn't have permission to listen on interface
-                # In any case, print just the error without traceback
-                logger.error(str(e))
-                sys.exit(1)
-        else:
-            # Otherwise, read from pcap file(s)
-            try:
-                capture = pcapy.open_offline(input0)
-            except pcapy.PcapError as e:
-                logger.error("Could not open '{}': {!s}".format(input0, e))
-                continue
-
-        # Try and use the first plugin's BPF as the initial filter
-        # The BPFs for other plugins will be applied along the chain as needed
-        initial_bpf = plugin_chain[0].bpf
-        try:
-            if initial_bpf:
-                capture.setfilter(initial_bpf)
-        except pcapy.PcapError as e:
-            if str(e).startswith("no VLAN support for data link type"):
-                logger.error("Cannot use VLAN filters for {!r}. Recommend running with --no-vlan argument.".format(input0))
-                continue
-            elif "syntax error" in str(e) or "link layer applied in wrong context" == str(e):
-                logger.error("Could not compile BPF: {!s} ({!r})".format(e, initial_bpf))
-                sys.exit(1)
-            elif "802.11 link-layer types supported only on 802.11" == str(e):
-                logger.error("BPF incompatible with pcap file: {!s}".format(e))
-                continue
-            else:
-                raise e
-
-        # Set the datalink layer for each plugin, based on the pcapy capture.
-        # Also compile a pcapy BPF object for each.
-        for plugin in plugin_chain:
-            # TODO Find way around libpcap bug that segfaults when certain BPFs
-            #      are used with certain datalink types
-            #      (e.g. datalink=204, bpf="ip")
-            plugin.set_link_layer_type(capture.datalink())
-            plugin.recompile_bpf()
-
-        # Iterate over the file/interface and pass the packets down the chain
-        while True:
-            try:
-                header, packet = capture.next()
-                if header == None and not packet:
-                    # probably the end of the capture
-                    break
-                if kwargs.get("count", 0) and plugin_chain[0].seen_packet_count.value >= kwargs["count"]:
-                    # we've reached the maximum number of packets to process
-                    break
-                pktlen = header.getlen()
-                ts = header.getts()
-                ts = ts[0] + ts[1] / 1000000.0
-                feed_plugin_chain(0, (pktlen, packet, ts))
-            except pcapy.PcapError as e:
-                estr = str(e)
-                eformat = "Error processing '{i}' - {e}"
-                if estr.startswith("truncated dump file"):
-                    logger.error( eformat.format(i=input0, e=estr) )
-                    if kwargs.get("debug", False):
-                        logger.exception(e)
-                elif estr.startswith("bogus savefile header"):
-                    logger.error( eformat.format(i=input0, e=estr) )
-                    if kwargs.get("debug", False):
-                        logger.exception(e)
-                else:
-                    raise e
-                break
+        for packet in read_packets(input0, interface=interface, bpf=bpf, count=count):
+            feed_plugin_chain(0, packet)
 
         clean_plugin_chain(0)
         for plugin in plugin_chain:
@@ -523,10 +511,18 @@ def process_files(inputs, **kwargs):
             plugin._postfile()
 
 
+# TODO: Separate some of this logic outside of this function so we can call
+#   dshell as a library.
 def main_command_line():
+    # Since plugin_chain contains the actual plugin instances we have to make sure
+    # we reset the global plugin_chain so multiple runs don't affect each other.
+    # (This was necessary to call this function through a python script.)
+    # TODO: Should plugin_chain be a list of plugin classes instead of instances?
     global plugin_chain
+    plugin_chain = []
+
     # dictionary of all available plugins: {name: module path}
-    plugin_map = get_plugins(logger)
+    plugin_map = get_plugins()
     # dictionary of plugins that the user wants to use: {name: object}
     active_plugins = OrderedDict()
 
@@ -544,7 +540,7 @@ def main_command_line():
     parser.add_argument('-acc', '--allcc', action="store_true",
                       help="Show all 3 GeoIP2 country code types (represented_country/registered_country/country)")
     parser.add_argument('-d', '-p', '--plugin', dest='plugin', type=str,
-                      action='append', metavar="DECODER",
+                      action='append', metavar="PLUGIN",
                       help="Use a specific plugin module. Can be chained with '+'.")
     parser.add_argument('--defragment', dest='defrag', action='store_true',
                       help='Reconnect fragmented IP packets')
@@ -613,7 +609,7 @@ def main_command_line():
     parser.add_argument('--version', action='version',
                         version="Dshell " + str(dshell.core.__version__))
     parser_short.add_argument('-d', '-p', '--plugin', dest='plugin', type=str,
-                      action='append', metavar="DECODER",
+                      action='append', metavar="PLUGIN",
                       help="Use a specific plugin module")
     parser_short.add_argument('--ebpf', default='', type=str, metavar="BPF",
                         help="Extend existing BPFs with provided input for additional filtering. It will transform input into \"(<original bpf>) and (<ebpf>)\"")
@@ -623,6 +619,7 @@ def main_command_line():
                       help='List all available plugins', dest='list')
     parser_short.add_argument("--lo", "--list-output", action="store_true",
                             help="List available output modules")
+    # FIXME: Should this duplicate option be removed?
     parser_short.add_argument("-o", "--omodule", type=str, metavar="MODULE",
                             help="Use specified output module for plugins instead of defaults. For example, --omodule=jsonout for JSON output.")
     parser_short.add_argument('files', nargs='*',
@@ -662,6 +659,9 @@ def main_command_line():
                     i += 1
                     plugin = plugin[:-(len(str(i-1)))] + str(i)
             # Add copy of plugin object to chain and add to argument parsers
+            # TODO: Use class attributes for class related things like name, description, optionsdict
+            #   This way we don't have to initialize the plugin at this point and fixes a lot of the
+            #   issues that arise that come from dealing with a singleton.
             active_plugins[plugin] = plugin_module.DshellPlugin()
             plugin_chain.append(active_plugins[plugin])
             parser.add_plugin_arguments(plugin, active_plugins[plugin])
@@ -685,25 +685,15 @@ def main_command_line():
         sys.exit()
 
     if opts.list:
-        # Import ALL of the plugins and print info about them before exiting
-        listing_plugins = OrderedDict()
-        for name, module in sorted(plugin_map.items(), key=operator.itemgetter(1)):
-            try:
-                module = import_module(module)
-                if not module.DshellPlugin:
-                    continue
-                module = module.DshellPlugin()
-                listing_plugins[name] = module
-            except Exception as e:
-                logger.error("Could not load {!r}. ({!s})".format(module, e))
-                if opts.debug:
-                    logger.exception(e)
-        print_plugins(listing_plugins)
+        try:
+            print_plugins(get_plugin_information())
+        except ImportError as e:
+            logger.error(e, exc_info=opts.debug)
         sys.exit()
 
     if opts.listoutput:
         # List available output modules and a brief description
-        output_map = get_output_modules(get_output_path(), logger)
+        output_map = get_output_modules(get_output_path())
         for modulename in sorted(output_map):
             try:
                 module = import_module("dshell.output."+modulename)
@@ -737,6 +727,7 @@ def main_command_line():
             plugin_args[plugin][dattr] = value
 
     main(plugin_args=plugin_args, **vars(opts))
+
 
 if __name__ == "__main__":
     main_command_line()

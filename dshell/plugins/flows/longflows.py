@@ -3,8 +3,13 @@ Displays netflows that have a duration of at least 5 minutes.
 Minute threshold can be updated by the user.
 """
 
+import logging
+
 import dshell.core
 from dshell.output.netflowout import NetflowOutput
+
+logger = logging.getLogger(__name__)
+
 
 class DshellPlugin(dshell.core.ConnectionPlugin):
 
@@ -26,7 +31,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 
     def premodule(self):
         if self.len <= 0:
-            self.warn("Cannot have a time that's less than or equal to zero (size: {}). Setting to 5.".format(self.len))
+            logger.warning("Cannot have a time that's less than or equal to zero (size: {}). Setting to 5.".format(self.len))
             self.len = 5
         self.secs = 60 * self.len
 

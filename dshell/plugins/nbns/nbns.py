@@ -2,10 +2,13 @@
 NBNS plugin
 """
 
+import logging
+from struct import unpack
+
 import dshell.core
 from dshell.output.alertout import AlertOutput
 
-from struct import unpack
+logger = logging.getLogger(__name__)
 
 
 # A few common NBNS Protocol Info Opcodes
@@ -90,8 +93,8 @@ Examples:
         nbns_packet = pkt.pkt.upper_layer
         try:
             nbns_packet = nbns_packet.upper_layer
-        except (IndexError) as e:
-            self.out.log('{}: could not parse session data \
+        except IndexError as e:
+            logger.error('{}: could not parse session data \
                       (NBNS packet not found)'.format(str(e)))
             # pypacker may throw an Exception here; could use 
             #   further testing
@@ -102,8 +105,8 @@ Examples:
         # It is represented as 32-bytes half-ASCII
         try:
             nbns_name = unpack('32s', pkt.data[13:45])[0]
-        except error as e:
-            self.out.log('{}: (NBNS packet not found)'.format(str(e)))
+        except Exception as e:
+            logger.error('{}: (NBNS packet not found)'.format(str(e)))
             return
 
 
@@ -122,7 +125,7 @@ Examples:
                 self.client_hostname = str(nbns_name)
 
         except ValueError as e:
-            self.out.log('{}: Hostname in improper format \
+            logger.error('{}: Hostname in improper format \
                       (NBNS packet not found)'.format(str(e)))
             return
 
@@ -155,6 +158,7 @@ Examples:
             self.write('\n\tTransaction ID:\t\t{:<8} \n\tInfo:\t\t\t{:<16} \n\tClient Hostname:\t{:<16} \n\tClient MAC:\t\t{:<18}\n'.format(
                         self.xid, self.prot_info, self.client_hostname, self.mac_address), **pkt.info(), dir_arrow='->')
             return pkt
+
 
 if __name__ == "__main__":
     print(DshellPlugin())

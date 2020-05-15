@@ -21,9 +21,14 @@ Examples:
     Generates an alert for all client transmissions that are 61 times greater
     than the server transmission.
 """
+import logging
 
 import dshell.core
 from dshell.output.alertout import AlertOutput
+
+
+logger = logging.getLogger(__name__)
+
 
 class DshellPlugin(dshell.core.ConnectionPlugin):
 
@@ -69,10 +74,10 @@ Examples:
 
     def premodule(self):
         if self.threshold < 0:
-            self.warn("Cannot have a negative threshold. Defaulting to 3.0. (threshold: {0})".format(self.threshold))
+            logger.warning("Cannot have a negative threshold. Defaulting to 3.0. (threshold: {0})".format(self.threshold))
             self.threshold = 3.0
         elif not self.threshold:
-            self.warn("Threshold not set. Displaying all client-server transmissions (threshold: {0})".format(self.threshold))
+            logger.warning("Threshold not set. Displaying all client-server transmissions (threshold: {0})".format(self.threshold))
 
     def connection_handler(self, conn):
         if conn.clientbytes < self.minimum:
