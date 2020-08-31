@@ -1,6 +1,7 @@
 # Dshell
+**_A new version of Dshell for Python 3 is coming in September 2020, Dshell 3. See ‘News’ section for additional information._**
 
-An extensible network forensic analysis framework.  Enables rapid development of plugins to support the dissection of network packet captures.
+An extensible network forensic analysis framework. Enables rapid development of plugins to support the dissection of network packet captures.
 
 Key features:
 
@@ -48,8 +49,19 @@ Key features:
 ## Development
 * [Using Dshell With PyCharm](doc/UsingDshellWithPyCharm.md)
 
-## Recent Major Updates
+## News
 
+* Sep 2020 - A new version of Dshell for Python 3 is coming, Dshell 3.
+  * This is a major framework update to Dshell. Plugins written for the previous version are not compatible with this version, and vice versa.
+  * Uses Python 3
+    * Rewritten in Python 3 from the ground up. Python 2 language deprecated on [1 JAN 2020](https://www.python.org/doc/sunset-python-2/)
+    * By extension, dpkt and pypcap have been replaced with Python 3-friendly pypacker and pcapy (respectively).
+  * Is a Python package
+  * All plugins are chainable
+  * Plugins can use all output modules
+  * Improved error handling
+  * Enables development of external plugin packs, allowing the sharing and installation of new, externally-developed plugins without overlapping the core Dshell libraries.
+* Sep 2020 - This Python 2 version of Dshell will be deprecated and tagged with its current version number after Dshell 3 is released. It will still be available via this repository. Issues and Pull requests for the previous version will be closed when the new version is released.
 * Feb 2019 - Removed deprecated pygeoip dependency, and replaced it with geoip2. This requires the use of new GeoIP data files, listed in the Prerequisites and Installation sections above.
 
 ## Partners
