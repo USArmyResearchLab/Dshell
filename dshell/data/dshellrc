@@ -1,0 +1,2 @@
+export PS1="`whoami`@`hostname`:\w Dshell> "
+alias decode="python3 -m dshell.decode "

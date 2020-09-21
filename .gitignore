@@ -1,9 +1,3 @@
 *.pyc
-__init__.py
 __pycache__
-
-# Ignore built files
-/.dshellrc
-/bin/decode
-/dshell
-/dshell-decode
+Dshell.egg-info
