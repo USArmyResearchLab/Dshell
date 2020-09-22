@@ -26,7 +26,6 @@ class DshellPlugin(HTTPPlugin):
             # Collect basics about the request, if available
             method = request.method
             host = request.headers.get("host", "")
-            print(request.headers)
             uri = request.uri
 #            useragent = request.headers.get("user-agent", None)
 #            referer = request.headers.get("referer", None)
