@@ -38,7 +38,7 @@ from pypacker.layer4 import tcp, udp
 logging.basicConfig(format="%(levelname)s (%(name)s) - %(message)s")
 logger = logging.getLogger("dshell.core")
 
-__version__ = "1.1"
+__version__ = "3.1.3"
 
 class SequenceNumberError(Exception):
     """
@@ -95,7 +95,7 @@ class PacketPlugin(object):
         description:    short description of the plugin (used with decode -l)
         longdescription:    verbose description of the plugin (used with -h)
         bpf:            default BPF to apply to traffic entering plugin
-        compiled_bpf:   a compiled BPF for pcapy, usually created in bin/decode
+        compiled_bpf:   a compiled BPF for pcapy, usually created in decode.py
         vlan_bpf:       boolean that tells whether BPF should be compiled with
                         VLAN support
         author:         preferably, the initials of the plugin's author
@@ -241,7 +241,7 @@ class PacketPlugin(object):
 
     def recompile_bpf(self):
         "Compile the BPF stored in the .bpf attribute"
-        # This function is normally only called by the bin/decode.py script,
+        # This function is normally only called by the decode.py script,
         # but can also be called by plugins that need to dynamically update
         # their filter.
         if not self.bpf:
