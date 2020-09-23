@@ -61,7 +61,7 @@ class DshellPlugin(HTTPPlugin):
         elif not response:
             self.write(data, method=method, uri=uri, version=version, status=status, reason=reason, hash=hash, **request.headers, **request.blob.info())
         else:
-        	self.write(data, method=method, uri=uri, version=version, status=status, reason=reason, hash=hash, response_headers=response.headers, **request.headers, **request.blob.info())
+        	self.write(data, method=method, uri=uri, version=version, status=status, reason=reason, hash=hash, request_headers=request.headers, response_headers=response.headers, **request.blob.info())
         return conn, request, response
 
 if __name__ == "__main__":
