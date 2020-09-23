@@ -26,7 +26,6 @@ class DshellPlugin(HTTPPlugin):
             # Collect basics about the request, if available
             method = request.method
             host = request.headers.get("host", "")
-            print(request.headers)
             uri = request.uri
 #            useragent = request.headers.get("user-agent", None)
 #            referer = request.headers.get("referer", None)
@@ -59,8 +58,10 @@ class DshellPlugin(HTTPPlugin):
                                                  hash)
         if not request:
             self.write(data, method=method, host=host, uri=uri, version=version, status=status, reason=reason, hash=hash, **response.blob.info())
-        else:
+        elif not response:
             self.write(data, method=method, uri=uri, version=version, status=status, reason=reason, hash=hash, **request.headers, **request.blob.info())
+        else:
+        	self.write(data, method=method, uri=uri, version=version, status=status, reason=reason, hash=hash, request_headers=request.headers, response_headers=response.headers, **request.blob.info())
         return conn, request, response
 
 if __name__ == "__main__":
