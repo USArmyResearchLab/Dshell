@@ -11,7 +11,7 @@ Key features:
 ## Requirements
 * Linux (developed on Red Hat Enterprise Linux 6.7)
 * Python 3 (developed with Python 3.5.1)
-* [pypacker](https://github.com/mike01/pypacker)
+* [pypacker](https://gitlab.com/mike01/pypacker)
 * [pcapy](http://www.coresecurity.com/corelabs-research/open-source-tools/pcapy)
 * [geoip2](https://github.com/maxmind/GeoIP2-python)
   * [MaxMind GeoIP2 datasets](https://dev.maxmind.com/geoip/geoip2/geolite2/)
