@@ -112,7 +112,8 @@ class DshellGeoIP(object):
 class DshellFailedGeoIP(object):
     "Class used in place of DshellGeoIP if GeoIP database files are not found."
 
-    def __init__(self):
+    def __init__(self, logger=logging.getLogger("dshellgeoip.py")):
+        self.logger = logger
         self.geodir = os.path.join(get_data_path(), 'GeoIP')
         self.geoccdb = None
         self.geoasndb = None
