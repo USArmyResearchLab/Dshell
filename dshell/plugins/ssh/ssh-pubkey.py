@@ -1,5 +1,5 @@
 """
-Generates color-coded Screen/HTML output similar to Wireshark Follow Stream
+Extract server ssh public key from key exchange
 """
 
 import dshell.core
