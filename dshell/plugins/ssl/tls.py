@@ -10,6 +10,7 @@ import binascii
 import hashlib
 import OpenSSL
 import time
+import ja3.ja3
 
 ##################################################################################################
 #
@@ -547,29 +548,16 @@ class TLSCertificate(TLSHandshake):
 #####################################################################
 class TLSClientHello(TLSHandshake):
 
-	def fingerprint(self):
-		h = hashlib.md5()
-		h.update(''.join(self.fingerprintdata))
-		return h.hexdigest()
-
-	def signature(self):
-		sig = 'alert tcp any any -> any any ('
-		sig += 'msg:"ClientHello %s"; content:"|16|"; depth:1; content:"|01|"; offset:5; depth:1; ' % self.fingerprint()
-		sig += 'content:"|%s|"; offset:9; depth:2; ' % ' '.join([ binascii.hexlify(b) for b in self.fingerprintdata[0] ])
-		sig += 'content:"|%s|"; offset:44; ' % ' '.join([ binascii.hexlify(b) for b in self.fingerprintdata[1:] ])
-		sig += 'sid:12345;)'
-		return sig
-
 	def __init__(self, HandshakeType, HandshakeLength, data):
 		TLSHandshake.__init__(self, HandshakeType, HandshakeLength)
 		data_length = len(data)
 		offset = 0
-		self.fingerprintdata = []
+		self.ja3_data = []
 
 		# self.client_version
 		if data_length >= offset+2:
 			self.client_version = struct.unpack('!H', data[offset:offset+2])[0]
-			self.fingerprintdata.append(data[offset:offset+2])
+			self.ja3_data.append(self.client_version)
 			offset += 2
 		else:
 			raise InsufficientData('%d bytes received by TLSClientHello, expected %d for client_version' % (data_length, offset + 2))
@@ -601,7 +589,6 @@ class TLSClientHello(TLSHandshake):
 		# self.cipher_suites_length
 		if data_length >= offset+2:
 			self.cipher_suites_length = struct.unpack('!H', data[offset:offset+2])[0]
-			self.fingerprintdata.append(data[offset:offset+2])
 			offset += 2
 		else:
 			raise InsufficientData('%d bytes received by TLSClientHello, expected %d for cipher_suites_length' % (data_length, offset + 2))
@@ -609,18 +596,17 @@ class TLSClientHello(TLSHandshake):
 		# self.cipher_suites (array, two bytes each)
 		self.cipher_suites = []
 		if self.cipher_suites_length > 0:
+			self.ja3_data.append( ja3.ja3.convert_to_ja3_segment(data[offset:offset+self.cipher_suites_length], 2) )
 			if data_length >= offset + self.cipher_suites_length:
 				for j in range(0, self.cipher_suites_length, 2):
 					self.cipher_suites.append(data[offset+j:offset+j+2])
 				offset += self.cipher_suites_length
 			else:
 				raise InsufficientData('%d bytes received by TLSClientHello, expected %d for cipher_suites' % (data_length, offset + self.cipher_suites_length))
-		self.fingerprintdata.append(''.join(self.cipher_suites))
 
 		# self.compression_methods_length
 		if data_length >= offset+1:
-			self.compression_methods_length = struct.unpack('!B', data[offset])[0]
-			self.fingerprintdata.append(data[offset])
+			self.compression_methods_length = data[offset]
 			offset += 1
 		else:
 			raise InsufficientData('%d bytes received by TLSClientHello, expected %d for compression_methods_length' % (data_length, offset + 1))
@@ -634,11 +620,11 @@ class TLSClientHello(TLSHandshake):
 				offset += self.compression_methods_length
 			else:
 				raise InsufficientData('%d bytes received by TLSClientHello, expected %d for compression_methods' % (data_length, offset + self.compression_methods_length))
-		self.fingerprintdata.append(''.join(self.compression_methods))
 
 		################################
 		# Slice Off the Extensions
 		################################
+		self.ja3_data.extend(ja3.ja3.process_extensions(ja3.ja3.dpkt.ssl.TLSClientHello(data)))
 		self.extensions = {}
 		self.raw_extensions = []  # ordered list of tuples (ex_type, ex_data)
 		# self.extensions_length
@@ -694,6 +680,14 @@ class TLSClientHello(TLSHandshake):
 		# After Loop
 		# add extension information to dictionary
 		self.extensions['server_name'] = extension_server_name_list
+
+	def ja3(self):
+		return ','.join([str(x) for x in self.ja3_data])
+
+	def ja3_digest(self):
+		h = hashlib.md5(self.ja3().encode('utf-8'))
+		return h.hexdigest()
+
 
 #####################################################################
 # TLSServerHello - ServerHello Handshake type
@@ -751,10 +745,11 @@ class TLSServerHello(TLSHandshake):
 		else:
 			raise InsufficientData('%d bytes received by TLSServerHello, expected %d for compression_method' % (data_length, offset + 1))
 
-#
-# Some Utility Functions
-#
 
+
+##############################################################################
+# Some Utility Functions
+##############################################################################
 def keyTypeToString(kt):
 	global keytypes
 	if kt in keytypes:
@@ -853,7 +848,9 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 									inverted_ssl = True
 								if 'server_name' in hs.extensions:
 									for server in hs.extensions['server_name']:
-										client_names.add(server)
+										client_names.add(server.decode('utf-8'))
+								info['ja3'] = hs.ja3()
+								info['ja3_digest'] = hs.ja3_digest()
 
 							#
 							# Certificate.  Looking for first server cert.
@@ -874,7 +871,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 					offset += len(data)
 				except:
 					offset += len(data)
-					self.log('Error in connectionHandler: %s' % sys.exc_info()[1])
+					self.log('Unknown error in connectionHandler: %s' % sys.exc_info()[1])
 					break
 
 		# Post processing
@@ -886,7 +883,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 			info['client_certs'] = certs_cs
 			info['server_certs'] = certs_sc
 		if len(info['client_certs']):
-			client_names.add("%s"%info['client_certs'][0]['subject_cn'])
+			client_names.add(info['client_certs'][0]['subject_cn'])
 		if len(info['server_certs']):
 			server_names.add(info['server_certs'][0]['subject_cn'])
 			try:
@@ -895,7 +892,6 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 				pass
 		info['client_names'] = list(client_names)
 		info['server_names'] = list(server_names)
-
 
 		#
 		# Determine output message
