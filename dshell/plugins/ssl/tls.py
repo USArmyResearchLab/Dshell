@@ -807,6 +807,8 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 		server_names = set()  # Agregate list of names specified by server
 		certs_cs = []
 		certs_sc = []
+		server_cipher = None
+		client_cipher_list = []
 
 		for blob in conn.blobs:
 
