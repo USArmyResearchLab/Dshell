@@ -375,23 +375,6 @@ ciphersuit_text = {
 	0xC0AB : 'TLS_PSK_DHE_WITH_AES_256_CCM_8',
 }
 
-oid_text = {
-  (1,2,840,113549,1,1,1) : 'PubKeyALG_RSA',
-  (1,2,840,10040,4,1) : 'PubKeyALG_DSA',
-  (1,2,840,10045,2,1) : 'PubKeyALG_ECDSA',
-  (1,2,840,10046,2,1) : 'PubKeyALG_DH',
-	(1,2,840,113549,1,1,5) : 'SignatureALG_HashSHA1_PubKeyALG_RSA',
-	(1,2,840,113549,1,1,4) : 'SignatureALG_HashMD5_PubKeyALG_RSA',
-	(1,2,840,113549,1,1,2) : 'SignatureALG_HashMD2_PubKeyALG_RSA',
-	(1,2,840,113549,1,1,11) : 'SignatureALG_HashSHA256_PubKeyALG_RSA',
-	(1,2,840,113549,1,1,12) : 'SignatureALG_HashSHA384_PubKeyALG_RSA',
-	(1,2,840,10040,4,3) : 'SignatureALG_HashSHA1_PubKeyALG_DSA',
-	(1,2,840,10045,4,3,1) : 'SignatureALG_HashSHA224_PubKeyALG_ECDSA',
-	(1,2,840,10045,4,3,2) : 'SignatureALG_HashSHA256_PubKeyALG_ECDSA',
-	(1,2,840,10045,4,3,3) : 'SignatureALG_HashSHA384_PubKeyALG_ECDSA',
-	(1,2,840,10045,4,3,4) : 'SignatureALG_HashSHA512_PubKeyALG_ECDSA',
-}
-
 keytypes = {
  OpenSSL.crypto.TYPE_RSA : 'RSA',
  OpenSSL.crypto.TYPE_DSA : 'DSA',
@@ -851,11 +834,15 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 										client_names.add(server.decode('utf-8'))
 								info['ja3'] = hs.ja3()
 								info['ja3_digest'] = hs.ja3_digest()
+								client_cipher_list = hs.cipher_suites
+
+							elif hs.HandshakeType == SSL3_MT_SERVER_HELLO:
+								server_cipher = hs.cipher_suite
 
 							#
 							# Certificate.  Looking for first server cert.
 							#
-							if hs.HandshakeType == SSL3_MT_CERTIFICATE:
+							elif hs.HandshakeType == SSL3_MT_CERTIFICATE:
 								for cert in hs.Certificates:
 									cert_info = openSSL_cert_to_info_dictionary(cert)
 									if blob.direction == 'cs':
@@ -892,6 +879,16 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 				pass
 		info['client_names'] = list(client_names)
 		info['server_names'] = list(server_names)
+		# Cipher Lists
+		if server_cipher in client_cipher_list:
+			cipher_index = client_cipher_list.index(server_cipher)
+		else:
+			cipher_index = None
+		info['cipher_index'] = cipher_index
+		try:
+			info['cipher_text'] = ciphersuit_text[struct.unpack('!H',server_cipher)[0]]
+		except:
+			info['cipher_text'] = 'UNKNOWN'
 
 		#
 		# Determine output message
