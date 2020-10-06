@@ -40,9 +40,13 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
                     blob.reassemble(allow_overlap=True, allow_padding=True)
                     if not blob.data:
                         continue
-                    info['clientbanner'] = blob.data.split(b'\x0d')[0].rstrip().decode('utf-8')
-                    if not info['clientbanner'].startswith('SSH'):
+                    info['clientbanner'] = blob.data.split(b'\x0d')[0].rstrip()
+                    if not info['clientbanner'].startswith(b'SSH'):
                         return # NOT AN SSH CONNECTION 
+                    try:
+                    	info['clientbanner'] = info['clientbanner'].decode('utf-8')
+                    except UnicodeDecodeError:
+                    	return
                     continue                 
 
             #
