@@ -42,11 +42,11 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
                         continue
                     info['clientbanner'] = blob.data.split(b'\x0d')[0].rstrip()
                     if not info['clientbanner'].startswith(b'SSH'):
-                        return # NOT AN SSH CONNECTION 
+                        return conn # NOT AN SSH CONNECTION 
                     try:
                     	info['clientbanner'] = info['clientbanner'].decode('utf-8')
                     except UnicodeDecodeError:
-                    	return
+                    	return conn
                     continue                 
 
             #
@@ -63,7 +63,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
             if sc_blob_count == 1:
                 info['serverbanner'] = d.split(b'\x0d')[0].rstrip().decode('utf-8')
                 if not info['serverbanner'].startswith('SSH'):
-                    return # NOT AN SSH CONNECTION
+                    return conn # NOT AN SSH CONNECTION
                 continue
 
             # Key Exchange Packet/Messages
@@ -88,6 +88,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
             
             msg = "%s" % (info['host_pubkey'])
             self.write(msg, **info, **conn.info())
+            return conn
 
 
 def messagefactory(data):
