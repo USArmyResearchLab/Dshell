@@ -896,7 +896,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 		# Determine output message
 		#
 		if len(client_names) + len(server_names) == 0:
-			return
+			return conn
 		client_name = ','.join(info['client_names'])
 		server_name = ','.join(info['server_names'])
 		if len(client_name) and client_name != server_name:
@@ -904,7 +904,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 		else:
 			msg = server_name
 		self.write(msg, **info)
-
+		return conn
 		
 
 
