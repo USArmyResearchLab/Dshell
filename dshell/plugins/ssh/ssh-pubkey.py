@@ -61,9 +61,13 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 
             # Server Banner
             if sc_blob_count == 1:
-                info['serverbanner'] = d.split(b'\x0d')[0].rstrip().decode('utf-8')
-                if not info['serverbanner'].startswith('SSH'):
+                info['serverbanner'] = d.split(b'\x0d')[0].rstrip()
+                if not info['serverbanner'].startswith(b'SSH'):
                     return conn # NOT AN SSH CONNECTION
+                try:
+                    info['serverbanner'] = info['serverbanner'].decode('utf-8')
+                except UnicodeDecodeError:
+                    pass
                 continue
 
             # Key Exchange Packet/Messages
