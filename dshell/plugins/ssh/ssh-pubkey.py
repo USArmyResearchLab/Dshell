@@ -8,6 +8,7 @@ import struct
 import base64
 import hashlib
 
+
 class DshellPlugin(dshell.core.ConnectionPlugin):
 
     def __init__(self):
@@ -42,12 +43,13 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
                         continue
                     info['clientbanner'] = blob.data.split(b'\x0d')[0].rstrip()
                     if not info['clientbanner'].startswith(b'SSH'):
-                        return conn # NOT AN SSH CONNECTION 
+                        return conn  # NOT AN SSH CONNECTION
                     try:
-                    	info['clientbanner'] = info['clientbanner'].decode('utf-8')
+                        info['clientbanner'] = info['clientbanner'].decode(
+                            'utf-8')
                     except UnicodeDecodeError:
-                    	return conn
-                    continue                 
+                        return conn
+                    continue
 
             #
             # SC Blobs: Banner and public key
@@ -57,13 +59,12 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
             if not blob.data:
                 continue
             d = blob.data
-            
 
             # Server Banner
             if sc_blob_count == 1:
                 info['serverbanner'] = d.split(b'\x0d')[0].rstrip()
                 if not info['serverbanner'].startswith(b'SSH'):
-                    return conn # NOT AN SSH CONNECTION
+                    return conn  # NOT AN SSH CONNECTION
                 try:
                     info['serverbanner'] = info['serverbanner'].decode('utf-8')
                 except UnicodeDecodeError:
@@ -81,22 +82,22 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
             if stop_blobs:
                 break
 
-
         if 'host_pubkey' in info:
             # Calculate key fingerprints
             info['host_fingerprints'] = {}
             for hash_scheme in ("md5", "sha1", "sha256"):
                 hashfunction = eval("hashlib."+hash_scheme)
                 thisfp = key_fingerprint(info['host_pubkey'], hashfunction)
-                info['host_fingerprints'][hash_scheme] = ':'.join(['%02x'%b for b in thisfp])
-            
+                info['host_fingerprints'][hash_scheme] = ':'.join(
+                    ['%02x' % b for b in thisfp])
+
             msg = "%s" % (info['host_pubkey'])
             self.write(msg, **info, **conn.info())
             return conn
 
 
 def messagefactory(data):
-    
+
     datalen = len(data)
     offset = 0
     msglist = []
@@ -110,8 +111,9 @@ def messagefactory(data):
 
     return msglist
 
+
 class sshmessage:
-    
+
     def __init__(self, rawdata):
         self.__parse_raw(rawdata)
 
@@ -120,11 +122,12 @@ class sshmessage:
         if datalen < 6:
             raise ValueError
 
-        (self.packet_len, self.padding_len, self.message_code) = struct.unpack(">IBB", data[0:6])
+        (self.packet_len, self.padding_len,
+         self.message_code) = struct.unpack(">IBB", data[0:6])
         if datalen < self.packet_len + 4:
             raise ValueError
         self.body = data[6:4+self.packet_len]
-        
+
         # ECDH Kex Reply
         if self.message_code == 31:
             host_key_len = struct.unpack(">I", self.body[0:4])[0]
@@ -137,34 +140,35 @@ class sshmessage:
                 # this probably isn't a code 31
                 self.message_code = 0
             else:
-                self.host_pub_key = "%s %s" % (key_type_name.decode('utf-8'), base64.b64encode(full_key_net).decode('utf-8'))
+                self.host_pub_key = "%s %s" % (key_type_name.decode(
+                    'utf-8'), base64.b64encode(full_key_net).decode('utf-8'))
+
 
 def key_fingerprint(ssh_pubkey, hashfunction=hashlib.sha256):
 
-        # Treat as bytes, not string
-        if type(ssh_pubkey) == str:
-            ssh_pubkey = ssh_pubkey.encode('utf-8')
+    # Treat as bytes, not string
+    if type(ssh_pubkey) == str:
+        ssh_pubkey = ssh_pubkey.encode('utf-8')
 
-        # Strip space from end
-        ssh_pubkey = ssh_pubkey.rstrip(b"\r\n\0 ")
+    # Strip space from end
+    ssh_pubkey = ssh_pubkey.rstrip(b"\r\n\0 ")
 
-        # Only look at first line
-        ssh_pubkey = ssh_pubkey.split(b"\n")[0]
-        # If two spaces, look at middle segment
-        if ssh_pubkey.count(b" ") >= 1:
-            ssh_pubkey = ssh_pubkey.split(b" ")[1]
+    # Only look at first line
+    ssh_pubkey = ssh_pubkey.split(b"\n")[0]
+    # If two spaces, look at middle segment
+    if ssh_pubkey.count(b" ") >= 1:
+        ssh_pubkey = ssh_pubkey.split(b" ")[1]
 
-        # Try to decode key as base64
-        try:
-            keybin = base64.b64decode(ssh_pubkey)
-        except:
-            sys.stderr.write("Invalid key value:\n")
-            sys.stderr.write("  \"%s\":\n" % ssh_pubkey)
-            return None
+    # Try to decode key as base64
+    try:
+        keybin = base64.b64decode(ssh_pubkey)
+    except:
+        sys.stderr.write("Invalid key value:\n")
+        sys.stderr.write("  \"%s\":\n" % ssh_pubkey)
+        return None
 
-        # Fingerprint
-        return hashfunction(keybin).digest()
-
+    # Fingerprint
+    return hashfunction(keybin).digest()
 
 
 if __name__ == "__main__":
