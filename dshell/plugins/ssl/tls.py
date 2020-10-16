@@ -10,7 +10,12 @@ import binascii
 import hashlib
 import OpenSSL
 import time
-import ja3.ja3
+try:
+    import ja3.ja3
+    ja3_available = True
+except ModuleNotFoundError:
+    ja3_available = False
+
 
 ##################################################################################################
 #
@@ -563,7 +568,8 @@ class TLSClientHello(TLSHandshake):
         # self.client_version
         if data_length >= offset+2:
             self.client_version = struct.unpack('!H', data[offset:offset+2])[0]
-            self.ja3_data.append(self.client_version)
+            if ja3_available:
+                self.ja3_data.append(self.client_version)
             offset += 2
         else:
             raise InsufficientData(
@@ -609,8 +615,9 @@ class TLSClientHello(TLSHandshake):
         # self.cipher_suites (array, two bytes each)
         self.cipher_suites = []
         if self.cipher_suites_length > 0:
-            self.ja3_data.append(ja3.ja3.convert_to_ja3_segment(
-                data[offset:offset+self.cipher_suites_length], 2))
+            if ja3_available:
+                self.ja3_data.append(ja3.ja3.convert_to_ja3_segment(
+                    data[offset:offset+self.cipher_suites_length], 2))
             if data_length >= offset + self.cipher_suites_length:
                 for j in range(0, self.cipher_suites_length, 2):
                     self.cipher_suites.append(data[offset+j:offset+j+2])
@@ -641,8 +648,9 @@ class TLSClientHello(TLSHandshake):
         ################################
         # Slice Off the Extensions
         ################################
-        self.ja3_data.extend(ja3.ja3.process_extensions(
-            ja3.ja3.dpkt.ssl.TLSClientHello(data)))
+        if ja3_available:
+            self.ja3_data.extend(ja3.ja3.process_extensions(
+                ja3.ja3.dpkt.ssl.TLSClientHello(data)))
         self.extensions = {}
         self.raw_extensions = []  # ordered list of tuples (ex_type, ex_data)
         # self.extensions_length
@@ -704,11 +712,17 @@ class TLSClientHello(TLSHandshake):
         self.extensions['server_name'] = extension_server_name_list
 
     def ja3(self):
-        return ','.join([str(x) for x in self.ja3_data])
+        if ja3_available:
+            return ','.join([str(x) for x in self.ja3_data])
+        else:
+            return None
 
     def ja3_digest(self):
-        h = hashlib.md5(self.ja3().encode('utf-8'))
-        return h.hexdigest()
+        if ja3_available:
+            h = hashlib.md5(self.ja3().encode('utf-8'))
+            return h.hexdigest()
+        else:
+            return None
 
 
 #####################################################################
@@ -849,6 +863,10 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
             output=AlertOutput(label=__name__)
         )
 
+    def premodule(self):
+        if not ja3_available:
+            self.debug("ja3 capability disabled due to missing python module")
+
     def connection_handler(self, conn):
 
         inverted_ssl = False
@@ -885,8 +903,9 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
                                     for server in hs.extensions['server_name']:
                                         client_names.add(
                                             server.decode('utf-8'))
-                                info['ja3'] = hs.ja3()
-                                info['ja3_digest'] = hs.ja3_digest()
+                                if ja3_available:
+                                    info['ja3'] = hs.ja3()
+                                    info['ja3_digest'] = hs.ja3_digest()
                                 client_cipher_list = hs.cipher_suites
 
                             elif hs.HandshakeType == SSL3_MT_SERVER_HELLO:
