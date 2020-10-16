@@ -860,7 +860,12 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
             author="amm",
             description="Extract interesting metadata from TLS connection setup",
             bpf="tcp and (port 443 or port 993 or port 25 or port 587 or port 465 or port 5269 or port 995 or port 3389)",
-            output=AlertOutput(label=__name__)
+            output=AlertOutput(label=__name__),
+            longdescription="""
+Extract interesting metadata from TLS connection setup, including the ClientHello and Certificate handshake structures.
+
+For JA3 support (ClientHello hash), install module pyja3
+            """
         )
 
     def premodule(self):
