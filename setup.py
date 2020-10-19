@@ -22,6 +22,7 @@ setup(
         "geoip2",
         "pcapy",
         "pypacker",
+        "pyopenssl",
     ],
     entry_points={
         "console_scripts": [
