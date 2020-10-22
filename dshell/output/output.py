@@ -117,7 +117,9 @@ class Output:
         pass
 
     def close(self):
-        """Close output file, assuming it's not stdout"""
+        """
+        Close output file, assuming it's not stdout
+        """
         if self.fh not in (sys.stdout, sys.stdout.buffer):
             self.fh.close()
 
@@ -194,7 +196,9 @@ class Output:
         return output
 
     def write(self, *args, **kwargs):
-        """Primary output function. Should be overwritten by subclasses."""
+        """
+        Primary output function. Should be overwritten by subclasses.
+        """
         line = self.convert(*args, **kwargs)
         try:
             self.fh.write(line)

@@ -625,7 +625,7 @@ class ConnectionPlugin(PacketPlugin):
             connection_handler_out = None
         if connection_handler_out:
             self._connection_queue.append(connection_handler_out)
-            with self.handled_packet_count.get_lock():
+            with self.handled_conn_count.get_lock():
                 self.handled_conn_count.value += 1
         if full:
             try:
@@ -1265,8 +1265,6 @@ class Blob(object):
 
     Attributes:
         addr:       .addr attribute of the first packet
-        direction:      direction of blob -
-                'cs' for client-to-server, 'sc' for server-to-client
         ts:         timestamp of the first packet
         starttime:  datetime for first packet
         endtime:    datetime of last packet
@@ -1406,6 +1404,12 @@ class Blob(object):
         return packets
 
     def get_frames(self, start, end=None) -> List[int]:
+        """
+        Returns frame identifiers for the packets that contain data for the given start offset
+        up to the end offset.
+        If end offset is not provided, just the frame identifier for the packet containing the
+        start offset is provided.
+        """
         return [packet.frame for packet in self.get_packets(start, end=end)]
 
     @property
@@ -1456,6 +1460,7 @@ class Blob(object):
                 expected_seq += missing_num_bytes + len(packet.data)
                 prev_packet = packet
 
+            # TODO: Support rollover sequence numbers.
             # Otherwise, we have some overlap in data and need to remove the invalid segment/packet
             # and ignoring adding it to the segments list.
             else:
@@ -1464,19 +1469,6 @@ class Blob(object):
 
         self._segments = segments  # cache for next time.
         return segments
-
-    # # TODO: Should this account for pulling data before all packets have been added?
-    # @property
-    # def data(self):
-    #     """
-    #     Returns the reassembled byte string.
-    #
-    #     If it was not already reassembled, reassemble is called with default
-    #     arguments.
-    #     """
-    #     if not self.__data_bytes:
-    #         self.reassemble()
-    #     return self.__data_bytes
 
     @property
     def data(self):
@@ -1501,7 +1493,6 @@ class Blob(object):
 
             # Check if we have missing packets.
             if seq - initial_seq != len(data):
-                # logger.warning('Missing packets in TCP stream.')
                 # buffer data with null bytes
                 data += b'\x00' * (seq - initial_seq - len(data))
 
@@ -1542,10 +1533,15 @@ class Blob(object):
             if initial_seq is None:
                 initial_seq = seq
 
+            relative_seq = seq - initial_seq
+            if relative_seq < written_bytes:
+                raise RuntimeError(
+                    "Relative sequence is less then written byte count. "
+                    "Sequence numbers have be miss-calculated."
+                )
             # Skip holes in data. (User should have put padding in these areas)
-            if seq - initial_seq != written_bytes:
-                # logger.warning('Missing packets in TCP stream.')
-                written_bytes += seq - initial_seq - written_bytes
+            elif relative_seq != written_bytes:
+                written_bytes = relative_seq
 
             packet.data = data[written_bytes:written_bytes + len(packet.data)]
             written_bytes += len(packet.data)
@@ -1763,22 +1759,22 @@ class Blob(object):
             return
 
         # Replace packet(s) with retransmitted packet
-        else:
-            # First add the retransmitted packet, replacing the original packet matching the
-            # sequence number.
-            logger.debug(f'Replacing packet {orig_packet.frame} with {packet.frame}')
-            self._seq_map[seq] = packet
-            self.packets = [packet if p.sequence_number == seq else p for p in self.packets]
 
-            # Now remove any packets that contained data that is now part of the retransmitted packet.
-            packets_to_remove = []
-            for seq_, packet_ in self._seq_map.items():
-                if 0 < (seq_ - seq) < len(packet.data):
-                    logger.debug(f'Removing packet: {packet_.frame}')
-                    packets_to_remove.append(packet_)
-            # NOTE: need to remove packets outside the above loop because removing packets affect seq_map
-            for packet_ in packets_to_remove:
-                self._remove_packet(packet_)
+        # First add the retransmitted packet, replacing the original packet matching the
+        # sequence number.
+        logger.debug(f'Replacing packet {orig_packet.frame} with {packet.frame}')
+        self._seq_map[seq] = packet
+        self.packets = [packet if p.sequence_number == seq else p for p in self.packets]
+
+        # Now remove any packets that contained data that is now part of the retransmitted packet.
+        packets_to_remove = []
+        for seq_, packet_ in self._seq_map.items():
+            if 0 < (seq_ - seq) < len(packet.data):
+                logger.debug(f'Removing packet: {packet_.frame}')
+                packets_to_remove.append(packet_)
+        # NOTE: need to remove packets outside the above loop because removing packets affect seq_map
+        for packet_ in packets_to_remove:
+            self._remove_packet(packet_)
 
     def _remove_packet(self, packet):
         """
