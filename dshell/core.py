@@ -454,7 +454,7 @@ class ConnectionPlugin(PacketPlugin):
     #   Due to how we modified the blob creation code, the ACK and handshake methods are not
     #   part of any of the blobs. Therefore, when the produce_packets() function is called, those
     #   packets are missing if we are only producing the packets within a blob.
-    BLOB_FILTERING = True
+    blob_filtering = True
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -513,7 +513,7 @@ class ConnectionPlugin(PacketPlugin):
         """
         # Produce connections
         for connection in self.produce_connections():
-            if self.BLOB_FILTERING:
+            if self.blob_filtering:
                 for blob in connection.blobs:
                     if not blob.hidden:
                         yield from blob.packets
