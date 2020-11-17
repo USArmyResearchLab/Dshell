@@ -97,7 +97,6 @@ class Output:
         Creates a distinct filename by appending a sequence number.
         """
         try:
-            # FIXME: Should n be incremented in the loop?
             while os.stat(filename):
                 p = filename.rsplit('-', 1)
                 try:
