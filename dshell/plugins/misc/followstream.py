@@ -16,6 +16,10 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
             output=ColorOutput(label=__name__),
         )
 
+    def premodule(self):
+        if 'delim' in dir(self.out):
+            self.out.delim = ''
+
     def connection_handler(self, conn):
         if (conn.clientbytes + conn.serverbytes > 0):
             self.write(conn, **conn.info())
