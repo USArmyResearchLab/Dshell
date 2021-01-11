@@ -570,6 +570,7 @@ class ConnectionPlugin(PacketPlugin):
                 self.seen_conn_count.value += 1
         else:
             conn = self._connection_tracker[addr]
+            conn.add_packet(packet)
 
         if conn.stop:
             # This connection was flagged to not be tracked
@@ -582,8 +583,6 @@ class ConnectionPlugin(PacketPlugin):
         # # for future calls to connection_handler
         # if pkt.data:
         #     conn.handled = False
-
-        conn.add_packet(packet)
 
         if conn.closed:
             # Both sides have closed the connection, process blobs (messages) and
