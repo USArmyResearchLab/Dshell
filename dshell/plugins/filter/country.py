@@ -2,13 +2,9 @@
 A filter for connections by IP address country code. Will generally be chained
 with other plugins.
 """
-import logging
 
 import dshell.core
 from dshell.output.netflowout import NetflowOutput
-
-logger = logging.getLogger(__name__)
-
 
 class DshellPlugin(dshell.core.ConnectionPlugin):
 
@@ -64,7 +60,7 @@ Example:
         # Several of the args are mutually exclusive
         # Check if more than one is set, and print a warning if so
         if (self.neither + self.both + self.notboth) > 1:
-            logger.warning("Can only use one of these args at a time: 'neither', 'both', or 'notboth'")
+            self.logger.warning("Can only use one of these args at a time: 'neither', 'both', or 'notboth'")
 
     def connection_handler(self, conn):
         # If no country code specified, pass all traffic through

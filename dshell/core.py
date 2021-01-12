@@ -16,6 +16,7 @@ for Blob, Connection, and Packet.
 
 # standard Python imports
 import datetime
+import inspect
 import ipaddress
 import logging
 import warnings
@@ -59,7 +60,7 @@ class DataError(Exception):
 try:
     geoip = DshellGeoIP()
 except FileNotFoundError:
-    logger.error(
+    logger.warning(
         "Could not find GeoIP data files! Country and ASN lookups will not be possible. Check README for instructions on where to find and install necessary data files.")
     geoip = DshellFailedGeoIP()
 
@@ -119,6 +120,7 @@ class PacketPlugin(object):
         self.compiled_bpf = kwargs.get('compiled_bpf', None)
         self.vlan_bpf = kwargs.get("vlan_bpf", True)
         self.author = kwargs.get('author', '')
+        self.logger = logging.getLogger(inspect.getmodule(self).__name__)
 
         # define overall counts as multiprocessing Values for --parallel
         self.seen_packet_count = Value('i', 0)

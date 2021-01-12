@@ -3,15 +3,11 @@ Shows MAC address information and optionally filters by it. It is highly
 recommended that oui.txt be included in the share/ directory (see README).
 """
 
-import logging
 import os
 
 import dshell.core
 from dshell.output.output import Output
 from dshell.util import get_data_path
-
-logger = logging.getLogger(__name__)
-
 
 class DshellPlugin(dshell.core.PacketPlugin):
     OUTPUT_FORMAT = "[%(plugin)s] %(dt)s   %(sip)-15s %(smac)-18s %(smac_org)-35s ->  %(dip)-15s %(dmac)-18s %(dmac_org)-35s %(byte_count)d\n"
@@ -46,7 +42,7 @@ class DshellPlugin(dshell.core.PacketPlugin):
         except FileNotFoundError:
             # user probably did not download it
             # print warning and continue
-            logger.warning("Could not find {} (see README). Will not be able to determine MAC organizations.".format(ouifilepath))
+            self.logger.warning("Could not find {} (see README). Will not be able to determine MAC organizations.".format(ouifilepath))
 
     def packet_handler(self, pkt):
         if not pkt.smac or not pkt.dmac:

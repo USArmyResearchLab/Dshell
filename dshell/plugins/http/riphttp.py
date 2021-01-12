@@ -3,16 +3,12 @@ Identifies HTTP traffic and reassembles file transfers before writing them to
 files.
 """
 
-import logging
 import os
 import re
 import sys
 
 from dshell.plugins.httpplugin import HTTPPlugin
 from dshell.output.alertout import AlertOutput
-
-logger = logging.getLogger(__name__)
-
 
 class DshellPlugin(HTTPPlugin):
     def __init__(self):
@@ -47,7 +43,7 @@ class DshellPlugin(HTTPPlugin):
 
     def premodule(self):
         if self.direction not in ('cs', 'sc', None):
-            logger.warning("Invalid value for direction: {!r}. Argument must be either 'sc' for server-to-client or 'cs' for client-to-server.".format(self.direction))
+            self.logger.warning("Invalid value for direction: {!r}. Argument must be either 'sc' for server-to-client or 'cs' for client-to-server.".format(self.direction))
             sys.exit(1)
 
         if self.content_filter:
@@ -85,7 +81,7 @@ class DshellPlugin(HTTPPlugin):
         if url in self.openfiles:
             # File is already open, so just insert the new data
             s, e = self.openfiles[url].handleresponse(response)
-            logger.debug("{0!r} --> Range: {1} - {2}".format(url, s, e))
+            self.logger.debug("{0!r} --> Range: {1} - {2}".format(url, s, e))
         else:
             # A new file!
             filename = request.uri.split('?', 1)[0].split('/')[-1]
@@ -104,7 +100,7 @@ class DshellPlugin(HTTPPlugin):
             self.write("New file {} ({})".format(filename, url), **conn.info(), dir_arrow="<-")
             self.openfiles[url] = HTTPFile(os.path.join(self.outdir, filename), self)
             s, e = self.openfiles[url].handleresponse(payload)
-            logger.debug("{0!r} --> Range: {1} - {2}".format(url, s, e))
+            self.logger.debug("{0!r} --> Range: {1} - {2}".format(url, s, e))
         if self.openfiles[url].done():
             self.write("File done {} ({})".format(filename, url), **conn.info(), dir_arrow="<-")
             del self.openfiles[url]
