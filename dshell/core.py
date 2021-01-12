@@ -990,8 +990,6 @@ class Packet(object):
         """
         d = dict(self.__dict__)
         del d['pkt']
-        del d['rawpkt']
-        del d['data']
         return d
 
 
