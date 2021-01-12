@@ -14,13 +14,9 @@ Example uses include:
    (decode -d web+pcapwriter ~/pcap/*)
 """
 
-import logging
 import struct
 
 import dshell.core
-
-logger = logging.getLogger(__name__)
-
 
 class DshellPlugin(dshell.core.PacketPlugin):
 

@@ -3,15 +3,11 @@ Only follows connections that match user-provided IP addresses and ports. Is
 generally chained with other plugins.
 """
 
-import logging
 import ipaddress
 import sys
 
 import dshell.core
 from dshell.output.alertout import AlertOutput
-
-logger = logging.getLogger(__name__)
-
 
 class DshellPlugin(dshell.core.ConnectionPlugin):
     def __init__(self, **kwargs):
@@ -118,8 +114,8 @@ CIDR notation is okay (e.g. --track_source=196.168.0.0/16).
         if self.source:
             for sstr in self.source:
                 self.sources.extend(self.__split_ips(sstr))
-        logger.debug("targets: {!s}".format(self.targets))
-        logger.debug("sources: {!s}".format(self.sources))
+        self.logger.debug("targets: {!s}".format(self.targets))
+        self.logger.debug("sources: {!s}".format(self.sources))
 
     def connection_handler(self, conn):
         if self.targets:

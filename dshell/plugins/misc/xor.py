@@ -3,15 +3,11 @@ XOR the data in every packet with a user-provided key. Multiple keys can be used
 for different data directions.
 """
 
-import logging
 import struct
 
 import dshell.core
 import dshell.util
 from dshell.output.output import Output
-
-logger = logging.getLogger(__name__)
-
 
 class DshellPlugin(dshell.core.ConnectionPlugin):
     def __init__(self):
@@ -57,7 +53,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
                 try:
                     newkey += struct.pack('B', int(oldkey[i:i + 2], 16))
                 except ValueError as e:
-                    logger.warning("Error converting hex. Will treat as raw string. - {!s}".format(e))
+                    self.logger.warning("Error converting hex. Will treat as raw string. - {!s}".format(e))
                     newkey = key.encode('ascii')
                     break
         else:
@@ -68,7 +64,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
             except ValueError:
                 # otherwise, convert string key to bytes as it is
                 newkey = key.encode('ascii')
-        logger.debug("__make_key: {!r} -> {!r}".format(key, newkey))
+        self.logger.debug("__make_key: {!r} -> {!r}".format(key, newkey))
         return newkey
 
     def premodule(self):
@@ -91,7 +87,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
                 # grab the data from the TCP layer and down
                 data = pkt.data
                 # data = pkt.pkt.upper_layer.upper_layer.body_bytes
-                logger.debug("Original:\n{}".format(dshell.util.hex_plus_ascii(data)))
+                self.logger.debug("Original:\n{}".format(dshell.util.hex_plus_ascii(data)))
                 # XOR the data and store it in new_data
                 new_data = b''
                 for i in range(len(data)):
@@ -103,5 +99,5 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
                 pkt.data = new_data
                 # # rebuild the packet by adding together each of the layers
                 # pkt.rawpkt = pkt.pkt.header_bytes + pkt.pkt.upper_layer.header_bytes + pkt.pkt.upper_layer.upper_layer.header_bytes + new_data
-                logger.debug("New:\n{}".format(dshell.util.hex_plus_ascii(new_data)))
+                self.logger.debug("New:\n{}".format(dshell.util.hex_plus_ascii(new_data)))
         return conn

@@ -7,10 +7,6 @@ from dshell.output.alertout import AlertOutput
 
 import json
 from struct import unpack
-import logging
-
-logger = logging.getLogger(__name__)
-
 
 # Magic values used to determine Bitcoin Network Type
 # Bitcoin Testnet is an alternative blockchain used for testing
@@ -131,7 +127,7 @@ Examples:
             data_str = ''.join(chr(x) for x in data)
             data_len = len(data)
         except:
-            logger.error('could not parse session data')
+            self.logger.error('could not parse session data')
             return
 
         # Only continue if the packet contains data 
@@ -188,9 +184,9 @@ Examples:
                                                                          clean_jobs]
 
                         except KeyError as e:
-                            logger.error("{} - Error extracting auth ID".format(str(e)))
+                            self.logger.error("{} - Error extracting auth ID".format(str(e)))
             except ValueError as e:
-                logger.error('{} - json data not found'.format(str(e)))
+                self.logger.error('{} - json data not found'.format(str(e)))
                 return
 
 
@@ -201,7 +197,7 @@ Examples:
             magic_val = data[0:4].hex().upper()
             magic_val = ' '.join([magic_val[i:i+2] for i in range(0, len(magic_val), 2)])
         except:
-            logger.error('could not parse session data')
+            self.logger.error('could not parse session data')
             return 
 
         # Attempt to translate first 4 bytes of payload into a Bitcoin (bc) 

@@ -2,14 +2,10 @@
 NBNS plugin
 """
 
-import logging
 from struct import unpack
 
 import dshell.core
 from dshell.output.alertout import AlertOutput
-
-logger = logging.getLogger(__name__)
-
 
 # A few common NBNS Protocol Info Opcodes
 # Due to a typo in RFC 1002, 0x9 is also acceptable, but rarely used 
@@ -94,7 +90,7 @@ Examples:
         try:
             nbns_packet = nbns_packet.upper_layer
         except IndexError as e:
-            logger.error('{}: could not parse session data \
+            self.logger.error('{}: could not parse session data \
                       (NBNS packet not found)'.format(str(e)))
             # pypacker may throw an Exception here; could use 
             #   further testing
@@ -106,7 +102,7 @@ Examples:
         try:
             nbns_name = unpack('32s', pkt.data[13:45])[0]
         except Exception as e:
-            logger.error('{}: (NBNS packet not found)'.format(str(e)))
+            self.logger.error('{}: (NBNS packet not found)'.format(str(e)))
             return
 
 
@@ -125,7 +121,7 @@ Examples:
                 self.client_hostname = str(nbns_name)
 
         except ValueError as e:
-            logger.error('{}: Hostname in improper format \
+            self.logger.error('{}: Hostname in improper format \
                       (NBNS packet not found)'.format(str(e)))
             return
 

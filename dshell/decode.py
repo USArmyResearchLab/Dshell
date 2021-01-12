@@ -317,7 +317,7 @@ def main(plugin_args=None, **kwargs):
         processes = []
         for i in inputs:
             processes.append(
-                multiprocessing.Process(target=process_files, args=(i,), kwargs=kwargs)
+                multiprocessing.Process(target=process_files, args=([i],), kwargs=kwargs)
             )
 
         # Spawn processes, and keep track of which ones are running

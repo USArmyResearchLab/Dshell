@@ -3,13 +3,8 @@ Displays netflows that have at least 1MB transferred, by default.
 Megabyte threshold can be updated by the user.
 """
 
-import logging
-
 import dshell.core
 from dshell.output.netflowout import NetflowOutput
-
-logger = logging.getLogger(__name__)
-
 
 class DshellPlugin(dshell.core.ConnectionPlugin):
 
@@ -30,10 +25,10 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 
     def premodule(self):
         if self.size <= 0:
-            logger.warning("Cannot have a size that's less than or equal to zero (size: {}). Setting to 1.".format(self.size))
+            self.logger.warning("Cannot have a size that's less than or equal to zero (size: {}). Setting to 1.".format(self.size))
             self.size = 1
         self.min = 1048576 * self.size
-        logger.debug("Input: {}, Final size: {} bytes".format(self.size, self.min))
+        self.logger.debug("Input: {}, Final size: {} bytes".format(self.size, self.min))
 
     def connection_handler(self, conn):
         if conn.clientbytes + conn.serverbytes >= self.min:

@@ -16,6 +16,7 @@ for Blob, Connection, and Packet.
 
 # standard Python imports
 import datetime
+import inspect
 import ipaddress
 import logging
 import warnings
@@ -37,7 +38,7 @@ from pypacker.layer4 import tcp, udp
 
 logger = logging.getLogger(__name__)
 
-__version__ = "3.1.3"
+__version__ = "3.2.1"
 
 class SequenceNumberError(Exception):
     """
@@ -59,7 +60,7 @@ class DataError(Exception):
 try:
     geoip = DshellGeoIP()
 except FileNotFoundError:
-    logger.error(
+    logger.warning(
         "Could not find GeoIP data files! Country and ASN lookups will not be possible. Check README for instructions on where to find and install necessary data files.")
     geoip = DshellFailedGeoIP()
 
@@ -119,6 +120,7 @@ class PacketPlugin(object):
         self.compiled_bpf = kwargs.get('compiled_bpf', None)
         self.vlan_bpf = kwargs.get("vlan_bpf", True)
         self.author = kwargs.get('author', '')
+        self.logger = logging.getLogger(inspect.getmodule(self).__name__)
 
         # define overall counts as multiprocessing Values for --parallel
         self.seen_packet_count = Value('i', 0)
@@ -988,8 +990,6 @@ class Packet(object):
         """
         d = dict(self.__dict__)
         del d['pkt']
-        del d['rawpkt']
-        del d['data']
         return d
 
 
