@@ -1,8 +1,7 @@
 
 # Expose classes and functions that external users will need to access as the API
 from .core import ConnectionPlugin, PacketPlugin, Packet
-# TODO: Make process_files()/main() function more API friendly through documentation and unwrapping the kwargs.
-from .decode import process_files, main_command_line
+# TODO: Make decode.process_files()/main() function more API friendly through documentation and unwrapping the kwargs
 from .api import get_plugins, get_plugin_information
 
 from .output.alertout import AlertOutput
