@@ -8,12 +8,15 @@ It automatically pairs request/response packets by ID and passes them to the
 handler for a custom plugin, such as dns.py, to use.
 """
 
+import logging
+
 import dshell.core as dshell
 
 from pypacker.pypacker import dns_name_decode
 from pypacker.layer567 import dns
 
-import struct
+logger = logging.getLogger(__name__)
+
 
 def basic_cname_decode(request, answer):
     """
@@ -41,6 +44,7 @@ def basic_cname_decode(request, answer):
     rebuilt = answer[:answer.index(b"\xc0")] + snip
     return dns_name_decode(rebuilt)
 
+
 class DNSPlugin(dshell.ConnectionPlugin):
     """
     A base-level plugin that overwrites the connection_handler in
@@ -57,7 +61,7 @@ class DNSPlugin(dshell.ConnectionPlugin):
         id_to_packets_map = {}
 
         for blob in conn.blobs:
-            for pkt in blob.all_packets:
+            for pkt in blob.packets:
                 packet = pkt.pkt
                 if not isinstance(packet.highest_layer, dns.DNS):
                     # First packet is not DNS, so we don't care
@@ -87,17 +91,19 @@ class DNSPlugin(dshell.ConnectionPlugin):
                 # remove packets from connections that dns_handler did not like
                 for blob in id_to_blob_map[id]:
                     for pkt in id_to_packets_map[id]:
-                        try: blob.all_packets.remove(pkt)
-                        except ValueError: continue
+                        try:
+                            blob.packets.remove(pkt)
+                        except ValueError:
+                            continue
             else:
                 for blob in id_to_blob_map[id]:
                     blob.hidden = False
             try:
                 if dns_handler_out and not isinstance(dns_handler_out[0], dshell.Connection):
-                    self.warn("The output from {} dns_handler must be a list with a dshell.Connection as the first element! Chaining plugins from here may not be possible.".format(self.name))
+                    logger.warning("The output from {} dns_handler must be a list with a dshell.Connection as the first element! Chaining plugins from here may not be possible.".format(self.name))
                     continue
             except TypeError:
-                self.warn("The output from {} dns_handler must be a list with a dshell.Connection as the first element! Chaining plugins from here may not be possible.".format(self.name))
+                logger.warning("The output from {} dns_handler must be a list with a dshell.Connection as the first element! Chaining plugins from here may not be possible.".format(self.name))
                 continue
             keep_connection = True
         if keep_connection:
@@ -120,5 +126,6 @@ class DNSPlugin(dshell.ConnectionPlugin):
         other plugins.
         """
         return (conn, requests, responses)
+
 
 DshellPlugin = None

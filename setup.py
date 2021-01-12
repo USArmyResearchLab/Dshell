@@ -23,6 +23,8 @@ setup(
         "pcapy",
         "pypacker",
         "pyopenssl",
+        "elasticsearch",
+        "tabulate",
     ],
     entry_points={
         "console_scripts": [

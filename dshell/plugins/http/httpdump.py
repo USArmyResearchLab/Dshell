@@ -128,7 +128,7 @@ class DshellPlugin(HTTPPlugin):
                 msg.append(dshell.util.printable_text(str(post_params)))
         elif request.body:
             msg.append("POST Body:")
-            request_body = dshell.util.printable_text(request_body)
+            request_body = dshell.util.printable_text(request.body)
             if self.maxpost > 0 and len(request.body) > self.maxpost:
                 msg.append("{}[truncated]".format(request_body[:self.maxpost]))
             else:
