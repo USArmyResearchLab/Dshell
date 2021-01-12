@@ -14,12 +14,14 @@ import geoip2.errors
 
 from dshell.util import get_data_path
 
-class DshellGeoIP(object):
 
+logger = logging.getLogger(__name__)
+
+
+class DshellGeoIP(object):
     MAX_CACHE_SIZE = 5000
 
-    def __init__(self, acc=False, logger=logging.getLogger("dshellgeoip.py")):
-        self.logger = logger
+    def __init__(self, acc=False):
         self.geodir = os.path.join(get_data_path(), 'GeoIP')
         self.geoccfile = os.path.join(self.geodir, 'GeoLite2-City.mmdb')
         self.geoasnfile = os.path.join(self.geodir, 'GeoLite2-ASN.mmdb')
@@ -30,16 +32,20 @@ class DshellGeoIP(object):
         self.acc = acc
 
     def check_file_dates(self):
-        "Check the data file age, and log a warning if it's over a year old"
+        """
+        Check the data file age, and log a warning if it's over a year old.
+        """
         cc_mtime = datetime.datetime.fromtimestamp(os.path.getmtime(self.geoccfile))
         asn_mtime = datetime.datetime.fromtimestamp(os.path.getmtime(self.geoasnfile))
         n = datetime.datetime.now()
         year = datetime.timedelta(days=365)
         if (n - cc_mtime) > year or (n - asn_mtime) > year:
-            self.logger.debug("GeoIP data file(s) over a year old, and possibly outdated.")
+            logger.debug("GeoIP data file(s) over a year old, and possibly outdated.")
 
     def geoip_country_lookup(self, ip):
-        "Looks up the IP and returns the two-character country code."
+        """
+        Looks up the IP and returns the two-character country code.
+        """
         location = self.geoip_location_lookup(ip)
         return location[0]
 
@@ -81,17 +87,17 @@ class DshellGeoIP(object):
                 if self.acc:
                     try:
                         cc = "{}/{}/{}".format(location.represented_country.iso_code,
-                                                location.registered_country.iso_code,
-                                                location.country.iso_code)
+                                               location.registered_country.iso_code,
+                                               location.country.iso_code)
                         cc = cc.replace("None", "--")
 
                     except KeyError:
                         pass
                 else:
                     cc = (location.represented_country.iso_code or
-                      location.registered_country.iso_code or
-                      location.country.iso_code or
-                      '--')
+                          location.registered_country.iso_code or
+                          location.country.iso_code or
+                          '--')
 
                 location = (
                     cc,
@@ -109,11 +115,13 @@ class DshellGeoIP(object):
                 self.geo_loc_cache[ip] = location
                 return location
 
-class DshellFailedGeoIP(object):
-    "Class used in place of DshellGeoIP if GeoIP database files are not found."
 
-    def __init__(self, logger=logging.getLogger("dshellgeoip.py")):
-        self.logger = logger
+class DshellFailedGeoIP(object):
+    """
+    Class used in place of DshellGeoIP if GeoIP database files are not found.
+    """
+
+    def __init__(self):
         self.geodir = os.path.join(get_data_path(), 'GeoIP')
         self.geoccdb = None
         self.geoasndb = None
@@ -130,8 +138,12 @@ class DshellFailedGeoIP(object):
     def geoip_location_lookup(self, ip):
         return ("??", None, None)
 
+
 class DshellGeoIPCache(OrderedDict):
-    "A cache for storing recent IP lookups to improve performance."
+    """
+    A cache for storing recent IP lookups to improve performance.
+    """
+
     def __init__(self, *args, **kwargs):
         self.max_cache_size = kwargs.pop("max_cache_size", 500)
         OrderedDict.__init__(self, *args, **kwargs)

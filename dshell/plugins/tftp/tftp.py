@@ -38,14 +38,17 @@ Example:
  filenames when saved
 """
 
+import logging
+import os
+import struct
+
+from pypacker.layer4 import udp
+
 import dshell.core
 import dshell.util
 from dshell.output.alertout import AlertOutput
 
-from pypacker.layer4 import udp
-
-import os
-import struct
+logger = logging.getLogger(__name__)
 
 
 class DshellPlugin(dshell.core.PacketPlugin):
@@ -106,8 +109,8 @@ class DshellPlugin(dshell.core.PacketPlugin):
 
     def postmodule(self):
         "cleanup any unfinished streams"
-        self.debug("Unset Read Streams: {!s}".format(self.unset_read_streams))
-        self.debug("Unset Write Streams: {!s}".format(self.unset_write_streams))
+        logger.debug("Unset Read Streams: {!s}".format(self.unset_read_streams))
+        logger.debug("Unset Write Streams: {!s}".format(self.unset_write_streams))
         while(len(self.open_streams) > 0):
             k = list(self.open_streams)[0]
             self.__closeStream(k, "POSSIBLY INCOMPLETE")

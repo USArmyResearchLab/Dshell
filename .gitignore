@@ -2,3 +2,4 @@
 __pycache__
 Dshell.egg-info
 build/
+.idea/

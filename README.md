@@ -12,7 +12,8 @@ Key features:
 * Linux (developed on Red Hat Enterprise Linux 6.7)
 * Python 3 (developed with Python 3.5.1)
 * [pypacker](https://gitlab.com/mike01/pypacker)
-* [pcapy](http://www.coresecurity.com/corelabs-research/open-source-tools/pcapy)
+* [pcapy](https://github.com/helpsystems/pcapy)
+* [pyOpenSSL](https://github.com/pyca/pyopenssl)
 * [geoip2](https://github.com/maxmind/GeoIP2-python)
   * [MaxMind GeoIP2 datasets](https://dev.maxmind.com/geoip/geoip2/geolite2/)
 
@@ -23,6 +24,8 @@ Key features:
 * [elasticsearch](https://www.elastic.co/guide/en/elasticsearch/client/python-api/current/index.html)
   * used in the elasticout output module
   * only necessary if planning to use elasticsearch to store output
+* [pyJA3](https://github.com/salesforce/ja3/tree/master/python)
+  * used in the tls plugin
 
 ## Major Changes Since Previous Release
 * This is a major framework update to Dshell. Plugins written for the previous version are not compatible with this version, and vice versa.

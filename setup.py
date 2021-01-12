@@ -22,6 +22,9 @@ setup(
         "geoip2",
         "pcapy",
         "pypacker",
+        "pyopenssl",
+        "elasticsearch",
+        "tabulate",
     ],
     entry_points={
         "console_scripts": [
