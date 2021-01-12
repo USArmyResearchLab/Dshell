@@ -38,7 +38,7 @@ from pypacker.layer4 import tcp, udp
 
 logger = logging.getLogger(__name__)
 
-__version__ = "3.1.3"
+__version__ = "3.2.1"
 
 class SequenceNumberError(Exception):
     """

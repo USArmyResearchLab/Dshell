@@ -10,7 +10,7 @@ Key features:
 
 ## Requirements
 * Linux (developed on Red Hat Enterprise Linux 6.7)
-* Python 3 (developed with Python 3.5.1)
+* Python 3 (developed with Python 3.6.2)
 * [pypacker](https://gitlab.com/mike01/pypacker)
 * [pcapy](https://github.com/helpsystems/pcapy)
 * [pyOpenSSL](https://github.com/pyca/pyopenssl)
