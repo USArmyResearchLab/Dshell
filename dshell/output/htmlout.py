@@ -98,6 +98,8 @@ End: %(endtime)s
                         rawdata.append((blob.data, blob.direction))
             elif type(arg) == dshell.core.Packet:
                 rawdata.append((arg.pkt.body_bytes, kwargs.get('direction', '--')))
+            elif type(arg) == tuple:
+                rawdata.append(arg)
             else:
                 rawdata.append((arg, kwargs.get('direction', '--')))
 
