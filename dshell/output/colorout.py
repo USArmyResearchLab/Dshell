@@ -27,6 +27,7 @@ End:   %(endtime)s
 
 """
     _DEFAULT_FORMAT = _PACKET_FORMAT
+    _DEFAULT_DELIM = "\n\n"
 
 
     def __init__(self, *args, **kwargs):
@@ -37,7 +38,6 @@ End:   %(endtime)s
             'sc': '32',   # server-to-client is green
             '--': '34',   # everything else is blue
         }  # TODO configurable for color-blind users?
-        self.delim = "\n\n"
         self.hexmode = kwargs.get('hex', False)
         self.format_is_set = False
 
