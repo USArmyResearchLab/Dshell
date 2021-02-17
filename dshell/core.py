@@ -950,8 +950,13 @@ class Packet(object):
             ip_layer = self._ip_layer
             tcp_layer = self._tcp_layer
             if ip_layer and tcp_layer:
-                data_size = ip_layer.len - (ip_layer.header_len + tcp_layer.header_len)
-                self._data = best_layer.body_bytes[:data_size]
+                if isinstance(ip_layer, ip.IP):  # IPv4
+                    data_size = ip_layer.len - (ip_layer.header_len + tcp_layer.header_len)
+                    self._data = best_layer.body_bytes[:data_size]
+                else:  # IPv6
+                    # TODO handle extension headers
+                    data_size = ip_layer.dlen - tcp_layer.header_len
+                    self._data = best_layer.body_bytes[:data_size]
             else:
                 self._data = best_layer.body_bytes
 
@@ -971,8 +976,13 @@ class Packet(object):
         ip_layer = self._ip_layer
         tcp_layer = self._tcp_layer
         if ip_layer and tcp_layer:
-            data_size = ip_layer.len - (ip_layer.header_len + tcp_layer.header_len)
-            best_layer.body_bytes = data + best_layer.body_bytes[data_size:]
+            if isinstance(ip_layer, ip.IP):  # IPv4
+                data_size = ip_layer.len - (ip_layer.header_len + tcp_layer.header_len)
+                best_layer.body_bytes = data + best_layer.body_bytes[data_size:]
+            else:  # IPv6
+                # TODO handle extension headers
+                data_size = ip_layer.dlen - tcp_layer.header_len
+                best_layer.body_bytes = data + best_layer.body_bytes[data_size:]
         else:
             best_layer.body_bytes = data
 
