@@ -465,6 +465,7 @@ class ConnectionPlugin(PacketPlugin):
         self._connection_queue = []
 
         # dictionary to store packets for connections according to addr()
+        # NOTE: Only currently unhandled (ie. open) connections are stored here.
         self._connection_tracker = {}
 
         # define overall counts as multiprocessing Values for --parallel
@@ -475,11 +476,18 @@ class ConnectionPlugin(PacketPlugin):
         # connection_handler
         # it defaults to infinite, but this should be lowered for huge datasets
         self.maxblobs = float("inf")  # infinite
+
         # how long do we wait before deciding a connection is "finished"
         # time is checked by iterating over cached connections and checking if
         # the timestamp of the connection's last packet is older than the
         # timestamp of the current packet, minus this value
-        self.connection_timeout = datetime.timedelta(hours=1)
+        self.timeout = datetime.timedelta(hours=1)
+        # The frequency of packets to process between timeout checks.
+        self.timeout_frequency = 300
+        # The maximum number of open connections allowed at one time.
+        # If the maximum number of connections is met, the oldest connections
+        # will be force closed.
+        self.max_open_connections = 1000
 
     def _postmodule(self):
         """
@@ -599,15 +607,9 @@ class ConnectionPlugin(PacketPlugin):
         #     # will clear the connection's blob cache
         #     self._close_connection(conn)
 
-        # The current connection is done processing. Now, look over existing
-        # connections and look for any that have timed out.
-        # This is based on comparing the time of the current packet, minus
-        # self.connection_timeout, to each connection's current endtime value.
-        for addr, conn in self._connection_tracker.items():
-            if conn.handled:
-                continue
-            if conn.endtime < (packet.dt - self.connection_timeout):
-                self._close_connection(conn)
+        # Check for and close old connections every so often.
+        if self.handled_packet_count.value % self.timeout_frequency == 0:
+            self._timeout_connections(packet.dt)
 
     def _close_connection(self, conn, full=False):
         """
@@ -619,6 +621,13 @@ class ConnectionPlugin(PacketPlugin):
             print_handler_exception(e, self, 'connection_handler')
             return None
         conn.handled = True
+
+        # Remove connection from tracker once successfully closed/handled.
+        try:
+            del self._connection_tracker[tuple(sorted(conn.addr))]
+        except KeyError:
+            pass
+
         if connection_handler_out and not isinstance(connection_handler_out, Connection):
             logger.warning(
                 "The output from {} connection_handler must be of type dshell.Connection! Chaining plugins from here may not be possible.".format(
@@ -635,6 +644,24 @@ class ConnectionPlugin(PacketPlugin):
                 print_handler_exception(e, self, 'connection_close_handler')
         return connection_handler_out
 
+    def _timeout_connections(self, timestamp: datetime.datetime):
+        """
+        Checks for and force closes connections that have been alive for too long.
+        It also closes the oldest connections if too many connections are open.
+        """
+        # Force close any connections that have timed out.
+        # This is based on comparing the time of the current packet, minus
+        # self.timeout, to each connection's current endtime value.
+        for conn in list(self._connection_tracker.values()):
+            if conn.endtime < (timestamp - self.timeout):
+                self._close_connection(conn)
+
+        # Force close oldest connections if we have too many.
+        if len(self._connection_tracker) > self.max_open_connections:
+            connections = sorted(self._connection_tracker.values(), key=lambda conn: conn.endtime, reverse=True)
+            for conn in connections[self.max_open_connections:]:
+                self._close_connection(conn)
+
     def _cleanup_connections(self):
         """
         decode.py will often reach the end of packet capture before all of the
@@ -644,13 +671,8 @@ class ConnectionPlugin(PacketPlugin):
         NOTE: Because the connections did not close cleanly,
         connection_close_handler will not be called.
         """
-        for addr, conn in self._connection_tracker.items():
+        for conn in list(self._connection_tracker.values()):
             if not conn.stop and not conn.handled:
-                # try to process the final blob in the connection
-                # TODO: Refactoring most likely made processing the last blob obsolete.
-                # self._blob_handler(conn, conn.blobs[-1])
-
-                # then, handle the connection itself
                 self._close_connection(conn)
 
     def _purge_connections(self):

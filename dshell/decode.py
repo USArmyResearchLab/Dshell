@@ -79,6 +79,13 @@ def feed_plugin_chain(plugin_index: int, packet: Packet):
     if next_plugin_index:
         for _packet in current_plugin.produce_packets():
             feed_plugin_chain(next_plugin_index, _packet)
+    else:
+        # For the last plugin in the chain we still need to call produce_packets()
+        # to release resources for already processed packets.
+        # This prevents us consuming too much memory or processing time for large pcaps
+        # or long running live captures.
+        for _ in current_plugin.produce_packets():
+            pass
 
 
 def clean_plugin_chain(plugin_index):
