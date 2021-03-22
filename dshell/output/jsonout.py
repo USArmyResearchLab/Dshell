@@ -6,7 +6,6 @@ from datetime import datetime
 import json
 from dshell.output.output import Output
 
-
 class JSONOutput(Output):
     """
     Converts arguments for every write into JSON
@@ -26,6 +25,11 @@ class JSONOutput(Output):
             self.extra = False
         if args and 'data' not in kwargs:
             kwargs['data'] = self.delim.join(map(str, args))
+        if 'packets' in kwargs:
+            del kwargs['packets']
+        for k in list(kwargs.keys()):
+            if k.startswith('_'):
+              del kwargs[k]
         jsondata = json.dumps(kwargs, ensure_ascii=self.ensure_ascii, default=self.json_default)
         super().write(jsondata=jsondata)
 
