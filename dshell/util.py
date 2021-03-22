@@ -5,6 +5,7 @@ A collection of useful utilities used in several plugins and libraries.
 import os
 import string
 
+
 def xor(xinput, key):
     """
     Xor an input string with a given character key.
@@ -19,15 +20,18 @@ def xor(xinput, key):
 
 def get_data_path():
     dpath = os.path.dirname(__file__)
-    return os.path.sep.join( (dpath, 'data') )
+    return os.path.sep.join((dpath, 'data'))
+
 
 def get_plugin_path():
     dpath = os.path.dirname(__file__)
-    return os.path.sep.join( (dpath, 'plugins') )
+    return os.path.sep.join((dpath, 'plugins'))
+
 
 def get_output_path():
     dpath = os.path.dirname(__file__)
-    return os.path.sep.join( (dpath, 'output') )
+    return os.path.sep.join((dpath, 'output'))
+
 
 def decode_base64(intext, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/', padchar='='):
     """
@@ -53,7 +57,12 @@ def decode_base64(intext, alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 
     i = 0
     while i < len(intext) - 3:
-        if intext[i] not in alphabet or intext[i + 1] not in alphabet or intext[i + 2] not in alphabet or intext[i + 3] not in alphabet:
+        if (
+            intext[i] not in alphabet
+            or intext[i + 1] not in alphabet
+            or intext[i + 2] not in alphabet
+            or intext[i + 3] not in alphabet
+        ):
             raise KeyError("Non-alphabet character in encoded text.")
         val = alphabet_index[intext[i]] * 262144
         val += alphabet_index[intext[i + 1]] * 4096
@@ -111,6 +120,7 @@ def hex_plus_ascii(data, width=16, offset=0):
         output += outstr
     return output
 
+
 def gen_local_filename(path, origname):
     """
     Generates a local filename based on the original. Automatically adds a
@@ -138,6 +148,7 @@ def gen_local_filename(path, origname):
         postfix = "_{:04d}".format(i)
     return localname + postfix
 
+
 def human_readable_filesize(bytecount):
     """
     Converts the raw byte counts into a human-readable format
@@ -148,4 +159,3 @@ def human_readable_filesize(bytecount):
             return "{:3.2f} {}".format(bytecount, unit)
         bytecount /= 1024.0
     return "{:3.2f} {}".format(bytecount, "YB")
-

@@ -10,13 +10,17 @@ import re
 import sys
 from collections import defaultdict
 from datetime import datetime
+import warnings
 
-class Output():
+
+logger = logging.getLogger(__name__)
+
+
+class Output:
     """
     Base-level output class
 
     Arguments:
-        label : name to use for logging.getLogger(label)
         format : 'format string' to override default formatstring for output class
         timeformat : 'format string' for datetime representation
         delim : set a delimiter for CSV or similar output
@@ -31,35 +35,35 @@ class Output():
     _DEFAULT_DELIM = ','
     _DESCRIPTION = "Base output class"
 
-    def __init__(self, *args, **kwargs):
-        self.logger = logging.getLogger(kwargs.get("label", "dshell"))
-
+    def __init__(
+            self, file=None, fh=None, mode='w', format=None, timeformat=None, delim=None, nobuffer=False,
+            noclobber=False, extra=None, **unused_kwargs
+    ):
         self.format_fields = []
-        self.timeformat = kwargs.get('timeformat', self._DEFAULT_TIME_FORMAT)
-        self.delim = kwargs.get('delim', self._DEFAULT_DELIM)
-        self.nobuffer = kwargs.get('nobuffer', False)
-        self.noclobber = kwargs.get('noclobber', False)
-        self.mode = kwargs.get('mode', 'w')
-        self.extra = kwargs.get('extra', False)
+        self.timeformat = timeformat or self._DEFAULT_TIME_FORMAT
+        self.delim = delim or self._DEFAULT_DELIM
+        self.nobuffer = nobuffer
+        self.noclobber = noclobber
+        self.extra = extra
+        self.mode = mode
 
-        self.set_format( kwargs.get('format', self._DEFAULT_FORMAT) )
+        # Must define attributes even if they are setup in different function.
+        self.format_fields = None
+        self.format = None
+        self.set_format(format or self._DEFAULT_FORMAT)
 
         # Set the filehandle for any output
-        f = None
-        if 'fh' in kwargs:
-            self.fh = kwargs['fh']
+        if fh:
+            self.fh = fh
             return
-        elif 'file' in kwargs:
-            f = kwargs['file']
-        elif len(args) > 0:
-            f = args[0]
+
+        f = file
         if f:
             if self.noclobber:
-                f = self.__incrementFilename(f)
+                f = self._increment_filename(f)
             self.fh = open(f, self.mode)
         else:
             self.fh = sys.stdout
-
 
     def reset_fh(self, filename=None, fh=None, mode=None):
         """
@@ -71,28 +75,23 @@ class Output():
             self.fh = fh
         elif filename:
             if self.noclobber:
-                filename = self.__incrementFilename(filename)
+                filename = self._increment_filename(filename)
             if mode:
                 self.mode = mode
                 self.fh = open(filename, mode)
             else:
                 self.fh = open(filename, self.mode)
 
-    def set_level(self, lvl):
-        "Set the logging level. Just a wrapper around logging.setLevel(lvl)."
-        self.logger.setLevel(lvl)
-
     def set_format(self, fmt):
-        "Set the output format to a new format string"
+        """Set the output format to a new format string"""
         # Use a regular expression to identify all fields that the format will
         # populate, based on limited printf-style formatting.
         # https://docs.python.org/3/library/stdtypes.html#old-string-formatting
         regexmatch = "%\((?P<field>.*?)\)[diouxXeEfFgGcrs]"
         self.format_fields = re.findall(regexmatch, fmt)
-
         self.format = fmt
 
-    def __incrementFilename(self, filename):
+    def _increment_filename(self, filename):
         """
         Used with the noclobber argument.
         Creates a distinct filename by appending a sequence number.
@@ -117,16 +116,22 @@ class Output():
         pass
 
     def close(self):
-        "Close output file, assuming it's not stdout"
+        """
+        Close output file, assuming it's not stdout
+        """
         if self.fh not in (sys.stdout, sys.stdout.buffer):
             self.fh.close()
 
+    # NOTE: Output modules no longer handles logging. Logging should be done by creating a logger
+    # at the top of each of the modules.
+    # If we want to change the destination of the log messages we can create a log handler.
     def log(self, msg, level=logging.INFO, *args, **kwargs):
         """
         Write a message to the log
         Passes all args and kwargs thru to logging, except for 'level'
         """
-        self.logger.log(level, msg, *args, **kwargs)
+        warnings.warn("Please create and use a logger using the logging module instead", DeprecationWarning)
+        logger.log(level, msg, *args, **kwargs)
 
     def convert(self, *args, **kwargs):
         """
@@ -190,7 +195,9 @@ class Output():
         return output
 
     def write(self, *args, **kwargs):
-        "Primary output function. Should be overwritten by subclasses."
+        """
+        Primary output function. Should be overwritten by subclasses.
+        """
         line = self.convert(*args, **kwargs)
         try:
             self.fh.write(line)
@@ -204,6 +211,7 @@ class Output():
         DEPRECATED
         Use the write function of the AlertOutput class
         """
+        warnings.warn("Use the write function of the AlertOutput class", DeprecationWarning)
         self.write(*args, **kwargs)
 
     def dump(self, *args, **kwargs):
@@ -211,8 +219,8 @@ class Output():
         DEPRECATED
         Use the write function of the PCAPOutput class
         """
+        warnings.warn("Use the write function of the PCAPOutput class", DeprecationWarning)
         self.write(*args, **kwargs)
-
 
 
 class QueueOutputWrapper(object):

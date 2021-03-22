@@ -9,12 +9,18 @@ and collects them into HTTPRequest and HTTPResponse objects that are passed
 to the http_handler.
 """
 
+import logging
+
 import dshell.core
 
 from pypacker.layer567 import http
 
 import gzip
 import io
+
+
+logger = logging.getLogger(__name__)
+
 
 def parse_headers(obj, f):
     """Return dict of HTTP headers parsed from a file object."""
@@ -28,7 +34,7 @@ def parse_headers(obj, f):
             break
         l = line.split(None, 1)
         if not l[0].endswith(':'):
-            obj.errors.append(dshell.core.DataError("Invalid header {!r}".format(line)))
+            raise dshell.core.DataError("Invalid header {!r}".format(line))
         k = l[0][:-1].lower()
         v = len(l) != 1 and l[1] or ''
         if k in d:
@@ -38,6 +44,7 @@ def parse_headers(obj, f):
         else:
             d[k] = v
     return d
+
 
 def parse_body(obj, f, headers):
     """Return HTTP body parsed from a file object, given HTTP header dict."""
@@ -50,6 +57,9 @@ def parse_body(obj, f, headers):
                 sz = f.readline().split(None, 1)[0]
             except IndexError:
                 obj.errors.append(dshell.core.DataError('missing chunk size'))
+                # FIXME: If this error occurs sz is not available to continue parsing!
+                #   The appropriate exception should be thrown.
+                raise
             n = int(sz, 16)
             if n == 0:
                 found_end = True
@@ -61,7 +71,7 @@ def parse_body(obj, f, headers):
             else:
                 break
         if not found_end:
-            obj.errors.append(dshell.core.DataError('premature end of chunked body'))
+            raise dshell.core.DataError('premature end of chunked body')
         body = b''.join(l)
     elif 'content-length' in headers:
         n = int(headers['content-length'])
@@ -74,6 +84,7 @@ def parse_body(obj, f, headers):
         # XXX - need to handle HTTP/0.9
         body = b''
     return body
+
 
 class HTTPRequest(object):
     """
@@ -127,6 +138,7 @@ class HTTPRequest(object):
         self.headers = parse_headers(self, data)
         self.body = parse_body(self, data, self.headers)
 
+
 class HTTPResponse(object):
     """
     A class for HTTP responses
@@ -174,6 +186,9 @@ class HTTPResponse(object):
             try:
                 iobody = io.BytesIO(self.body)
             except TypeError as e:
+                # TODO: Why would body ever not be bytes? If it's not bytes, then that means
+                #   we have a bug somewhere in the code and therefore should just allow the
+                #   original exception to be raised.
                 self.errors.append(dshell.core.DataError("Body was not a byte string ({!s}). Could not decompress.".format(type(self.body))))
                 return
             try:
@@ -203,7 +218,7 @@ class HTTPPlugin(dshell.core.ConnectionPlugin):
         request = None
         response = None
         for blob in conn.blobs:
-            blob.reassemble(allow_overlap=True, allow_padding=True)
+            # blob.reassemble(allow_overlap=True, allow_padding=True)
             if not blob.data:
                 continue
             if blob.direction == 'cs':

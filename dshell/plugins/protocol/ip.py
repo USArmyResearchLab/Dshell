@@ -20,5 +20,5 @@ class DshellPlugin(dshell.core.PacketPlugin):
     def packet_handler(self, packet):
         self.write(**packet.info(), dir_arrow='->')
         # If verbose flag set, outputs packet contents in hex and ascii alongside packet info
-        self.out.log("\n" + dshell.util.hex_plus_ascii(packet.rawpkt))
+        self.logger.info("\n" + dshell.util.hex_plus_ascii(packet.rawpkt))
         return packet

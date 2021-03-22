@@ -69,10 +69,10 @@ Examples:
 
     def premodule(self):
         if self.threshold < 0:
-            self.warn("Cannot have a negative threshold. Defaulting to 3.0. (threshold: {0})".format(self.threshold))
+            self.logger.warning("Cannot have a negative threshold. Defaulting to 3.0. (threshold: {0})".format(self.threshold))
             self.threshold = 3.0
         elif not self.threshold:
-            self.warn("Threshold not set. Displaying all client-server transmissions (threshold: {0})".format(self.threshold))
+            self.logger.warning("Threshold not set. Displaying all client-server transmissions (threshold: {0})".format(self.threshold))
 
     def connection_handler(self, conn):
         if conn.clientbytes < self.minimum:

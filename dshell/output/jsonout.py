@@ -6,6 +6,7 @@ from datetime import datetime
 import json
 from dshell.output.output import Output
 
+
 class JSONOutput(Output):
     """
     Converts arguments for every write into JSON

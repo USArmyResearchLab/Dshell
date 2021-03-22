@@ -2,11 +2,11 @@ from setuptools import find_packages, setup
 
 setup(
     name="Dshell",
-    version="3.1.3",
+    version="3.2.1",
     author="USArmyResearchLab",
     description="An extensible network forensic analysis framework",
     url="https://github.com/USArmyResearchLab/Dshell",
-    python_requires='>=3.5',
+    python_requires='>=3.6',
     packages=find_packages(),
     package_data={
         "dshell": ["data/dshellrc", "data/GeoIP/readme.txt"],
@@ -23,6 +23,8 @@ setup(
         "pcapy",
         "pypacker",
         "pyopenssl",
+        "elasticsearch",
+        "tabulate",
     ],
     entry_points={
         "console_scripts": [

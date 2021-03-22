@@ -38,15 +38,14 @@ Example:
  filenames when saved
 """
 
-import dshell.core
-import dshell.util
-from dshell.output.alertout import AlertOutput
-
-from pypacker.layer4 import udp
-
 import os
 import struct
 
+from pypacker.layer4 import udp
+
+import dshell.core
+import dshell.util
+from dshell.output.alertout import AlertOutput
 
 class DshellPlugin(dshell.core.PacketPlugin):
     "Primary plugin class"
@@ -106,8 +105,8 @@ class DshellPlugin(dshell.core.PacketPlugin):
 
     def postmodule(self):
         "cleanup any unfinished streams"
-        self.debug("Unset Read Streams: {!s}".format(self.unset_read_streams))
-        self.debug("Unset Write Streams: {!s}".format(self.unset_write_streams))
+        self.logger.debug("Unset Read Streams: {!s}".format(self.unset_read_streams))
+        self.logger.debug("Unset Write Streams: {!s}".format(self.unset_write_streams))
         while(len(self.open_streams) > 0):
             k = list(self.open_streams)[0]
             self.__closeStream(k, "POSSIBLY INCOMPLETE")

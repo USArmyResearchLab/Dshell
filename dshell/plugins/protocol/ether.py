@@ -4,6 +4,7 @@ recommended that oui.txt be included in the share/ directory (see README).
 """
 
 import os
+
 import dshell.core
 from dshell.output.output import Output
 from dshell.util import get_data_path
@@ -41,7 +42,7 @@ class DshellPlugin(dshell.core.PacketPlugin):
         except FileNotFoundError:
             # user probably did not download it
             # print warning and continue
-            self.warn("Could not find {} (see README). Will not be able to determine MAC organizations.".format(ouifilepath))
+            self.logger.warning("Could not find {} (see README). Will not be able to determine MAC organizations.".format(ouifilepath))
 
     def packet_handler(self, pkt):
         if not pkt.smac or not pkt.dmac:
@@ -61,6 +62,7 @@ class DshellPlugin(dshell.core.PacketPlugin):
         if not self.quiet:
             self.write("", smac_org=smac_org, dmac_org=dmac_org, **pkt.info())
         return pkt
+
 
 if __name__ == "__main__":
     print(DshellPlugin())

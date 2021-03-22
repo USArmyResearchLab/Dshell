@@ -19,11 +19,10 @@ import datetime
 import inspect
 import ipaddress
 import logging
-import os
-#import pprint
-import struct
+import warnings
 from collections import defaultdict
 from multiprocessing import Value
+from typing import Iterable, List, Tuple
 
 # Dshell imports
 from dshell.output.output import Output
@@ -31,14 +30,15 @@ from dshell.dshellgeoip import DshellGeoIP, DshellFailedGeoIP
 
 # third-party imports
 import pcapy
+from pypacker import pypacker
 from pypacker.layer12 import can, ethernet, ieee80211, linuxcc, ppp, pppoe, radiotap
 from pypacker.layer3 import ip, ip6, icmp, icmp6
 from pypacker.layer4 import tcp, udp
 
-logging.basicConfig(format="%(levelname)s (%(name)s) - %(message)s")
-logger = logging.getLogger("dshell.core")
 
-__version__ = "3.1.3"
+logger = logging.getLogger(__name__)
+
+__version__ = "3.2.1"
 
 class SequenceNumberError(Exception):
     """
@@ -46,6 +46,7 @@ class SequenceNumberError(Exception):
     See Blob.reassemble function
     """
     pass
+
 
 class DataError(Exception):
     """
@@ -57,9 +58,10 @@ class DataError(Exception):
 
 # Create GeoIP refrence object
 try:
-    geoip = DshellGeoIP(logger=logging.getLogger("dshellgeoip.py"))
+    geoip = DshellGeoIP()
 except FileNotFoundError:
-    logger.error("Could not find GeoIP data files! Country and ASN lookups will not be possible. Check README for instructions on where to find and install necessary data files.")
+    logger.warning(
+        "Could not find GeoIP data files! Country and ASN lookups will not be possible. Check README for instructions on where to find and install necessary data files.")
     geoip = DshellFailedGeoIP()
 
 
@@ -76,11 +78,10 @@ def print_handler_exception(e, plugin, handler):
         handler:    name of the handler function
     """
     etype = e.__class__.__name__
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.error("The {!s} for the {!r} plugin raised an exception and failed! ({}: {!s})".format(handler, plugin.name, etype, e))
-        logger.exception(e)
-    else:
-        logger.error("The {!s} for the {!r} plugin raised an exception and failed! ({}: {!s}) Use --debug for more details.".format(handler, plugin.name, etype, e))
+    logger.error(
+        "The {!s} for the {!r} plugin raised an exception and failed! ({}: {!s})".format(
+            handler, plugin.name, etype, e))
+    logger.debug(e, exc_info=True)
 
 
 class PacketPlugin(object):
@@ -106,15 +107,11 @@ class PacketPlugin(object):
         handled_conn_count:     number of connections this plugin has passed
                                 through a handler function
         out:            output module instance
-        raw_decoder:        pypacker module to use for unpacking packet
         link_layer_type:    numeric label for link layer
-        striplayers:    number of layers to automatically strip before handling
-                        (such as PPPoE, IP-over-IP, etc.)
         defrag_ip:      rebuild fragmented IP packets (default: True)
     """
 
-    IP_PROTOCOL_MAP = dict((v, k[9:]) for k, v in ip.__dict__.items() if type(v) == int and k.startswith('IP_PROTO_') and k != 'IP_PROTO_HOPOPTS')
-
+    # TODO: Move attributes like name, author, and description to be class attributes instead of instance.
     def __init__(self, **kwargs):
         self.name = kwargs.get('name', __name__)
         self.description = kwargs.get('description', '')
@@ -123,11 +120,12 @@ class PacketPlugin(object):
         self.compiled_bpf = kwargs.get('compiled_bpf', None)
         self.vlan_bpf = kwargs.get("vlan_bpf", True)
         self.author = kwargs.get('author', '')
+        self.logger = logging.getLogger(inspect.getmodule(self).__name__)
+
         # define overall counts as multiprocessing Values for --parallel
         self.seen_packet_count = Value('i', 0)
         self.handled_packet_count = Value('i', 0)
-        self.seen_conn_count = Value('i', 0)
-        self.handled_conn_count = Value('i', 0)
+
         # dict of options specific to this plugin in format
         #       'optname':{configdict} translates to --pluginname_optname
         self.optiondict = kwargs.get('optiondict', {})
@@ -135,31 +133,38 @@ class PacketPlugin(object):
         # queues used by decode.py
         # if a handler decides a packet is worth keeping, it is placed in a
         # queue and later grabbed by decode.py to pass to subplugins
-        self.raw_packet_queue = []
-        self.packet_queue = []
+        self._packet_queue = []
 
         # self.out holds the output plugin instance
         # can be overwritten in decode.py by user selection
-        self.out = kwargs.get('output', Output(label=__name__))
+        self.out = kwargs.get('output', Output())
 
         # capture options
         # these can be updated with set_link_layer_type function
-        self.raw_decoder = ethernet.Ethernet    # assumed link-layer type
-        self.link_layer_type = 1                # assume Ethernet
-        # strip extra layers before IP/IPv6? (such as PPPoE, IP-over-IP, etc..)
-        self.striplayers = 0
+        self.link_layer_type = 1  # assume Ethernet
         # rebuild fragmented IP packets
         self.defrag_ip = True
 
         # holder for the pcap file being processing
         self.current_pcap_file = None
 
-        # get the list of functions for this plugin
-        # this is used in decode.py
-        self.members = tuple([x[0] for x in inspect.getmembers(self, inspect.ismethod)])
-
         # a holder for IP packet fragments when attempting to reassemble them
         self.packet_fragments = defaultdict(dict)
+
+    def produce_packets(self) -> Iterable["Packet"]:
+        """
+        Produces packets ready to be processed by the next plugin in the chain.
+        """
+        while self._packet_queue:
+            yield self._packet_queue.pop(0)
+
+    def flush(self):
+        """
+        Triggers plugin to finish processing any remaining packets that are being held onto.
+        """
+        # By default we don't need to do anything because any consumed packet is placed onto the queue
+        # right away.
+        pass
 
     def write(self, *args, **kwargs):
         """
@@ -173,27 +178,37 @@ class PacketPlugin(object):
         self.out.write(*args, **kwargs)
 
     def log(self, msg, level=logging.INFO):
-        '''
-        logs msg argument at specified level
+        """
+        Logs msg argument at specified level
         (default of INFO is for -v/--verbose output)
 
         Arguments:
             msg:        text string to log
             level:      logging level (default: logging.INFO)
-        '''
-        self.out.log(msg, level=level)
+        """
+        warnings.warn("log() function is deprecated. Please use logging library instead.", DeprecationWarning)
+        logger.log(level, msg)
 
     def debug(self, msg):
-        '''logs msg argument at debug level'''
-        self.log(msg, level=logging.DEBUG)
+        """
+        Logs msg argument at debug level
+        """
+        warnings.warn("debug() function is deprecated. Please use logging library instead.", DeprecationWarning)
+        logger.debug(msg)
 
     def warn(self, msg):
-        '''logs msg argument at warning level'''
-        self.log(msg, level=logging.WARN)
+        """
+        Logs msg argument at warning level
+        """
+        warnings.warn("warn() function is deprecated. Please use logging library instead.", DeprecationWarning)
+        logger.warning(msg)
 
     def error(self, msg):
-        '''logs msg argument at error level'''
-        self.log(msg, level=logging.ERROR)
+        """
+        Logs msg argument at error level.
+        """
+        warnings.warn("error() function is deprecated. Please use logging library instead.", DeprecationWarning)
+        logger.warning(msg)
 
     def __str__(self):
         return "<{}: {}>".format("Plugin", self.name)
@@ -202,45 +217,11 @@ class PacketPlugin(object):
         return '<{}: {}/{}/{}>'.format("Plugin", self.name, self.bpf,
                              ','.join([('%s=%s' % (x, str(self.__dict__.get(x)))) for x in self.optiondict]))
 
-    def set_link_layer_type(self, datalink):
-        """
-        Attempts to set the raw_decoder attribute based on the capture file's
-        datalink type, which is fetched by pcapy when used in decode.py. It
-        takes one argument: the numeric value of the link layer.
-
-        http://www.tcpdump.org/linktypes.html
-        """
-        # NOTE: Not all of these have been tested
-        # TODO add some more of these
-        self.link_layer_type = datalink
-        if datalink == 1:
-            self.raw_decoder = ethernet.Ethernet
-        elif datalink == 9:
-            self.raw_decoder = ppp.PPP
-        elif datalink == 51:
-            self.raw_decoder = pppoe.PPPoE
-        elif datalink == 105:
-            self.raw_decoder = ieee80211.IEEE80211
-        elif datalink == 113:
-            self.raw_decoder = linuxcc.LinuxCC
-        elif datalink == 127:
-            self.raw_decoder = radiotap.Radiotap
-        elif datalink == 204:
-            self.raw_decoder = ppp.PPP
-        elif datalink == 227:
-            self.raw_decoder = can.CAN
-        elif datalink == 228:
-            self.raw_decoder = ip.IP
-        elif datalink == 229:
-            self.raw_decoder = ip6.IP6
-        else:
-            # by default, assume Ethernet and hope for the best
-            self.link_layer_type = 1
-            self.raw_decoder = ethernet.Ethernet
-        self.debug("Datalink input: {!s}. Setting raw_decoder to {!r}, link_layer_type to {!s}".format(datalink, self.raw_decoder, self.link_layer_type))
-
+    # TODO: Perhaps make bpf a property which auto-triggers this when the property value is set.
     def recompile_bpf(self):
-        "Compile the BPF stored in the .bpf attribute"
+        """
+        Compile the BPF stored in the .bpf attribute
+        """
         # This function is normally only called by the decode.py script,
         # but can also be called by plugins that need to dynamically update
         # their filter.
@@ -254,7 +235,7 @@ class PacketPlugin(object):
             bpf = "({0}) or (vlan and {0})".format(self.bpf)
         else:
             bpf = self.bpf
-        self.debug("Compiling BPF as {!r}".format(bpf))
+        logger.debug("Compiling BPF as {!r}".format(bpf))
 
         # Compile BPF and handle any expected errors
         try:
@@ -265,14 +246,15 @@ class PacketPlugin(object):
             if str(e).startswith("no VLAN support for data link type"):
                 logger.error("Cannot use VLAN filters for {!r} plugin. Recommend running with --no-vlan argument.".format(self.name))
             elif str(e) == "syntax error":
-                logger.error("Fatal error when compiling BPF: {!r}".format(bpf))
-                sys.exit(1)
+                raise ValueError("Fatal error when compiling BPF: {!r}".format(bpf))
             else:
                 raise e
 
     def ipdefrag(self, pkt):
-        "IP fragment reassembly"
-        if isinstance(pkt, ip.IP): # IPv4
+        """
+        IP fragment reassembly
+        """
+        if isinstance(pkt, ip.IP):  # IPv4
             f = self.packet_fragments[(pkt.src, pkt.dst, pkt.id)]
             f[pkt.offset] = pkt
 
@@ -285,7 +267,7 @@ class PacketPlugin(object):
                 newpkt.bin(update_auto_fields=True)  # refresh checksum
                 return newpkt
 
-        elif isinstance(pkt, ip6.IP6): # IPv6
+        elif isinstance(pkt, ip6.IP6):  # IPv6
             # TODO handle IPv6 offsets https://en.wikipedia.org/wiki/IPv6_packet#Fragment
             return pkt
 
@@ -296,7 +278,7 @@ class PacketPlugin(object):
         This function is called immediately after plugin args are processed
         and set in decode.py. A plugin can overwrite this function to perform
         actions based on the arg values as soon as they are set, before
-        decoder.py does any further processing (e.g. updating a BPF based on
+        decode.py does any further processing (e.g. updating a BPF based on
         provided arguments before handling --ebpf and --bpf flags).
         """
         pass
@@ -308,7 +290,7 @@ class PacketPlugin(object):
         """
         self.premodule()
         self.out.setup()
-#        self.debug('{}'.format(pprint.pformat(self.__dict__)))
+        #        self.debug('{}'.format(pprint.pformat(self.__dict__)))
         self.debug(str(self.__dict__))
 
     def premodule(self):
@@ -328,7 +310,10 @@ class PacketPlugin(object):
         """
         self.postmodule()
         self.out.close()
-        self.log("{} seen packets, {} handled packets, {} seen connections, {} handled connections".format(self.seen_packet_count.value, self.handled_packet_count.value, self.seen_conn_count.value, self.handled_conn_count.value))
+        logger.info(
+            f"{self.seen_packet_count.value} seen packets, "
+            f"{self.handled_packet_count.value} handled packets "
+        )
 
     def postmodule(self):
         """
@@ -347,7 +332,7 @@ class PacketPlugin(object):
         """
         self.current_pcap_file = infile
         self.prefile(infile)
-        self.log('working on file "{}"'.format(infile))
+        logger.info('working on file "{}"'.format(infile))
 
     def prefile(self, infile=None):
         """
@@ -378,106 +363,35 @@ class PacketPlugin(object):
         """
         pass
 
-    def _raw_handler(self, pktlen, pkt, ts):
+    def filter(self, packet) -> bool:
         """
-        Accepts raw packet data (pktlen, pkt, ts), and handles decapsulation
-        and layer stripping.
+        Determines if plugin accepts the packet or it should be filtered out.
 
-        Then, it passes the massaged data to the child's raw_handler function,
-        if additional custom handling is necessary. The raw_handler function
-        should return (pktlen, pkt, ts) if it wishes to continue with the call
-        chain. Otherwise, return None.
+        :param packet: dshell.Packet object
+        :return:
         """
-#        with self.seen_packet_count.get_lock():
-#            self.seen_packet_count.value += 1
-#
-#        # call raw_handler and check its output
-#        # decode.py will continue down the chain if it returns proper output or
-#        # display a warning if it doesn't return the correct things
-#        try:
-#            raw_handler_out = self.raw_handler(pktlen, pkt, ts)
-#        except Exception as e:
-#            print_handler_exception(e, self, 'raw_handler')
-#            return
-#
-#        failed_msg = "The output of {} raw_handler must be (pktlen, pkt, ts) or a list of such lists! Further packet refinement and plugin chaining will not be possible".format(self.name)
-#        if raw_handler_out and isinstance(raw_handler_out, (list, tuple)):
-#            self.warn(failed_msg)
-#            return
+        # By default we filter by running the compiled bpf, but a plugin can
+        # inherit this to do extra stuff if desired.
+        if not self.compiled_bpf:
+            return True
+        return bool(self.compiled_bpf.filter(packet.rawpkt))
+
+    # NOTE: This was originally called '_packet_handler'
+    def consume_packet(self, packet: "Packet"):
+        """
+        Filters and defragments packet and then passes the packet along to the packet_handler()
+        function to determine whether we should pass the packet(s) along to the next plugin.
+        """
+        # First apply filter to packet.
+        if not self.filter(packet):
+            return
 
         with self.seen_packet_count.get_lock():
             self.seen_packet_count.value += 1
-        # decode with the raw decoder (probably ethernet.Ethernet)
-        pkt = self.raw_decoder(pkt)
 
-        # strip any intermediate layers (e.g. PPPoE, etc.)
-        # NOTE: make sure only the first plugin in a chain has striplayers set
-        for _ in range(self.striplayers):
-            try:
-                pkt = pkt.upper_layer
-            except AttributeError:
-                # No more layers to strip
-                break
-
-        # call raw_handler and check its output
-        # decode.py will continue down the chain if it returns proper output or
-        # display a warning if it doesn't return the correct things
-        try:
-            raw_handler_out = self.raw_handler(pktlen, pkt, ts)
-        except Exception as e:
-            print_handler_exception(e, self, 'raw_handler')
-            return
-        failed_msg = "The output of {} raw_handler must be (pktlen, pkt, ts) or a list of such lists! Further packet refinement and plugin chaining will not be possible".format(self.name)
-        if isinstance(raw_handler_out, (list, tuple)):
-            if len(raw_handler_out) == 3 and (
-                    isinstance(raw_handler_out[0], type(pktlen)) and
-                    isinstance(raw_handler_out[1], type(pkt)) and
-                    isinstance(raw_handler_out[2], type(ts))):
-                # If it returns one properly formed response, queue and continue
-                self.raw_packet_queue.append(raw_handler_out)
-            else:
-                # If it returns several responses, check them individually
-                for rhout in raw_handler_out:
-                    if isinstance(rhout, (list, tuple)) and \
-                            len(rhout) == 3 and \
-                            isinstance(rhout[0], type(pktlen)) and \
-                            isinstance(rhout[1], type(pkt)) and \
-                            isinstance(rhout[2], type(ts)):
-                        self.raw_packet_queue.append(rhout)
-                    elif rhout:
-                        self.warn(failed_msg)
-        elif raw_handler_out:
-            self.warn(failed_msg)
-
-
-    def raw_handler(self, pktlen, pkt, ts):
-        """
-        A placeholder.
-
-        Plugins will be able to overwrite this to perform custom activites on
-        raw packet data, such as decapsulation or decryption, before it
-        becomes further refined down the chain. It should return the same
-        arguments: pktlen, pkt, ts
-
-        Generally speaking, however, this should never be overwritten unless
-        there is a very, very good reason for it.
-
-        Arguments:
-            pktlen:     length of packet
-            pkt:        raw bytes of the packet
-            ts:         timestamp of packet
-        """
-        return pktlen, pkt, ts
-
-    def _packet_handler(self, pktlen, pkt, ts):
-        """
-        Accepts the output of raw_handler, pulls out addresses, and converts
-        it all into a dshell.Packet object before calling the child's
-        packet_handler function.
-        """
         # Attempt to perform defragmentation
-        if isinstance(pkt.upper_layer, (ip.IP, ip6.IP6)):
-            ipp = pkt.upper_layer
+        if isinstance(packet.pkt.upper_layer, (ip.IP, ip6.IP6)):
+            ipp = packet.pkt.upper_layer
             if self.defrag_ip:
                 ipp = self.ipdefrag(ipp)
                 if not ipp:
@@ -485,12 +399,7 @@ class PacketPlugin(object):
                     # on to next packet for now
                     return
                 else:
-                    pkt.upper_layer = ipp
-
-        # Initialize a Packet object
-        # This will be populated with values as we continue through
-        # the function and eventually be passed to packet_handler
-        packet = Packet(self, pktlen, pkt, ts)
+                    packet.pkt.upper_layer = ipp
 
         # call packet_handler and return its output
         # decode.py will continue down the chain if it returns anything
@@ -499,24 +408,26 @@ class PacketPlugin(object):
         except Exception as e:
             print_handler_exception(e, self, 'packet_handler')
             return
-        failed_msg = "The output from {} packet_handler must be of type dshell.Packet or a list of such objects! Handling connections or chaining from this plugin may not be possible.".format(self.name)
+        failed_msg = (
+            f"The output from {self.name} packet_handler must be of type dshell.Packet or a list of "
+            f"such objects! Handling connections or chaining from this plugin may not be possible."
+        )
         if isinstance(packet_handler_out, (list, tuple)):
             for phout in packet_handler_out:
                 if isinstance(phout, Packet):
-                    self.packet_queue.append(phout)
+                    self._packet_queue.append(phout)
                     with self.handled_packet_count.get_lock():
                         self.handled_packet_count.value += 1
                 elif phout:
-                    self.warn(failed_msg)
+                    logger.warning(failed_msg)
         elif isinstance(packet_handler_out, Packet):
-            self.packet_queue.append(packet_handler_out)
+            self._packet_queue.append(packet_handler_out)
             with self.handled_packet_count.get_lock():
                 self.handled_packet_count.value += 1
         elif packet_handler_out:
-            self.warn(failed_msg)
+            logger.warning(failed_msg)
 
-
-    def packet_handler(self, pkt):
+    def packet_handler(self, pkt: "Packet"):
         """
         A placeholder.
 
@@ -532,7 +443,6 @@ class PacketPlugin(object):
         return pkt
 
 
-
 class ConnectionPlugin(PacketPlugin):
     """
     Base level class that plugins will inherit.
@@ -540,14 +450,27 @@ class ConnectionPlugin(PacketPlugin):
     This plugin reassembles connections from packets.
     """
 
+    # Determines whether to filter out packets based on blobs or to produce packets directly.
+    # Turning this off if the plugin doesn't mark any blobs as hidden can help improve speed.
+    # TODO: There is another hacky reason this boolean exists.
+    #   Due to how we modified the blob creation code, the ACK and handshake methods are not
+    #   part of any of the blobs. Therefore, when the produce_packets() function is called, those
+    #   packets are missing if we are only producing the packets within a blob.
+    blob_filtering = True
+
     def __init__(self, **kwargs):
-        PacketPlugin.__init__(self, **kwargs)
+        super().__init__(**kwargs)
 
         # similar to packet_queue and raw_packet_queue in superclass
-        self.connection_queue = []
+        self._connection_queue = []
 
         # dictionary to store packets for connections according to addr()
-        self.connection_tracker = {}
+        self._connection_tracker = {}
+
+        # define overall counts as multiprocessing Values for --parallel
+        self.seen_conn_count = Value('i', 0)
+        self.handled_conn_count = Value('i', 0)
+
         # maximum number of blobs a connection will store before calling
         # connection_handler
         # it defaults to infinite, but this should be lowered for huge datasets
@@ -558,7 +481,66 @@ class ConnectionPlugin(PacketPlugin):
         # timestamp of the current packet, minus this value
         self.connection_timeout = datetime.timedelta(hours=1)
 
-    def _connection_handler(self, pkt):
+    def _postmodule(self):
+        """
+        Overwriting _postmodule to add log info about connection counts.
+        """
+        super()._postmodule()
+        logger.info(
+            f"{self.seen_conn_count.value} seen connections, "
+            f"{self.handled_conn_count.value} handled connections"
+        )
+
+    def produce_connections(self) -> Iterable["Connection"]:
+        """
+        Produces recently closed connections ready to be passed down to the next plugin in the chain.
+        """
+        while self._connection_queue:
+            connection = self._connection_queue.pop(0)
+            yield connection
+
+            # Attempt to clear out the connection, now that it has been handled.
+            conn_key = tuple(sorted(connection.addr))
+            try:
+                del self._connection_tracker[conn_key]
+            except KeyError:
+                # If the plugin messed with the connection's address, it might
+                # fail to clear it.
+                # TODO find some way to better handle this scenario
+                pass
+
+    def produce_packets(self) -> Iterable["Packet"]:
+        """
+        Produces packets ready to be processed by the next plugin in the chain.
+        """
+        # Produce connections
+        for connection in self.produce_connections():
+            if self.blob_filtering:
+                for blob in connection.blobs:
+                    if not blob.hidden:
+                        yield from blob.packets
+            else:
+                # TODO: Perhaps have a "hidden" field on the packet itself?
+                yield from connection.packets
+
+    def consume_packet(self, packet: "Packet"):
+        # First run super() to handle the individual packets.
+        super().consume_packet(packet)
+
+        # Now process any produced packets to be processed through connection handler.
+        for _packet in super().produce_packets():
+            self._connection_handler(_packet)
+
+    def flush(self):
+        """
+        Triggers plugin to finish processing any remaining packets that are being held onto.
+        """
+        super().flush()
+        # Call cleanup_connections() to force close any remaining open connections so they are
+        # on the queue ready to be passed down the chain.
+        self._cleanup_connections()
+
+    def _connection_handler(self, packet: "Packet"):
         """
         Accepts a single Packet object and tracks the connection it belongs to.
 
@@ -575,12 +557,12 @@ class ConnectionPlugin(PacketPlugin):
         connection should close.
         """
         # Sort the addr value for consistent dictionary key purposes
-        addr = tuple(sorted(pkt.addr))
+        addr = tuple(sorted(packet.addr))
 
         # If this is a new connection, initialize it and call the init handler
-        if addr not in self.connection_tracker:
-            conn = Connection(self, pkt)
-            self.connection_tracker[addr] = conn
+        if addr not in self._connection_tracker:
+            conn = Connection(packet)
+            self._connection_tracker[addr] = conn
             try:
                 self.connection_init_handler(conn)
             except Exception as e:
@@ -589,98 +571,61 @@ class ConnectionPlugin(PacketPlugin):
             with self.seen_conn_count.get_lock():
                 self.seen_conn_count.value += 1
         else:
-            conn = self.connection_tracker[addr]
+            conn = self._connection_tracker[addr]
+            conn.add_packet(packet)
 
         if conn.stop:
             # This connection was flagged to not be tracked
             return
 
-        # If connection data is about to change, we set it to a "dirty" state
-        # for future calls to connection_handler
-        if pkt.data:
-            conn.handled = False
+        # TODO: Do we need this? This flag is set to False when the connection is initialized and not
+        #   set to true until it is closed.
+        #   Is there any scenario where we would want to undo a True handled state?
+        # # If connection data is about to change, we set it to a "dirty" state
+        # # for future calls to connection_handler
+        # if pkt.data:
+        #     conn.handled = False
 
-        # Check and update the connection's current state
-        if pkt.tcp_flags in (tcp.TH_SYN, tcp.TH_ACK, tcp.TH_SYN|tcp.TH_ACK, tcp.TH_SYN|tcp.TH_ACK|tcp.TH_ECE):
-            # if new connection and a handshake is taking place, set to "init"
-            if not conn.client_state:
-                conn.client_state = "init"
-            if not conn.server_state:
-                conn.server_state = "init"
-        else:
-            # otherwise, if the connection isn't closed, set to "established"
-            # TODO do we care about "listen", "syn-sent", and other in-between states?
-            if conn.client_state not in ('finishing', 'closed'):
-                conn.client_state = "established"
-            if conn.server_state not in ('finishing', 'closed'):
-                conn.server_state = "established"
-
-        # Add the packet to the connection
-        # If the direction changed, a Blob will be returned for handling
-        # Note: The Blob will not be reassembled ahead of time. reassemble()
-        # must be run inside the blob_handler to catch any unwanted exceptions.
-        previous_blob = conn.add_packet(pkt)
-        if previous_blob:
-            try:
-                blob_handler_out = self._blob_handler(conn, previous_blob)
-            except Exception as e:
-                print_handler_exception(e, self, 'blob_handler')
-                return
-            if (blob_handler_out
-                    and not isinstance(blob_handler_out[0], Connection)
-                    and not isinstance(blob_handler_out[1], Blob)):
-                self.warn("The output from {} blob_handler must be of type (dshell.Connection, dshell.Blob)! Chaining plugins from here may not be possible.".format(self.name))
-                blob_handler_out = None
-            # If the blob_handler decides this Blob isn't interesting, it sets
-            # the hidden flag, which excludes it and its packets from further
-            # processing along the plugin chain
-            if not blob_handler_out:
-                conn.blobs[-2].hidden = True
-
-        # Check if a side of the connection is attempting to close the
-        # connection using a FIN or RST packet. Once both sides make a
-        # closing gesture, the connection is considered closed and handled
-        if pkt.tcp_flags and pkt.tcp_flags & (tcp.TH_RST | tcp.TH_FIN):
-            if pkt.sip == conn.clientip:
-                conn.client_state = "closed"
-            else:
-                conn.server_state = "closed"
-
-        if conn.connection_closed:
-            # Both sides have closed the connection
+        if conn.closed:
+            # Both sides have closed the connection, process blobs (messages) and
+            # close connection.
+            for blob in conn.blobs:
+                self._blob_handler(conn, blob)
             self._close_connection(conn, full=True)
 
-        elif len(conn.blobs) > self.maxblobs:
-            # Max blobs hit, so we will run connection_handler and decode.py
-            # will clear the connection's blob cache
-            self._close_connection(conn)
+        # TODO: Switch to a max_packets option.
+        # elif len(conn.blobs) > self.maxblobs:
+        #     # Max blobs hit, so we will run connection_handler and decode.py
+        #     # will clear the connection's blob cache
+        #     self._close_connection(conn)
 
         # The current connection is done processing. Now, look over existing
         # connections and look for any that have timed out.
         # This is based on comparing the time of the current packet, minus
         # self.connection_timeout, to each connection's current endtime value.
-        for addr, conn in self.connection_tracker.items():
+        for addr, conn in self._connection_tracker.items():
             if conn.handled:
                 continue
-            if conn.endtime < (pkt.dt - self.connection_timeout):
+            if conn.endtime < (packet.dt - self.connection_timeout):
                 self._close_connection(conn)
-
 
     def _close_connection(self, conn, full=False):
         """
         Runs through some standard actions to close a connection
         """
         try:
-           connection_handler_out = self.connection_handler(conn)
+            connection_handler_out = self.connection_handler(conn)
         except Exception as e:
             print_handler_exception(e, self, 'connection_handler')
             return None
         conn.handled = True
         if connection_handler_out and not isinstance(connection_handler_out, Connection):
-            self.warn("The output from {} connection_handler must be of type dshell.Connection! Chaining plugins from here may not be possible.".format(self.name))
+            logger.warning(
+                "The output from {} connection_handler must be of type dshell.Connection! Chaining plugins from here may not be possible.".format(
+                    self.name))
             connection_handler_out = None
         if connection_handler_out:
-            self.connection_queue.append(connection_handler_out)
+            self._connection_queue.append(connection_handler_out)
             with self.handled_conn_count.get_lock():
                 self.handled_conn_count.value += 1
         if full:
@@ -689,7 +634,6 @@ class ConnectionPlugin(PacketPlugin):
             except Exception as e:
                 print_handler_exception(e, self, 'connection_close_handler')
         return connection_handler_out
-
 
     def _cleanup_connections(self):
         """
@@ -700,44 +644,47 @@ class ConnectionPlugin(PacketPlugin):
         NOTE: Because the connections did not close cleanly,
         connection_close_handler will not be called.
         """
-        for addr, conn in self.connection_tracker.items():
+        for addr, conn in self._connection_tracker.items():
             if not conn.stop and not conn.handled:
                 # try to process the final blob in the connection
-                try:
-                    blob_handler_out = self._blob_handler(conn, conn.blobs[-1])
-                except Exception as e:
-                    print_handler_exception(e, self, 'blob_handler')
-                    blob_handler_out = None
-                if (blob_handler_out
-                        and not isinstance(blob_handler_out[0], Connection)
-                        and not isinstance(blob_handler_out[1], Blob)):
-                    self.warn("The output from {} blob_handler must be of type (dshell.Connection, dshell.Blob)! Chaining plugins from here may not be possible.".format(self.name))
-                    blob_handler_out = None
-                if not blob_handler_out:
-                    conn.blobs[-1].hidden = True
+                # TODO: Refactoring most likely made processing the last blob obsolete.
+                # self._blob_handler(conn, conn.blobs[-1])
 
                 # then, handle the connection itself
-                connection_handler_out = self._close_connection(conn)
-                yield connection_handler_out
+                self._close_connection(conn)
 
     def _purge_connections(self):
         """
         When finished with handling a pcap file, calling this will clear all
         caches in preparation for next file.
         """
-        self.connection_queue = []
-        self.connection_tracker = {}
+        self._connection_queue = []
+        self._connection_tracker = {}
 
-    def _blob_handler(self, conn, blob):
+    # TODO: Have blobs handled with consumer/producer model just like Packets and Connections?
+    def _blob_handler(self, conn: "Connection", blob: "Blob"):
         """
         Accepts a Connection and a Blob.
 
         It doesn't really do anything except call the blob_handler and is only
         here for consistency and possible future features.
         """
-        return self.blob_handler(conn, blob)
+        try:
+            blob_handler_out = self.blob_handler(conn, blob)
+        except Exception as e:
+            print_handler_exception(e, self, 'blob_handler')
+            blob_handler_out = None
+        if blob_handler_out:
+            connection, blob = blob_handler_out
+            if not isinstance(connection, Connection) or not isinstance(blob, Blob):
+                logger.warning(
+                    "The output from {} blob_handler must be of type (dshell.Connection, dshell.Blob)! Chaining plugins from here may not be possible.".format(
+                        self.name))
+                blob_handler_out = None
+        if not blob_handler_out:
+            blob.hidden = True
 
-    def blob_handler(self, conn, blob):
+    def blob_handler(self, conn: "Connection", blob: "Blob"):
         """
         A placeholder.
 
@@ -753,7 +700,7 @@ class ConnectionPlugin(PacketPlugin):
         """
         return conn, blob
 
-    def connection_init_handler(self, conn):
+    def connection_init_handler(self, conn: "Connection"):
         """
         A placeholder.
 
@@ -765,7 +712,7 @@ class ConnectionPlugin(PacketPlugin):
         """
         return
 
-    def connection_handler(self, conn):
+    def connection_handler(self, conn: "Connection"):
         """
         A placeholder.
 
@@ -779,7 +726,7 @@ class ConnectionPlugin(PacketPlugin):
         """
         return conn
 
-    def connection_close_handler(self, conn):
+    def connection_close_handler(self, conn: "Connection"):
         """
         A placeholder.
 
@@ -791,6 +738,7 @@ class ConnectionPlugin(PacketPlugin):
         """
         return
 
+
 class Packet(object):
     """
     Class for holding data of individual packets
@@ -798,13 +746,11 @@ class Packet(object):
     def __init__(self, plugin, pktlen, pkt, ts):
 
     Args:
-        plugin:     an instance of the plugin creating this packet
         pktlen:     length of packet
         pkt:        pypacker object for the packet
         ts:         timestamp of packet
 
     Attributes:
-        plugin:     name of plugin creating Packet
         ts:         timestamp of packet
         dt:         datetime of packet
         pkt:        pypacker object for the packet
@@ -835,13 +781,17 @@ class Packet(object):
         tcp_flags:  TCP header flags, or None
     """
 
-    def __init__(self, plugin, pktlen, pkt, ts):
-        self.plugin = plugin.name
-        self.ts = ts
-        self.dt = datetime.datetime.fromtimestamp(ts)
-        self.pkt = pkt
-        self.rawpkt = pkt.bin()
-        self.pktlen = pktlen
+    IP_PROTOCOL_MAP = dict((v, k[9:]) for k, v in ip.__dict__.items() if
+                           type(v) == int and k.startswith('IP_PROTO_') and k != 'IP_PROTO_HOPOPTS')
+
+    def __init__(self, pktlen, packet: pypacker.Packet, timestamp: int, frame=0):
+        # TODO: Use full variable names.
+        self.ts = timestamp
+        self.dt = datetime.datetime.fromtimestamp(timestamp)
+        self.frame = frame
+        self.pkt = packet
+        self.pktlen = pktlen  # TODO: Is this needed?
+
         self.byte_count = None
         self.sip = None
         self.dip = None
@@ -859,7 +809,7 @@ class Packet(object):
         self.dipasn = None
         self.protocol = None
         self.protocol_num = None
-        self.data = b''
+        self._data = None  # data cache
         self.sequence_number = None
         self.ack_number = None
         self.tcp_flags = None
@@ -871,8 +821,10 @@ class Packet(object):
         ip_p = None
         tcp_p = None
         udp_p = None
-        current_layer = pkt
+        current_layer = packet
+        self._highest_layer = current_layer
         while current_layer:
+            self._highest_layer = current_layer
             if isinstance(current_layer, ethernet.Ethernet) and not ethernet_p:
                 ethernet_p = current_layer
             elif isinstance(current_layer, ieee80211.IEEE80211) and not ieee80211_p:
@@ -914,6 +866,11 @@ class Packet(object):
             except AttributeError as e:
                 pass
 
+        # Cache ip, tcp, and udp layer for future use.
+        self._ip_layer = ip_p
+        self._tcp_layer = tcp_p
+        self._udp_layer = udp_p
+
         # process IP addresses and associated metadata (if applicable)
         if ip_p:
             # get IP addresses
@@ -926,7 +883,7 @@ class Packet(object):
 
             # get protocols, country codes, and ASNs
             self.protocol_num = ip_p.p if isinstance(ip_p, ip.IP) else ip_p.nxt
-            self.protocol = PacketPlugin.IP_PROTOCOL_MAP.get(self.protocol_num, str(self.protocol_num))
+            self.protocol = self.IP_PROTOCOL_MAP.get(self.protocol_num, str(self.protocol_num))
             self.sipcc, self.siplat, self.siplon = geoip.geoip_location_lookup(self.sip)
             self.sipasn = geoip.geoip_asn_lookup(self.sip)
             self.dipcc, self.diplat, self.diplon = geoip.geoip_location_lookup(self.dip)
@@ -938,19 +895,12 @@ class Packet(object):
             self.sequence_number = tcp_p.seq
             self.ack_number = tcp_p.ack
             self.tcp_flags = tcp_p.flags
-            self.data = tcp_p.body_bytes
 
         elif udp_p:
             self.sport = udp_p.sport
             self.dport = udp_p.dport
-            self.data = udp_p.body_bytes
-
-        else:
-            self.data = pkt.highest_layer.body_bytes
 
         self.byte_count = len(self.data)
-
-
 
     @property
     def addr(self):
@@ -962,13 +912,13 @@ class Packet(object):
         """
         # try using IP addresses first
         if self.sip or self.dip:
-            return ((self.sip, self.sport), (self.dip, self.dport))
+            return (self.sip, self.sport), (self.dip, self.dport)
         # then try MAC addresses
         elif self.smac or self.dmac:
-            return ((self.smac, self.sport), (self.dmac, self.dport))
+            return (self.smac, self.sport), (self.dmac, self.dport)
         # if all else fails, return Nones
         else:
-            return ((None, None), (None, None))
+            return (None, None), (None, None)
 
     @property
     def packet_tuple(self):
@@ -976,10 +926,72 @@ class Packet(object):
         A standard representation of the raw packet tuple:
         (self.pktlen, self.rawpkt, self.ts)
         """
-        return (self.pktlen, self.rawpkt, self.ts)
+        return self.pktlen, self.rawpkt, self.ts
+
+    @property
+    def rawpkt(self):
+        """
+        The raw data that represents the full packet.
+        """
+        return self.pkt.bin()
+
+    @property
+    def data(self):
+        """
+        Retrieve data bytes from TCP/UDP data layer. Backtracks to data from highest layer.
+        """
+        if self._data is None:
+            # NOTE: Using cached layers because pypacker's __getitem__ is slow.
+            # best_layer = self.pkt[tcp.TCP] or self.pkt[udp.UDP] or self.pkt.highest_layer
+            best_layer = self._tcp_layer or self._udp_layer or self._highest_layer
+
+            # Pypacker doesn't handle Ethernet trailers correctly, so we need to
+            # do some header calculation in order to determine the true body_bytes size.
+            ip_layer = self._ip_layer
+            tcp_layer = self._tcp_layer
+            if ip_layer and tcp_layer:
+                if isinstance(ip_layer, ip.IP):  # IPv4
+                    data_size = ip_layer.len - (ip_layer.header_len + tcp_layer.header_len)
+                    self._data = best_layer.body_bytes[:data_size]
+                else:  # IPv6
+                    # TODO handle extension headers
+                    data_size = ip_layer.dlen - tcp_layer.header_len
+                    self._data = best_layer.body_bytes[:data_size]
+            else:
+                self._data = best_layer.body_bytes
+
+        return self._data
+
+    @data.setter
+    def data(self, data):
+        """
+        Sets data bytes to TCP/UDP data layer. Backtracks to setting data at highest layer.
+        """
+        # NOTE: Using cached layers because pypacker's __getitem__ is slow.
+        # best_layer = self.pkt[tcp.TCP] or self.pkt[udp.UDP] or self.pkt.highest_layer
+        best_layer = self._tcp_layer or self._udp_layer or self._highest_layer
+
+        # Pypacker doesn't handle Ethernet trailers correctly, so we need to
+        # do some header calculation in order to determine the true body_bytes size.
+        ip_layer = self._ip_layer
+        tcp_layer = self._tcp_layer
+        if ip_layer and tcp_layer:
+            if isinstance(ip_layer, ip.IP):  # IPv4
+                data_size = ip_layer.len - (ip_layer.header_len + tcp_layer.header_len)
+                best_layer.body_bytes = data + best_layer.body_bytes[data_size:]
+            else:  # IPv6
+                # TODO handle extension headers
+                data_size = ip_layer.dlen - tcp_layer.header_len
+                best_layer.body_bytes = data + best_layer.body_bytes[data_size:]
+        else:
+            best_layer.body_bytes = data
+
+        self._data = data
+        # TODO: Rebuild packet object to allow for pypacker to do its thing.
 
     def __repr__(self):
-        return "%s  %16s :%-5s -> %5s :%-5s (%s -> %s)" % (self.dt, self.sip, self.sport, self.dip, self.dport, self.sipcc, self.dipcc)
+        return "%s  %16s :%-5s -> %5s :%-5s (%s -> %s)" % (
+            self.dt, self.sip, self.sport, self.dip, self.dport, self.sipcc, self.dipcc)
 
     def info(self):
         """
@@ -988,8 +1000,6 @@ class Packet(object):
         """
         d = dict(self.__dict__)
         del d['pkt']
-        del d['rawpkt']
-        del d['data']
         return d
 
 
@@ -1000,11 +1010,9 @@ class Connection(object):
     def __init__(self, plugin, first_packet)
 
     Args:
-        plugin:         an instance of the plugin creating this connection
         first_packet:   the first Packet object to initialize connection
 
     Attributes:
-        plugin:     name of the plugin that created object
         addr:       .addr attribute of first packet
         sip:        source IP
         smac:       source MAC address
@@ -1054,16 +1062,23 @@ class Connection(object):
 
     """
 
-    def __init__(self, plugin, first_packet):
+    # status
+    # NOTE: Using strings instead of int enum to stay backwards compatible.
+    INIT = "init"
+    ESTABLISHED = "established"
+    FINISHING = "finishing"
+    CLOSED = "closed"
+
+    def __init__(self, first_packet):
         """
         Initializes Connection object
 
         Args:
-            plugin:         an instance of the plugin creating this connection
             first_packet:   the first Packet object to initialize connection
         """
-        self.plugin = plugin.name
         self.addr = first_packet.addr
+        # TODO: Rename these variables to something more verbose like "source_ip"
+        #   I keep getting confused whether the "s" stands for "source" or "server".
         self.sip = first_packet.sip
         self.smac = first_packet.smac
         self.sport = first_packet.sport
@@ -1103,53 +1118,101 @@ class Connection(object):
         self.endtime = first_packet.dt
         self.client_state = None
         self.server_state = None
-        self.blobs = []
+        # self.blobs = []
+        self.packets = []  # keeps track of packets in connection.
         self.stop = False
         self.handled = False
         # used to determine if direction changes
         self._current_addr_pair = None
 
+        self.add_packet(first_packet)
+
     @property
     def duration(self):
-        "total seconds from starttime to endtime"
+        """
+        Total seconds from start_time to end_time.
+        """
         tdelta = self.endtime - self.starttime
         return tdelta.total_seconds()
 
     @property
-    def connection_closed(self):
-        return self.client_state == "closed" and self.server_state == "closed"
+    def closed(self):
+        return self.client_state == self.CLOSED and self.server_state == self.CLOSED
 
-    def add_packet(self, packet):
+    @property
+    def established(self):
+        return self.client_state == self.ESTABLISHED and self.server_state == self.ESTABLISHED
+
+    @property
+    def blobs(self) -> Iterable["Blob"]:
         """
-        Accepts a Packet object and attempts to push it into the current Blob.
-        If the direction changes, it creates a new Blob and returns the old one
-        to the caller.
+        Iterates the blobs (or messages) contained in this tcp connection
 
-        Args:
-            packet: a Packet object to add to the connection
-
-        Returns:
-            Previous Blob if direction has changed
+        This is dynamically generated on-demand based on the current set of packets in the connection.
         """
-        if packet.sip == self.clientip and (not packet.sport or packet.sport == self.clientport):
-            # packet moving from client to server
-            direction = 'cs'
-        else:
-            # packet moving from server to client
-            direction = 'sc'
+        blobs = []
 
-        if (packet.addr != self._current_addr_pair and packet.data) or len(self.blobs) == 0:
-            try:
-                old_blob = self.blobs[-1]
-            except IndexError:
-                old_blob = None
-            self.blobs.append(Blob(packet, direction))
-            self._current_addr_pair = packet.addr
-        else:
-            old_blob = None
+        for packet in self.packets:
+            # TODO: skipping packets without data greatly improves speed, but we may want to
+            #   allow them if we support using ack numbers.
+            if not packet.data:
+                continue
 
-        blob = self.blobs[-1]
-        blob.add_packet(packet)
+            # If we see a sequence for an old blob, this is a retransmission.
+            # Find the blob and add this packet.
+            # NOTE: There is probably more to it than this, but this seems to work for now.
+            seq = packet.sequence_number
+            if seq is not None:
+                found = False
+                for blob in blobs:
+                    if blob.sip == packet.sip and seq in blob.sequence_range:
+                        blob.add_packet(packet)
+                        found = True
+                        break
+                if found:
+                    continue
+
+            # Create a new message if the first or the other direction has started sending data.
+            if not blobs or (packet.sip != blobs[-1].sip and packet.data):
+                blobs.append(Blob(self, packet))
+
+            # Otherwise add packet to last blob.
+            else:
+                blobs[-1].add_packet(packet)
+
+        yield from blobs
+
+    def add_packet(self, packet: Packet):
+        """
+        Adds packet to connection.
+
+        :param packet: a Packet object to add to the connection
+        """
+        if packet.sip not in (self.sip, self.dip):
+            raise ValueError(f"Address {repr(packet.sip)} is not part of connection.")
+
+        self.packets.append(packet)
+
+        # Adjust state if packet is part of a startup or shutdown.
+        if packet.tcp_flags is not None:
+            # Acknowledging a completed handshake to open connection.
+            if packet.tcp_flags == (tcp.TH_SYN | tcp.TH_ACK):
+                self.server_state = self.ESTABLISHED
+                self.client_state = self.ESTABLISHED
+
+            # Asking to close connection.
+            elif packet.tcp_flags & (tcp.TH_FIN | tcp.TH_RST):
+                if packet.sip == self.serverip:
+                    self.server_state = self.FINISHING
+                else:
+                    self.client_state = self.FINISHING
+
+            # Closing connection acknowledged.
+            elif packet.tcp_flags & tcp.TH_ACK:
+                if packet.dip == self.serverip and self.server_state == self.FINISHING:
+                    self.server_state = self.CLOSED
+                elif packet.dip == self.clientip and self.client_state == self.FINISHING:
+                    self.client_state = self.CLOSED
 
         # Only count packets if they have data (i.e. ignore SYNs, ACKs, etc.)
         if packet.data:
@@ -1163,9 +1226,6 @@ class Connection(object):
         if packet.dt > self.endtime:
             self.endtime = packet.dt
 
-        if old_blob:
-            return old_blob
-
     def info(self):
         """
         Provides a dictionary with information about a connection. Useful for
@@ -1176,7 +1236,6 @@ class Connection(object):
         """
         d = dict(self.__dict__)
         d['duration'] = self.duration
-        del d['blobs']
         del d['stop']
         del d['_current_addr_pair']
         del d['handled']
@@ -1198,6 +1257,8 @@ class Connection(object):
             self.duration,
         )
 
+
+# TODO: Rename this "TCPBlob" and then have a more generic "Blob" class it inherits from.
 class Blob(object):
     """
     Class for holding and reassembling pieces of a connection.
@@ -1208,9 +1269,8 @@ class Blob(object):
     def __init__(self, first_packet, direction)
 
     Args:
+        connection:     The Connection object that this Blob comes from. (Used for validating packets.)
         first_packet:   the first Packet object to initialize Blob
-        direction:      direction of blob -
-                        'cs' for client-to-server, 'sc' for sever-to-client
 
     Attributes:
         addr:       .addr attribute of the first packet
@@ -1229,10 +1289,10 @@ class Blob(object):
         dipasn:     ASN of dest IP
         protocol:   text version of protocol in layer-3 header
         direction:  direction of the blob -
-                    'cs' for client-to-server, 'sc' for sever-to-client
+                    'cs' for client-to-server, 'sc' for server-to-client
         ack_sequence_numbers: set of ACK numbers from the receiver for ####################################
                               collected data packets
-        all_packets:    list of all packets in the blob
+        packets:    list of all packets in the blob
         hidden (bool):  Used to indicate that a Blob should not be passed to
                     next plugin. Can theoretically be overruled in, say, a
                     connection_handler to force a Blob to be passed to next
@@ -1242,11 +1302,13 @@ class Blob(object):
     # max offset before wrap, default is MAXINT32 for TCP sequence numbers
     MAX_OFFSET = 0xffffffff
 
-    def __init__(self, first_packet, direction):
+    CLIENT_TO_SERVER = 'cs'
+    SERVER_TO_CLIENT = 'sc'
+
+    def __init__(self, connection: Connection, first_packet):
+        self.connection = connection
         self.addr = first_packet.addr
         self.ts = first_packet.ts
-        self.starttime = first_packet.dt
-        self.endtime = first_packet.dt
         self.sip = first_packet.sip
         self.smac = first_packet.smac
         self.sport = first_packet.sport
@@ -1258,29 +1320,246 @@ class Blob(object):
         self.dipcc = first_packet.dipcc
         self.dipasn = first_packet.dipasn
         self.protocol = first_packet.protocol
-        self.direction = direction
-#        self.ack_sequence_numbers = {}
-        self.all_packets = []
-#        self.data_packets = []
+        #        self.ack_sequence_numbers = {}
+        self.packets = []
+        #        self.data_packets = []
         self.__data_bytes = b''
+
+        # Used for data caching
+        self._data = None
+        self._segments = None
+
+        # Maps sequence number with packets
+        self._seq_map = {}
 
         # Used to indicate that a Blob should not be passed to next plugin.
         # Can theoretically be overruled in, say, a connection_handler to
         # force a Blob to be passed to next plugin.
         self.hidden = False
 
+        if self.sip == self.connection.clientip and \
+                (not self.sport or self.sport == self.connection.clientport):
+            # packet moving from client to server
+            self.direction = self.CLIENT_TO_SERVER
+        else:
+            # packet moving from server to client
+            self.direction = self.SERVER_TO_CLIENT
+
+        self.add_packet(first_packet)
+
+    @property
+    def all_packets(self):
+        warnings.warn("all_packets has been replaced with packets attribute", DeprecationWarning)
+        return self.packets
+
+    @property
+    def starttime(self):
+        return min(packet.dt for packet in self.packets)
+
+    @property
+    def start_time(self):
+        return self.starttime
+
+    @property
+    def endtime(self):
+        return max(packet.dt for packet in self.packets)
+
+    @property
+    def end_time(self):
+        return self.endtime
+
+    @property
+    def frames(self) -> List[int]:
+        """
+        The frame identifiers for the packets which contain the message.
+        """
+        return [packet.frame for packet in self.packets]
+
+    def get_packets(self, start, end=None) -> List["Packet"]:
+        """
+        Returns the packets that contain data for the given start offset up to the end offset.
+        If end offset is not provided, just the packet containing the start offset is provided.
+        """
+        packets = []
+
+        # TODO: Double check logic on this.
+
+        # If not a TCP connection, return frames that had data.
+        if self.packets[0].tcp_flags is None:
+            offset = 0
+            for packet in self.packets:
+                if not packet.data:
+                    continue
+
+                offset += len(packet.data)
+                if offset > start:
+                    packets.append(packet)
+                    if end is None or offset >= end:
+                        break
+
+        # Otherwise, base offsets on sequence numbers.
+        else:
+            initial_seq = None
+            for seq, packet in self.segments:
+                if initial_seq is None:
+                    initial_seq = seq
+                offset = seq - initial_seq
+                end_offset = offset + len(packet.data)
+                if end_offset > start:
+                    packets.append(packet)
+                    if end is None or end_offset >= end:
+                        break
+
+        return packets
+
+    def get_frames(self, start, end=None) -> List[int]:
+        """
+        Returns frame identifiers for the packets that contain data for the given start offset
+        up to the end offset.
+        If end offset is not provided, just the frame identifier for the packet containing the
+        start offset is provided.
+        """
+        return [packet.frame for packet in self.get_packets(start, end=end)]
+
+    @property
+    def sequence_numbers(self) -> List[int]:
+        """
+        The starting sequence numbers found within the packets.
+        """
+        return list(self._seq_map.keys())
+
+    @property
+    def sequence_range(self) -> range:
+        """
+        The range of sequence numbers found within the packets.
+        """
+        sequence_numbers = self.sequence_numbers
+        if not sequence_numbers:
+            return range(0, 0)
+
+        min_seq = min(sequence_numbers)
+        max_seq = max(sequence_numbers)
+        return range(min_seq, max_seq + len(self._seq_map[max_seq].data))
+
+    @property
+    def segments(self) -> List[Tuple[int, "Packet"]]:
+        """
+        List of valid (sequence number, packet) tuples in order by sequence number.
+        """
+        if self._segments is not None:
+            return self._segments
+
+        segments = []
+        # Iterate through segments, ignoring segments that cause overlap in data.
+        expected_seq = None
+        prev_packet = None
+        for seq, packet in sorted(self._seq_map.items()):
+            if expected_seq is None:
+                expected_seq = seq
+
+            # If the sequence is greater than or equal to the expected sequence, this segment is valid.
+            if seq >= expected_seq:
+                segments.append((seq, packet))
+                missing_num_bytes = seq - expected_seq
+                if missing_num_bytes:
+                    logger.debug(
+                        f"Missing {missing_num_bytes} bytes of data between packets "
+                        f"{prev_packet and prev_packet.frame} and {packet.frame}"
+                    )
+                expected_seq += missing_num_bytes + len(packet.data)
+                prev_packet = packet
+
+            # TODO: Support rollover sequence numbers.
+            # Otherwise, we have some overlap in data and need to remove the invalid segment/packet
+            # and ignoring adding it to the segments list.
+            else:
+                logger.debug(f"Packet {packet.frame} contains overlapped data. Removing...")
+                self._remove_packet(packet)
+
+        self._segments = segments  # cache for next time.
+        return segments
+
     @property
     def data(self):
         """
-        Returns the reassembled byte string.
-
-        If it was not already reassembled, reassemble is called with default
-        arguments.
+        Raw data of tcp message.
         """
-        if not self.__data_bytes:
-            self.reassemble()
-        return self.__data_bytes
+        # Return cache if set.
+        if self._data is not None:
+            return self._data
 
+        # If not a TCP connection, just join packet data as they arrived on the wire.
+        # TODO: Move this logic to a base class.
+        if self.packets[0].tcp_flags is None:
+            return b''.join(packet.data for packet in self.packets)
+
+        # Join packet data based on segment data.
+        data = bytearray()  # using bytearray to improve speed.
+        initial_seq = None
+        for seq, packet in self.segments:
+            if initial_seq is None:
+                initial_seq = seq
+
+            # Check if we have missing packets.
+            if seq - initial_seq != len(data):
+                # buffer data with null bytes
+                data += b'\x00' * (seq - initial_seq - len(data))
+
+            data += packet.data
+        data = bytes(data)
+
+        self._data = data  # set cache
+        return data
+
+    @data.setter
+    def data(self, data):
+        """
+        Replaces message data with new data.
+
+        WARNING: Currently, data must match original length.
+        """
+        # TODO: Support different amount of bytes by adding packets or padding/removing packets.
+        orig_len = len(self.data)
+        if len(data) != orig_len:
+            raise ValueError(
+                f'Message data must be of the same length as original. '
+                f'Expected {orig_len} bytes, got {len(data)} bytes.')
+
+        # If not a TCP connection, just add data to packets in same order they arrived on wire.
+        if self.packets[0].tcp_flags is None:
+            written_bytes = 0
+            for packet in self.packets:
+                packet.data = data[written_bytes : written_bytes + len(packet.data)]
+                written_bytes += len(packet.data)
+            # Clear old cache.
+            self._data = None
+            return
+
+        # If TCP connection, add data based on sequence numbers.
+        written_bytes = 0
+        initial_seq = None
+        for seq, packet in self.segments:
+            if initial_seq is None:
+                initial_seq = seq
+
+            relative_seq = seq - initial_seq
+            if relative_seq < written_bytes:
+                raise RuntimeError(
+                    "Relative sequence is less then written byte count. "
+                    "Sequence numbers have be miss-calculated."
+                )
+            # Skip holes in data. (User should have put padding in these areas)
+            elif relative_seq != written_bytes:
+                written_bytes = relative_seq
+
+            packet.data = data[written_bytes:written_bytes + len(packet.data)]
+            written_bytes += len(packet.data)
+
+        # Clear old cache.
+        self._data = None
+
+    # TODO: Merge this in with the add_packet() logic, however I am unsure how using acknowledge numbers
+    #   works if we are only looking at one side.
     def reassemble(self, allow_padding=True, allow_overlap=True, padding=b'\x00'):
         """
         Rebuild the data string from the current list of data packets
@@ -1303,7 +1582,7 @@ class Blob(object):
         data = b""
         unacknowledged_data = []
         acknowledged_data = {}
-        for pkt in self.all_packets:
+        for pkt in self.packets:
             if not pkt.sequence_number:
                 # if there are no sequence numbers (i.e. not TCP), just rebuild
                 # in chronological order
@@ -1319,7 +1598,7 @@ class Blob(object):
                 ackpkt = pkt
                 for i, datapkt in enumerate(unacknowledged_data):
                     if (datapkt.ack_number == ackpkt.sequence_number
-                        and ackpkt.ack_number == (datapkt.sequence_number + len(datapkt.data))):
+                            and ackpkt.ack_number == (datapkt.sequence_number + len(datapkt.data))):
                         # if the seq/ack numbers align, this is the data packet
                         # we want
                         # TODO confirm this logic is correct
@@ -1355,7 +1634,8 @@ class Blob(object):
                 elif offset < nextoffset:
                     # data is overlapping
                     if not allow_overlap:
-                        raise SequenceNumberError("Overlapping data for sequence number %d %s" % (nextoffset, self.addr))
+                        raise SequenceNumberError(
+                            "Overlapping data for sequence number %d %s" % (nextoffset, self.addr))
 
                 nextoffset = (offset + len(segments[offset])) & self.MAX_OFFSET
                 data = data[:offset - startoffset] + \
@@ -1365,61 +1645,58 @@ class Blob(object):
 
         return data
 
-
-
-
-#        segments = {}
-#        for pkt in self.data_packets:
-#            if pkt.sequence_number:
-#                segments.setdefault(pkt.sequence_number, []).append(pkt.data)
-#            else:
-#                # if there are no sequence numbers (i.e. not TCP), just rebuild
-#                # in chronological order
-#                data += pkt.data
-#
-#        if not segments:
-#            # For non-sequential protocols, just return what we have
-#            self.__data_bytes = data
-#            return data
-#
-#        offsets = sorted(segments.keys())
-#
-#        # iterate over the segments and try to piece them together
-#        # handle any instances of missing or overlapping segments
-#        nextoffset = offsets[0]
-#        startoffset = offsets[0]
-#        for offset in offsets:
-#            # TODO do we still want to implement custom error handling?
-#            if offset > nextoffset:
-#                # data is missing
-#                if allow_padding:
-#                    data += padding * (offset - nextoffset)
-#                else:
-#                    raise SequenceNumberError("Missing data for sequence number %d %s" % (nextoffset, self.addr))
-#            elif offset < nextoffset:
-#                # data is overlapping
-#                if not allow_overlap:
-#                    raise SequenceNumberError("Overlapping data for sequence number %d %s" % (nextoffset, self.addr))
-##            nextoffset = (offset + len(segments[offset][dup])) & self.MAX_OFFSET
-##            if nextoffset in self.ack_sequence_numbers:
-#            if offset in self.ack_sequence_numbers:
-#                # If the data packet was acknowledged by the receiver,
-#                # we use the first packet received.
-#                dup = 0
-#            else:
-#                # If it went unacknowledged, we use the last packet and hope
-#                # for the best.
-#                dup = -1
-#            print(dup)
-#            print(offset)
-#            print(nextoffset)
-#            print(str(self.ack_sequence_numbers))
-#            nextoffset = (offset + len(segments[offset][dup])) & self.MAX_OFFSET
-#            data = data[:offset - startoffset] + \
-#                   segments[offset][dup] + \
-#                   data[nextoffset - startoffset:]
-#        self.__data_bytes = data
-#        return data
+    #        segments = {}
+    #        for pkt in self.data_packets:
+    #            if pkt.sequence_number:
+    #                segments.setdefault(pkt.sequence_number, []).append(pkt.data)
+    #            else:
+    #                # if there are no sequence numbers (i.e. not TCP), just rebuild
+    #                # in chronological order
+    #                data += pkt.data
+    #
+    #        if not segments:
+    #            # For non-sequential protocols, just return what we have
+    #            self.__data_bytes = data
+    #            return data
+    #
+    #        offsets = sorted(segments.keys())
+    #
+    #        # iterate over the segments and try to piece them together
+    #        # handle any instances of missing or overlapping segments
+    #        nextoffset = offsets[0]
+    #        startoffset = offsets[0]
+    #        for offset in offsets:
+    #            # TODO do we still want to implement custom error handling?
+    #            if offset > nextoffset:
+    #                # data is missing
+    #                if allow_padding:
+    #                    data += padding * (offset - nextoffset)
+    #                else:
+    #                    raise SequenceNumberError("Missing data for sequence number %d %s" % (nextoffset, self.addr))
+    #            elif offset < nextoffset:
+    #                # data is overlapping
+    #                if not allow_overlap:
+    #                    raise SequenceNumberError("Overlapping data for sequence number %d %s" % (nextoffset, self.addr))
+    ##            nextoffset = (offset + len(segments[offset][dup])) & self.MAX_OFFSET
+    ##            if nextoffset in self.ack_sequence_numbers:
+    #            if offset in self.ack_sequence_numbers:
+    #                # If the data packet was acknowledged by the receiver,
+    #                # we use the first packet received.
+    #                dup = 0
+    #            else:
+    #                # If it went unacknowledged, we use the last packet and hope
+    #                # for the best.
+    #                dup = -1
+    #            print(dup)
+    #            print(offset)
+    #            print(nextoffset)
+    #            print(str(self.ack_sequence_numbers))
+    #            nextoffset = (offset + len(segments[offset][dup])) & self.MAX_OFFSET
+    #            data = data[:offset - startoffset] + \
+    #                   segments[offset][dup] + \
+    #                   data[nextoffset - startoffset:]
+    #        self.__data_bytes = data
+    #        return data
 
     def info(self):
         """
@@ -1432,9 +1709,15 @@ class Blob(object):
         d = dict(self.__dict__)
         del d['hidden']
         del d['_Blob__data_bytes']
-        del d['all_packets']
+        del d['packets']
         return d
 
+
+    # TODO: Trying to determine if we should do this or take into account acknowledgement numbers
+    #   like originally implemented.
+    #   Perhaps rewrite their assemble to do some work in add_packet()?
+    #   Do we want to ensure all segments are acknowledged or should we avoid that so we can handle
+    #   partial/corrupt pcaps?
     def add_packet(self, packet):
         """
         Accepts a Packet object and stores it.
@@ -1442,7 +1725,76 @@ class Blob(object):
         Args:
             packet: a Packet object
         """
-        self.all_packets.append(packet)
+        # Clear old data and segment cache.
+        self._data = None
+        self._segments = None
 
-        if packet.dt > self.endtime:
-            self.endtime = packet.dt
+        seq = packet.sequence_number
+
+        # If packet is not TCP just add packet to list.
+        if seq is None:
+            self.packets.append(packet)
+            return
+
+        # If this a new sequence number we haven't seen before, add it to the map.
+        if seq not in self._seq_map:
+            self._seq_map[seq] = packet
+            self.packets.append(packet)
+            return
+
+        # Otherwise, if we already have the packet for the given sequence
+        # then we have a retransmission and will need to determine which packet to keep
+        # and possibly remove other packets if this packet overlaps them.
+        orig_packet = self._seq_map[seq]
+
+        # ignore duplicate packet.
+        if len(packet.data) <= len(orig_packet.data):
+            # TODO: should we still handle duplicate packets.
+            logger.debug(f'Ignoring duplicate packet: {packet.frame}')
+            return
+
+        # If this packet would create more inconsistencies in our sequence numbers (more holes)
+        # than the packet to be replaced, then this is most likely an out-of-order packet that the
+        # sender has ignored, and we should too.
+        orig_next_seq = seq + len(orig_packet.data)
+        next_seq = seq + len(packet.data)
+        if (
+            next_seq < max(self.sequence_numbers)
+            and orig_packet.data
+            and next_seq not in self._seq_map
+            and orig_next_seq in self._seq_map
+        ):
+            logger.debug(f'Ignoring out-of-order packet: {packet.frame}')
+            return
+
+        # Replace packet(s) with retransmitted packet
+
+        # First add the retransmitted packet, replacing the original packet matching the
+        # sequence number.
+        logger.debug(f'Replacing packet {orig_packet.frame} with {packet.frame}')
+        self._seq_map[seq] = packet
+        self.packets = [packet if p.sequence_number == seq else p for p in self.packets]
+
+        # Now remove any packets that contained data that is now part of the retransmitted packet.
+        packets_to_remove = []
+        for seq_, packet_ in self._seq_map.items():
+            if 0 < (seq_ - seq) < len(packet.data):
+                logger.debug(f'Removing packet: {packet_.frame}')
+                packets_to_remove.append(packet_)
+        # NOTE: need to remove packets outside the above loop because removing packets affect seq_map
+        for packet_ in packets_to_remove:
+            self._remove_packet(packet_)
+
+    def _remove_packet(self, packet):
+        """
+        Removes packet from Blob. (internal use only)
+        """
+        # Clear old data and segment cache.
+        self._data = None
+        self._segments = None
+
+        for seq, packet_ in list(self._seq_map.items()):
+            if packet_ == packet:
+                del self._seq_map[seq]
+
+        self.packets.remove(packet)
