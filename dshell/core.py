@@ -22,7 +22,7 @@ import logging
 import warnings
 from collections import defaultdict
 from multiprocessing import Value
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Tuple, Union
 
 # Dshell imports
 from dshell.output.output import Output
@@ -814,7 +814,6 @@ class Packet(object):
         self.pkt = packet
         self.pktlen = pktlen  # TODO: Is this needed?
 
-        self.byte_count = None
         self.sip = None
         self.dip = None
         self.sport = None
@@ -831,10 +830,13 @@ class Packet(object):
         self.dipasn = None
         self.protocol = None
         self.protocol_num = None
-        self._data = None  # data cache
         self.sequence_number = None
         self.ack_number = None
         self.tcp_flags = None
+
+        # attribute cache
+        self._byte_count = None
+        self._data = None
 
         # these are the layers Dshell will help parse
         # try to find them in the packet and eventually pull out useful data
@@ -843,24 +845,25 @@ class Packet(object):
         ip_p = None
         tcp_p = None
         udp_p = None
-        current_layer = packet
-        self._highest_layer = current_layer
-        while current_layer:
-            self._highest_layer = current_layer
-            if isinstance(current_layer, ethernet.Ethernet) and not ethernet_p:
-                ethernet_p = current_layer
-            elif isinstance(current_layer, ieee80211.IEEE80211) and not ieee80211_p:
-                ieee80211_p = current_layer
-            elif isinstance(current_layer, (ip.IP, ip6.IP6)) and not ip_p:
-                ip_p = current_layer
-            elif isinstance(current_layer, tcp.TCP) and not tcp_p:
-                tcp_p = current_layer
-            elif isinstance(current_layer, udp.UDP) and not udp_p:
-                udp_p = current_layer
-            try:
-                current_layer = current_layer.upper_layer
-            except AttributeError:
-                break
+        highest_layer = packet
+        for layer in packet:
+            highest_layer = layer
+            if ethernet_p is None and isinstance(layer, ethernet.Ethernet):
+                ethernet_p = layer
+            elif ieee80211_p is None and isinstance(layer, ieee80211.IEEE80211):
+                ieee80211_p = layer
+            elif ip_p is None and isinstance(layer, (ip.IP, ip6.IP6)):
+                ip_p = layer
+            elif tcp_p is None and isinstance(layer, tcp.TCP):
+                tcp_p = layer
+            elif udp_p is None and isinstance(layer, udp.UDP):
+                udp_p = layer
+        self._highest_layer = highest_layer
+        self._ethernet_layer = ethernet_p     # type: ethernet.Ethernet
+        self._ieee80211_layer = ieee80211_p   # type: ieee80211.IEEE80211
+        self._ip_layer = ip_p                 # type: Union[ip.IP, ip6.IP6]
+        self._tcp_layer = tcp_p               # type: tcp.TCP
+        self._udp_layer = udp_p               # type: udp.UDP
 
         # attempt to grab MAC addresses
         if ethernet_p:
@@ -887,11 +890,6 @@ class Packet(object):
                 self.dmac = ieee80211_p2.dst_s
             except AttributeError as e:
                 pass
-
-        # Cache ip, tcp, and udp layer for future use.
-        self._ip_layer = ip_p
-        self._tcp_layer = tcp_p
-        self._udp_layer = udp_p
 
         # process IP addresses and associated metadata (if applicable)
         if ip_p:
@@ -922,8 +920,6 @@ class Packet(object):
             self.sport = udp_p.sport
             self.dport = udp_p.dport
 
-        self.byte_count = len(self.data)
-
     @property
     def addr(self):
         """
@@ -941,6 +937,15 @@ class Packet(object):
         # if all else fails, return Nones
         else:
             return (None, None), (None, None)
+
+    @property
+    def byte_count(self) -> int:
+        """
+        Total number of payload bytes in the packet.
+        """
+        if self._byte_count is None:
+            self._byte_count = len(self.data)
+        return self._byte_count
 
     @property
     def packet_tuple(self):
@@ -1020,7 +1025,8 @@ class Packet(object):
         Provides a dictionary with information about a packet. Useful for
         calls to a plugin's write() function, e.g. self.write(\\*\\*pkt.info())
         """
-        d = dict(self.__dict__)
+        d = {k: v for k, v in self.__dict__ if not k.startswith('_')}
+        d['byte_count'] = self.byte_count
         del d['pkt']
         return d
 
@@ -1130,10 +1136,6 @@ class Connection(object):
         self.serverlon = first_packet.diplon
         self.serverasn = first_packet.dipasn
         self.protocol = first_packet.protocol
-        self.clientpackets = 0
-        self.clientbytes = 0
-        self.serverpackets = 0
-        self.serverbytes = 0
         self.ts = first_packet.ts
         self.dt = first_packet.dt
         self.starttime = first_packet.dt
@@ -1144,8 +1146,6 @@ class Connection(object):
         self.packets = []  # keeps track of packets in connection.
         self.stop = False
         self.handled = False
-        # used to determine if direction changes
-        self._current_addr_pair = None
 
         self.add_packet(first_packet)
 
@@ -1236,15 +1236,6 @@ class Connection(object):
                 elif packet.dip == self.clientip and self.client_state == self.FINISHING:
                     self.client_state = self.CLOSED
 
-        # Only count packets if they have data (i.e. ignore SYNs, ACKs, etc.)
-        if packet.data:
-            if packet.addr == self.addr:
-                self.clientpackets += 1
-                self.clientbytes += packet.byte_count
-            else:
-                self.serverpackets += 1
-                self.serverbytes += packet.byte_count
-
         if packet.dt > self.endtime:
             self.endtime = packet.dt
 
@@ -1256,12 +1247,55 @@ class Connection(object):
         Returns:
             Dictionary with information
         """
-        d = dict(self.__dict__)
+        d = {k: v for k, v in self.__dict__ if not k.startswith('_')}
         d['duration'] = self.duration
+        d['clientbytes'] = self.clientbytes
+        d['clientpackets'] = self.clientpackets
+        d['serverbytes'] = self.serverbytes
+        d['serverpackets'] = self.serverpackets
         del d['stop']
-        del d['_current_addr_pair']
         del d['handled']
         return d
+
+    def _client_packets(self) -> Iterable[Packet]:
+        for packet in self.packets:
+            if packet.addr == self.addr:
+                yield packet
+
+    def _server_packets(self) -> Iterable[Packet]:
+        for packet in self.packets:
+            if packet.addr != self.addr:
+                yield packet
+
+    @property
+    def clientbytes(self) -> int:
+        """
+        The total number of bytes form the client.
+        """
+        return sum(packet.byte_count for packet in self._client_packets())
+
+    @property
+    def clientpackets(self) -> int:
+        """
+        The total number of packets from the client.
+        """
+        # (Only counting packets with data.)
+        return sum(bool(packet.byte_count) for packet in self._client_packets())
+
+    @property
+    def serverbytes(self) -> int:
+        """
+        The total number of bytes form the server.
+        """
+        return sum(packet.byte_count for packet in self._server_packets())
+
+    @property
+    def serverpackets(self) -> int:
+        """
+        The total number of packets from the server.
+        """
+        # (Only counting packets with data.)
+        return sum(bool(packet.byte_count) for packet in self._server_packets())
 
     def __repr__(self):
         return '%s  %16s -> %16s  (%s -> %s)  %6s  %6s %5d  %5d  %7d  %7d  %-.4fs' % (
