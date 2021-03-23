@@ -149,7 +149,7 @@ class PacketPlugin(object):
         self.current_pcap_file = None
 
         # a holder for IP packet fragments when attempting to reassemble them
-        self.packet_fragments = defaultdict(dict)
+        self._packet_fragments = defaultdict(dict)
 
     def produce_packets(self) -> Iterable["Packet"]:
         """
@@ -165,6 +165,14 @@ class PacketPlugin(object):
         # By default we don't need to do anything because any consumed packet is placed onto the queue
         # right away.
         pass
+
+    def purge(self):
+        """
+        When finished with handling a pcap file, calling this will clear all
+        caches in preparation for next file.
+        """
+        self._packet_queue = []
+        self._packet_fragments = defaultdict(dict)
 
     def write(self, *args, **kwargs):
         """
@@ -255,14 +263,14 @@ class PacketPlugin(object):
         IP fragment reassembly
         """
         if isinstance(pkt, ip.IP):  # IPv4
-            f = self.packet_fragments[(pkt.src, pkt.dst, pkt.id)]
+            f = self._packet_fragments[(pkt.src, pkt.dst, pkt.id)]
             f[pkt.offset] = pkt
 
             if not pkt.flags & 0x1:
                 data = b''
                 for key in sorted(f.keys()):
                     data += f[key].body_bytes
-                del self.packet_fragments[(pkt.src, pkt.dst, pkt.id)]
+                del self._packet_fragments[(pkt.src, pkt.dst, pkt.id)]
                 newpkt = ip.IP(pkt.header_bytes + data)
                 newpkt.bin(update_auto_fields=True)  # refresh checksum
                 return newpkt
@@ -675,11 +683,12 @@ class ConnectionPlugin(PacketPlugin):
             if not conn.stop and not conn.handled:
                 self._close_connection(conn)
 
-    def _purge_connections(self):
+    def purge(self):
         """
         When finished with handling a pcap file, calling this will clear all
         caches in preparation for next file.
         """
+        super().purge()
         self._connection_queue = []
         self._connection_tracker = {}
 
@@ -894,12 +903,10 @@ class Packet(object):
         # process IP addresses and associated metadata (if applicable)
         if ip_p:
             # get IP addresses
-            sip = ipaddress.ip_address(ip_p.src)
-            dip = ipaddress.ip_address(ip_p.dst)
-            self.sip = sip.compressed
-            self.dip = dip.compressed
-            self.sip_bytes = sip.packed
-            self.dip_bytes = dip.packed
+            self.sip = ip_p.src_s
+            self.dip = ip_p.dst_s
+            self.sip_bytes = ip_p.src
+            self.dip_bytes = ip_p.dst
 
             # get protocols, country codes, and ASNs
             self.protocol_num = ip_p.p if isinstance(ip_p, ip.IP) else ip_p.nxt

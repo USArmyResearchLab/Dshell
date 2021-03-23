@@ -510,11 +510,7 @@ def process_files(inputs, **kwargs):
 
         clean_plugin_chain(0)
         for plugin in plugin_chain:
-            try:
-                plugin._purge_connections()
-            except AttributeError:
-                # probably just a packet plugin
-                pass
+            plugin.purge()
             plugin._postfile()
 
 
