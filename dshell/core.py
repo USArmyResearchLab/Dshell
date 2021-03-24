@@ -493,7 +493,7 @@ class ConnectionPlugin(PacketPlugin):
         # the timestamp of the connection's last packet is older than the
         # timestamp of the current packet, minus this value
         self.timeout = datetime.timedelta(hours=1)
-        # The frequency of packets to process between timeout checks.
+        # The number of packets to process between timeout checks.
         self.timeout_frequency = 300
         # The maximum number of open connections allowed at one time.
         # If the maximum number of connections is met, the oldest connections
@@ -872,7 +872,7 @@ class Packet(object):
         ip_p = None
         tcp_p = None
         udp_p = None
-        highest_layer = packet
+        highest_layer = None
         for layer in packet:
             highest_layer = layer
             if ethernet_p is None and isinstance(layer, ethernet.Ethernet):
@@ -1050,7 +1050,7 @@ class Packet(object):
         Provides a dictionary with information about a packet. Useful for
         calls to a plugin's write() function, e.g. self.write(\\*\\*pkt.info())
         """
-        d = {k: v for k, v in self.__dict__ if not k.startswith('_')}
+        d = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
         d['byte_count'] = self.byte_count
         del d['pkt']
         return d
@@ -1272,7 +1272,7 @@ class Connection(object):
         Returns:
             Dictionary with information
         """
-        d = {k: v for k, v in self.__dict__ if not k.startswith('_')}
+        d = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
         d['duration'] = self.duration
         d['clientbytes'] = self.clientbytes
         d['clientpackets'] = self.clientpackets
@@ -1787,9 +1787,8 @@ class Blob(object):
         Returns:
             Dictionary with information
         """
-        d = dict(self.__dict__)
+        d = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
         del d['hidden']
-        del d['_Blob__data_bytes']
         del d['packets']
         return d
 
