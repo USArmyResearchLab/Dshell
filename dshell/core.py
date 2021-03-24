@@ -16,8 +16,8 @@ for Blob, Connection, and Packet.
 
 # standard Python imports
 import datetime
+import heapq
 import inspect
-import ipaddress
 import logging
 import warnings
 from collections import defaultdict
@@ -471,6 +471,9 @@ class ConnectionPlugin(PacketPlugin):
 
         # similar to packet_queue and raw_packet_queue in superclass
         self._connection_queue = []
+        # Flag used to determine if we are ready to produce closed connections
+        # for the next plugin in the chain.
+        self._production_ready = True
 
         # dictionary to store packets for connections according to addr()
         # NOTE: Only currently unhandled (ie. open) connections are stored here.
@@ -511,19 +514,20 @@ class ConnectionPlugin(PacketPlugin):
         """
         Produces recently closed connections ready to be passed down to the next plugin in the chain.
         """
+        # Avoid producing connections if we are still waiting for an older connection to close.
+        # This helps to ensure connections are produced in the right order.... for the most part.
+        if not self._production_ready:
+            return
         while self._connection_queue:
-            connection = self._connection_queue.pop(0)
+            # Pop off oldest closed connection.
+            _, full, connection = heapq.heappop(self._connection_queue)
+            # Handle connection
+            success = self._handle_connection(connection, full=full)
+            if not success or connection.stop:
+                continue
+            # Pass along connection to next plugin.
             yield connection
-
-            # Attempt to clear out the connection, now that it has been handled.
-            conn_key = tuple(sorted(connection.addr))
-            try:
-                del self._connection_tracker[conn_key]
-            except KeyError:
-                # If the plugin messed with the connection's address, it might
-                # fail to clear it.
-                # TODO find some way to better handle this scenario
-                pass
+        self._production_ready = False
 
     def produce_packets(self) -> Iterable["Packet"]:
         """
@@ -590,10 +594,6 @@ class ConnectionPlugin(PacketPlugin):
             conn = self._connection_tracker[addr]
             conn.add_packet(packet)
 
-        if conn.stop:
-            # This connection was flagged to not be tracked
-            return
-
         # TODO: Do we need this? This flag is set to False when the connection is initialized and not
         #   set to true until it is closed.
         #   Is there any scenario where we would want to undo a True handled state?
@@ -623,34 +623,47 @@ class ConnectionPlugin(PacketPlugin):
         """
         Runs through some standard actions to close a connection
         """
-        try:
-            connection_handler_out = self.connection_handler(conn)
-        except Exception as e:
-            print_handler_exception(e, self, 'connection_handler')
-            return None
-        conn.handled = True
+        # Add connection to queue ready to be processed, based on order they were received on the wire.
+        heapq.heappush(self._connection_queue, (conn.packets[0].frame, full, conn))
 
-        # Remove connection from tracker once successfully closed/handled.
+        # Remove connection from tracker once in the queue.
         try:
             del self._connection_tracker[tuple(sorted(conn.addr))]
         except KeyError:
             pass
 
+    def _handle_connection(self, conn: "Connection", full=False) -> bool:
+        """
+        Handles produced connections.
+
+        :returns: True if connection was handled successfully.
+        """
+        try:
+            connection_handler_out = self.connection_handler(conn)
+        except Exception as e:
+            print_handler_exception(e, self, 'connection_handler')
+            return False
+        conn.handled = True
+
+        # TODO: Perhaps connection_handler() just returns a True or False indicating success?
         if connection_handler_out and not isinstance(connection_handler_out, Connection):
             logger.warning(
                 "The output from {} connection_handler must be of type dshell.Connection! Chaining plugins from here may not be possible.".format(
                     self.name))
             connection_handler_out = None
-        if connection_handler_out:
-            self._connection_queue.append(connection_handler_out)
-            with self.handled_conn_count.get_lock():
-                self.handled_conn_count.value += 1
+
+        if not connection_handler_out:
+            return False
+
+        with self.handled_conn_count.get_lock():
+            self.handled_conn_count.value += 1
+
         if full:
             try:
                 self.connection_close_handler(conn)
             except Exception as e:
                 print_handler_exception(e, self, 'connection_close_handler')
-        return connection_handler_out
+        return True
 
     def _timeout_connections(self, timestamp: datetime.datetime):
         """
@@ -670,6 +683,9 @@ class ConnectionPlugin(PacketPlugin):
             for conn in connections[self.max_open_connections:]:
                 self._close_connection(conn)
 
+        # We can produce connections again, now that we have handled lingering old connections.
+        self._production_ready = True
+
     def _cleanup_connections(self):
         """
         decode.py will often reach the end of packet capture before all of the
@@ -680,8 +696,9 @@ class ConnectionPlugin(PacketPlugin):
         connection_close_handler will not be called.
         """
         for conn in list(self._connection_tracker.values()):
-            if not conn.stop and not conn.handled:
+            if not conn.handled:
                 self._close_connection(conn)
+        self._production_ready = True
 
     def purge(self):
         """
@@ -691,6 +708,7 @@ class ConnectionPlugin(PacketPlugin):
         super().purge()
         self._connection_queue = []
         self._connection_tracker = {}
+        self._production_ready = False
 
     # TODO: Have blobs handled with consumer/producer model just like Packets and Connections?
     def _blob_handler(self, conn: "Connection", blob: "Blob"):
