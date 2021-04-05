@@ -65,20 +65,18 @@ def feed_plugin_chain(plugin_index: int, packet: Packet):
     Each plugin decides whether the packet(s) will proceed to the next
     plugin, i.e. act as a filter.
     """
-    global plugin_chain
+    if plugin_index >= len(plugin_chain):
+        # We are at the end of the chain.
+        return
 
     current_plugin = plugin_chain[plugin_index]
-    next_plugin_index = plugin_index + 1
-    if next_plugin_index >= len(plugin_chain):
-        next_plugin_index = None
 
     # Pass packet into plugin for processing.
     current_plugin.consume_packet(packet)
 
     # Process produced packets.
-    if next_plugin_index:
-        for _packet in current_plugin.produce_packets():
-            feed_plugin_chain(next_plugin_index, _packet)
+    for _packet in current_plugin.produce_packets():
+        feed_plugin_chain(plugin_index + 1, _packet)
 
 
 def clean_plugin_chain(plugin_index):
@@ -87,18 +85,20 @@ def clean_plugin_chain(plugin_index):
     It will go through the plugins and attempt to cleanup any connections
     that were not yet closed.
     """
+    if plugin_index >= len(plugin_chain):
+        # We are at the end of the chain
+        return
+
     current_plugin = plugin_chain[plugin_index]
-    next_plugin_index = plugin_index + 1
-    if next_plugin_index >= len(plugin_chain):
-        next_plugin_index = None
 
     # need to flush even if there are no more plugins in the chain to ensure all packets are processed.
     current_plugin.flush()
 
-    if next_plugin_index:
-        for _packet in current_plugin.produce_packets():
-            feed_plugin_chain(next_plugin_index, _packet)
-        clean_plugin_chain(next_plugin_index)
+    # Feed plugin chain with lingering packets released by flush.
+    for _packet in current_plugin.produce_packets():
+        feed_plugin_chain(plugin_index + 1, _packet)
+
+    clean_plugin_chain(plugin_index + 1)
 
 
 def decompress_file(filepath, extension, unzipdir):
@@ -503,11 +503,7 @@ def process_files(inputs, **kwargs):
 
         clean_plugin_chain(0)
         for plugin in plugin_chain:
-            try:
-                plugin._purge_connections()
-            except AttributeError:
-                # probably just a packet plugin
-                pass
+            plugin.purge()
             plugin._postfile()
 
 
