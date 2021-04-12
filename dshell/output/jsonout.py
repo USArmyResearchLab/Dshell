@@ -5,7 +5,7 @@ This output module converts plugin output into JSON
 from datetime import datetime
 import json
 from dshell.output.output import Output
-
+from dshell.core import Packet, Blob, Connection
 
 class JSONOutput(Output):
     """
@@ -39,6 +39,9 @@ class JSONOutput(Output):
             return serial
         if isinstance(obj, bytes):
             serial = repr(obj)
+            return serial
+        if isinstance(obj, (Connection, Blob, Packet)):
+            serial = obj.info()
             return serial
         raise TypeError ("Type not serializable ({})".format(str(type(obj))))
 

@@ -1280,6 +1280,7 @@ class Connection(object):
         d['serverpackets'] = self.serverpackets
         del d['stop']
         del d['handled']
+        del d['packets']
         return d
 
     def _client_packets(self) -> Iterable[Packet]:
