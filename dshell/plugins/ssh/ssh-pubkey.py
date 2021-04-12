@@ -75,12 +75,14 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
             mlist = messagefactory(d)
             stop_blobs = False
             for m in mlist:
-                if m.message_code == 31:
+                if m.message_code == 31 or m.message_code == 33:
                     info['host_pubkey'] = m.host_pub_key
                     stop_blobs = True
                     break
             if stop_blobs:
                 break
+
+        #print(repr(info))
 
         if 'host_pubkey' in info:
             # Calculate key fingerprints
@@ -129,7 +131,7 @@ class sshmessage:
         self.body = data[6:4+self.packet_len]
 
         # ECDH Kex Reply
-        if self.message_code == 31:
+        if self.message_code == 31 or self.message_code == 33:
             host_key_len = struct.unpack(">I", self.body[0:4])[0]
             full_key_net = self.body[4:4+host_key_len]
             key_type_name_len = struct.unpack(">I", full_key_net[0:4])[0]

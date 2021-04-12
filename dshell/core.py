@@ -16,13 +16,13 @@ for Blob, Connection, and Packet.
 
 # standard Python imports
 import datetime
+import heapq
 import inspect
-import ipaddress
 import logging
 import warnings
 from collections import defaultdict
 from multiprocessing import Value
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Tuple, Union
 
 # Dshell imports
 from dshell.output.output import Output
@@ -149,7 +149,7 @@ class PacketPlugin(object):
         self.current_pcap_file = None
 
         # a holder for IP packet fragments when attempting to reassemble them
-        self.packet_fragments = defaultdict(dict)
+        self._packet_fragments = defaultdict(dict)
 
     def produce_packets(self) -> Iterable["Packet"]:
         """
@@ -165,6 +165,14 @@ class PacketPlugin(object):
         # By default we don't need to do anything because any consumed packet is placed onto the queue
         # right away.
         pass
+
+    def purge(self):
+        """
+        When finished with handling a pcap file, calling this will clear all
+        caches in preparation for next file.
+        """
+        self._packet_queue = []
+        self._packet_fragments = defaultdict(dict)
 
     def write(self, *args, **kwargs):
         """
@@ -255,14 +263,14 @@ class PacketPlugin(object):
         IP fragment reassembly
         """
         if isinstance(pkt, ip.IP):  # IPv4
-            f = self.packet_fragments[(pkt.src, pkt.dst, pkt.id)]
+            f = self._packet_fragments[(pkt.src, pkt.dst, pkt.id)]
             f[pkt.offset] = pkt
 
             if not pkt.flags & 0x1:
                 data = b''
                 for key in sorted(f.keys()):
                     data += f[key].body_bytes
-                del self.packet_fragments[(pkt.src, pkt.dst, pkt.id)]
+                del self._packet_fragments[(pkt.src, pkt.dst, pkt.id)]
                 newpkt = ip.IP(pkt.header_bytes + data)
                 newpkt.bin(update_auto_fields=True)  # refresh checksum
                 return newpkt
@@ -463,8 +471,12 @@ class ConnectionPlugin(PacketPlugin):
 
         # similar to packet_queue and raw_packet_queue in superclass
         self._connection_queue = []
+        # Flag used to determine if we are ready to produce closed connections
+        # for the next plugin in the chain.
+        self._production_ready = True
 
         # dictionary to store packets for connections according to addr()
+        # NOTE: Only currently unhandled (ie. open) connections are stored here.
         self._connection_tracker = {}
 
         # define overall counts as multiprocessing Values for --parallel
@@ -475,11 +487,18 @@ class ConnectionPlugin(PacketPlugin):
         # connection_handler
         # it defaults to infinite, but this should be lowered for huge datasets
         self.maxblobs = float("inf")  # infinite
+
         # how long do we wait before deciding a connection is "finished"
         # time is checked by iterating over cached connections and checking if
         # the timestamp of the connection's last packet is older than the
         # timestamp of the current packet, minus this value
-        self.connection_timeout = datetime.timedelta(hours=1)
+        self.timeout = datetime.timedelta(hours=1)
+        # The number of packets to process between timeout checks.
+        self.timeout_frequency = 300
+        # The maximum number of open connections allowed at one time.
+        # If the maximum number of connections is met, the oldest connections
+        # will be force closed.
+        self.max_open_connections = 1000
 
     def _postmodule(self):
         """
@@ -495,19 +514,20 @@ class ConnectionPlugin(PacketPlugin):
         """
         Produces recently closed connections ready to be passed down to the next plugin in the chain.
         """
+        # Avoid producing connections if we are still waiting for an older connection to close.
+        # This helps to ensure connections are produced in the right order.... for the most part.
+        if not self._production_ready:
+            return
         while self._connection_queue:
-            connection = self._connection_queue.pop(0)
+            # Pop off oldest closed connection.
+            _, full, connection = heapq.heappop(self._connection_queue)
+            # Handle connection
+            success = self._handle_connection(connection, full=full)
+            if not success or connection.stop:
+                continue
+            # Pass along connection to next plugin.
             yield connection
-
-            # Attempt to clear out the connection, now that it has been handled.
-            conn_key = tuple(sorted(connection.addr))
-            try:
-                del self._connection_tracker[conn_key]
-            except KeyError:
-                # If the plugin messed with the connection's address, it might
-                # fail to clear it.
-                # TODO find some way to better handle this scenario
-                pass
+        self._production_ready = False
 
     def produce_packets(self) -> Iterable["Packet"]:
         """
@@ -574,10 +594,6 @@ class ConnectionPlugin(PacketPlugin):
             conn = self._connection_tracker[addr]
             conn.add_packet(packet)
 
-        if conn.stop:
-            # This connection was flagged to not be tracked
-            return
-
         # TODO: Do we need this? This flag is set to False when the connection is initialized and not
         #   set to true until it is closed.
         #   Is there any scenario where we would want to undo a True handled state?
@@ -599,41 +615,76 @@ class ConnectionPlugin(PacketPlugin):
         #     # will clear the connection's blob cache
         #     self._close_connection(conn)
 
-        # The current connection is done processing. Now, look over existing
-        # connections and look for any that have timed out.
-        # This is based on comparing the time of the current packet, minus
-        # self.connection_timeout, to each connection's current endtime value.
-        for addr, conn in self._connection_tracker.items():
-            if conn.handled:
-                continue
-            if conn.endtime < (packet.dt - self.connection_timeout):
-                self._close_connection(conn)
+        # Check for and close old connections every so often.
+        if self.handled_packet_count.value % self.timeout_frequency == 0:
+            self._timeout_connections(packet.dt)
 
     def _close_connection(self, conn, full=False):
         """
         Runs through some standard actions to close a connection
         """
+        # Add connection to queue ready to be processed, based on order they were received on the wire.
+        heapq.heappush(self._connection_queue, (conn.packets[0].frame, full, conn))
+
+        # Remove connection from tracker once in the queue.
+        try:
+            del self._connection_tracker[tuple(sorted(conn.addr))]
+        except KeyError:
+            pass
+
+    def _handle_connection(self, conn: "Connection", full=False) -> bool:
+        """
+        Handles produced connections.
+
+        :returns: True if connection was handled successfully.
+        """
         try:
             connection_handler_out = self.connection_handler(conn)
         except Exception as e:
             print_handler_exception(e, self, 'connection_handler')
-            return None
+            return False
         conn.handled = True
+
+        # TODO: Perhaps connection_handler() just returns a True or False indicating success?
         if connection_handler_out and not isinstance(connection_handler_out, Connection):
             logger.warning(
                 "The output from {} connection_handler must be of type dshell.Connection! Chaining plugins from here may not be possible.".format(
                     self.name))
             connection_handler_out = None
-        if connection_handler_out:
-            self._connection_queue.append(connection_handler_out)
-            with self.handled_conn_count.get_lock():
-                self.handled_conn_count.value += 1
+
+        if not connection_handler_out:
+            return False
+
+        with self.handled_conn_count.get_lock():
+            self.handled_conn_count.value += 1
+
         if full:
             try:
                 self.connection_close_handler(conn)
             except Exception as e:
                 print_handler_exception(e, self, 'connection_close_handler')
-        return connection_handler_out
+        return True
+
+    def _timeout_connections(self, timestamp: datetime.datetime):
+        """
+        Checks for and force closes connections that have been alive for too long.
+        It also closes the oldest connections if too many connections are open.
+        """
+        # Force close any connections that have timed out.
+        # This is based on comparing the time of the current packet, minus
+        # self.timeout, to each connection's current endtime value.
+        for conn in list(self._connection_tracker.values()):
+            if conn.endtime < (timestamp - self.timeout):
+                self._close_connection(conn)
+
+        # Force close oldest connections if we have too many.
+        if len(self._connection_tracker) > self.max_open_connections:
+            connections = sorted(self._connection_tracker.values(), key=lambda conn: conn.endtime, reverse=True)
+            for conn in connections[self.max_open_connections:]:
+                self._close_connection(conn)
+
+        # We can produce connections again, now that we have handled lingering old connections.
+        self._production_ready = True
 
     def _cleanup_connections(self):
         """
@@ -644,22 +695,20 @@ class ConnectionPlugin(PacketPlugin):
         NOTE: Because the connections did not close cleanly,
         connection_close_handler will not be called.
         """
-        for addr, conn in self._connection_tracker.items():
-            if not conn.stop and not conn.handled:
-                # try to process the final blob in the connection
-                # TODO: Refactoring most likely made processing the last blob obsolete.
-                # self._blob_handler(conn, conn.blobs[-1])
-
-                # then, handle the connection itself
+        for conn in list(self._connection_tracker.values()):
+            if not conn.handled:
                 self._close_connection(conn)
+        self._production_ready = True
 
-    def _purge_connections(self):
+    def purge(self):
         """
         When finished with handling a pcap file, calling this will clear all
         caches in preparation for next file.
         """
+        super().purge()
         self._connection_queue = []
         self._connection_tracker = {}
+        self._production_ready = False
 
     # TODO: Have blobs handled with consumer/producer model just like Packets and Connections?
     def _blob_handler(self, conn: "Connection", blob: "Blob"):
@@ -792,7 +841,6 @@ class Packet(object):
         self.pkt = packet
         self.pktlen = pktlen  # TODO: Is this needed?
 
-        self.byte_count = None
         self.sip = None
         self.dip = None
         self.sport = None
@@ -809,10 +857,13 @@ class Packet(object):
         self.dipasn = None
         self.protocol = None
         self.protocol_num = None
-        self._data = None  # data cache
         self.sequence_number = None
         self.ack_number = None
         self.tcp_flags = None
+
+        # attribute cache
+        self._byte_count = None
+        self._data = None
 
         # these are the layers Dshell will help parse
         # try to find them in the packet and eventually pull out useful data
@@ -821,24 +872,25 @@ class Packet(object):
         ip_p = None
         tcp_p = None
         udp_p = None
-        current_layer = packet
-        self._highest_layer = current_layer
-        while current_layer:
-            self._highest_layer = current_layer
-            if isinstance(current_layer, ethernet.Ethernet) and not ethernet_p:
-                ethernet_p = current_layer
-            elif isinstance(current_layer, ieee80211.IEEE80211) and not ieee80211_p:
-                ieee80211_p = current_layer
-            elif isinstance(current_layer, (ip.IP, ip6.IP6)) and not ip_p:
-                ip_p = current_layer
-            elif isinstance(current_layer, tcp.TCP) and not tcp_p:
-                tcp_p = current_layer
-            elif isinstance(current_layer, udp.UDP) and not udp_p:
-                udp_p = current_layer
-            try:
-                current_layer = current_layer.upper_layer
-            except AttributeError:
-                break
+        highest_layer = None
+        for layer in packet:
+            highest_layer = layer
+            if ethernet_p is None and isinstance(layer, ethernet.Ethernet):
+                ethernet_p = layer
+            elif ieee80211_p is None and isinstance(layer, ieee80211.IEEE80211):
+                ieee80211_p = layer
+            elif ip_p is None and isinstance(layer, (ip.IP, ip6.IP6)):
+                ip_p = layer
+            elif tcp_p is None and isinstance(layer, tcp.TCP):
+                tcp_p = layer
+            elif udp_p is None and isinstance(layer, udp.UDP):
+                udp_p = layer
+        self._highest_layer = highest_layer
+        self._ethernet_layer = ethernet_p     # type: ethernet.Ethernet
+        self._ieee80211_layer = ieee80211_p   # type: ieee80211.IEEE80211
+        self._ip_layer = ip_p                 # type: Union[ip.IP, ip6.IP6]
+        self._tcp_layer = tcp_p               # type: tcp.TCP
+        self._udp_layer = udp_p               # type: udp.UDP
 
         # attempt to grab MAC addresses
         if ethernet_p:
@@ -866,20 +918,13 @@ class Packet(object):
             except AttributeError as e:
                 pass
 
-        # Cache ip, tcp, and udp layer for future use.
-        self._ip_layer = ip_p
-        self._tcp_layer = tcp_p
-        self._udp_layer = udp_p
-
         # process IP addresses and associated metadata (if applicable)
         if ip_p:
             # get IP addresses
-            sip = ipaddress.ip_address(ip_p.src)
-            dip = ipaddress.ip_address(ip_p.dst)
-            self.sip = sip.compressed
-            self.dip = dip.compressed
-            self.sip_bytes = sip.packed
-            self.dip_bytes = dip.packed
+            self.sip = ip_p.src_s
+            self.dip = ip_p.dst_s
+            self.sip_bytes = ip_p.src
+            self.dip_bytes = ip_p.dst
 
             # get protocols, country codes, and ASNs
             self.protocol_num = ip_p.p if isinstance(ip_p, ip.IP) else ip_p.nxt
@@ -900,8 +945,6 @@ class Packet(object):
             self.sport = udp_p.sport
             self.dport = udp_p.dport
 
-        self.byte_count = len(self.data)
-
     @property
     def addr(self):
         """
@@ -919,6 +962,15 @@ class Packet(object):
         # if all else fails, return Nones
         else:
             return (None, None), (None, None)
+
+    @property
+    def byte_count(self) -> int:
+        """
+        Total number of payload bytes in the packet.
+        """
+        if self._byte_count is None:
+            self._byte_count = len(self.data)
+        return self._byte_count
 
     @property
     def packet_tuple(self):
@@ -950,8 +1002,13 @@ class Packet(object):
             ip_layer = self._ip_layer
             tcp_layer = self._tcp_layer
             if ip_layer and tcp_layer:
-                data_size = ip_layer.len - (ip_layer.header_len + tcp_layer.header_len)
-                self._data = best_layer.body_bytes[:data_size]
+                if isinstance(ip_layer, ip.IP):  # IPv4
+                    data_size = ip_layer.len - (ip_layer.header_len + tcp_layer.header_len)
+                    self._data = best_layer.body_bytes[:data_size]
+                else:  # IPv6
+                    # TODO handle extension headers
+                    data_size = ip_layer.dlen - tcp_layer.header_len
+                    self._data = best_layer.body_bytes[:data_size]
             else:
                 self._data = best_layer.body_bytes
 
@@ -971,8 +1028,13 @@ class Packet(object):
         ip_layer = self._ip_layer
         tcp_layer = self._tcp_layer
         if ip_layer and tcp_layer:
-            data_size = ip_layer.len - (ip_layer.header_len + tcp_layer.header_len)
-            best_layer.body_bytes = data + best_layer.body_bytes[data_size:]
+            if isinstance(ip_layer, ip.IP):  # IPv4
+                data_size = ip_layer.len - (ip_layer.header_len + tcp_layer.header_len)
+                best_layer.body_bytes = data + best_layer.body_bytes[data_size:]
+            else:  # IPv6
+                # TODO handle extension headers
+                data_size = ip_layer.dlen - tcp_layer.header_len
+                best_layer.body_bytes = data + best_layer.body_bytes[data_size:]
         else:
             best_layer.body_bytes = data
 
@@ -988,7 +1050,8 @@ class Packet(object):
         Provides a dictionary with information about a packet. Useful for
         calls to a plugin's write() function, e.g. self.write(\\*\\*pkt.info())
         """
-        d = dict(self.__dict__)
+        d = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
+        d['byte_count'] = self.byte_count
         del d['pkt']
         return d
 
@@ -1098,10 +1161,6 @@ class Connection(object):
         self.serverlon = first_packet.diplon
         self.serverasn = first_packet.dipasn
         self.protocol = first_packet.protocol
-        self.clientpackets = 0
-        self.clientbytes = 0
-        self.serverpackets = 0
-        self.serverbytes = 0
         self.ts = first_packet.ts
         self.dt = first_packet.dt
         self.starttime = first_packet.dt
@@ -1112,8 +1171,6 @@ class Connection(object):
         self.packets = []  # keeps track of packets in connection.
         self.stop = False
         self.handled = False
-        # used to determine if direction changes
-        self._current_addr_pair = None
 
         self.add_packet(first_packet)
 
@@ -1204,15 +1261,6 @@ class Connection(object):
                 elif packet.dip == self.clientip and self.client_state == self.FINISHING:
                     self.client_state = self.CLOSED
 
-        # Only count packets if they have data (i.e. ignore SYNs, ACKs, etc.)
-        if packet.data:
-            if packet.addr == self.addr:
-                self.clientpackets += 1
-                self.clientbytes += packet.byte_count
-            else:
-                self.serverpackets += 1
-                self.serverbytes += packet.byte_count
-
         if packet.dt > self.endtime:
             self.endtime = packet.dt
 
@@ -1224,12 +1272,55 @@ class Connection(object):
         Returns:
             Dictionary with information
         """
-        d = dict(self.__dict__)
+        d = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
         d['duration'] = self.duration
+        d['clientbytes'] = self.clientbytes
+        d['clientpackets'] = self.clientpackets
+        d['serverbytes'] = self.serverbytes
+        d['serverpackets'] = self.serverpackets
         del d['stop']
-        del d['_current_addr_pair']
         del d['handled']
         return d
+
+    def _client_packets(self) -> Iterable[Packet]:
+        for packet in self.packets:
+            if packet.addr == self.addr:
+                yield packet
+
+    def _server_packets(self) -> Iterable[Packet]:
+        for packet in self.packets:
+            if packet.addr != self.addr:
+                yield packet
+
+    @property
+    def clientbytes(self) -> int:
+        """
+        The total number of bytes form the client.
+        """
+        return sum(packet.byte_count for packet in self._client_packets())
+
+    @property
+    def clientpackets(self) -> int:
+        """
+        The total number of packets from the client.
+        """
+        # (Only counting packets with data.)
+        return sum(bool(packet.byte_count) for packet in self._client_packets())
+
+    @property
+    def serverbytes(self) -> int:
+        """
+        The total number of bytes form the server.
+        """
+        return sum(packet.byte_count for packet in self._server_packets())
+
+    @property
+    def serverpackets(self) -> int:
+        """
+        The total number of packets from the server.
+        """
+        # (Only counting packets with data.)
+        return sum(bool(packet.byte_count) for packet in self._server_packets())
 
     def __repr__(self):
         return '%s  %16s -> %16s  (%s -> %s)  %6s  %6s %5d  %5d  %7d  %7d  %-.4fs' % (
@@ -1696,9 +1787,8 @@ class Blob(object):
         Returns:
             Dictionary with information
         """
-        d = dict(self.__dict__)
+        d = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
         del d['hidden']
-        del d['_Blob__data_bytes']
         del d['packets']
         return d
 

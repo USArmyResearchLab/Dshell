@@ -24,6 +24,7 @@ End: %(endtime)s
 %(data)s
 """
     _DEFAULT_FORMAT = _PACKET_FORMAT
+    _DEFAULT_DELIM = "<br />"
 
     _HTML_HEADER = """
 <html>
@@ -68,7 +69,6 @@ End: %(endtime)s
             'sc': 'green',   # server-to-client is green
             '--': 'blue',   # everything else is blue
         }
-        self.delim = "<br />"
         self.hexmode = kwargs.get('hex', False)
         self.format_is_set = False
 
@@ -98,6 +98,8 @@ End: %(endtime)s
                         rawdata.append((blob.data, blob.direction))
             elif type(arg) == dshell.core.Packet:
                 rawdata.append((arg.pkt.body_bytes, kwargs.get('direction', '--')))
+            elif type(arg) == tuple:
+                rawdata.append(arg)
             else:
                 rawdata.append((arg, kwargs.get('direction', '--')))
 

@@ -22,7 +22,12 @@ class DshellPlugin(HTTPPlugin):
         )
 
     def http_handler(self, conn, request, response):
+     
         if request:
+            if request.method=="":
+                # It's impossible to have a properly formed HTTP request without a method
+                # indicating, the httpplugin is calling http_handler without a full object
+                return None
             # Collect basics about the request, if available
             method = request.method
             host = request.headers.get("host", "")
@@ -37,6 +42,9 @@ class DshellPlugin(HTTPPlugin):
             version = ""
 
         if response:
+            if response.status == "" and response.reason == "":
+                # Another indication of improperly parsed HTTP object in httpplugin
+                return None
             # Collect basics about the response, if available
             status = response.status
             reason = response.reason
