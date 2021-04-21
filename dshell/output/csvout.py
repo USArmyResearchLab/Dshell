@@ -10,7 +10,7 @@ class CSVOutput(Output):
     Takes specified fields provided to the write function and print them in
     a CSV format.
 
-    Delimiter can be set with --oarg delim=<char>
+    Delimiter can be set with --oarg delimiter=<char>
 
     A header row can be printed with --oarg header
 
@@ -26,7 +26,7 @@ class CSVOutput(Output):
     _DESCRIPTION = "CSV format output"
 
     def __init__(self, *args, **kwargs):
-        self.delimiter = kwargs.get('delim', self._DEFAULT_DELIM)
+        self.delimiter = kwargs.get('delimiter', self._DEFAULT_DELIM)
         if self.delimiter == 'tab':
             self.delimiter = '\t'
 
@@ -52,6 +52,10 @@ class CSVOutput(Output):
         fmt = self.delimiter.join('%%(%s)r' % f for f in columns)
         fmt += "\n"
         super().set_format(fmt)
+
+    def set_oargs(self, **kwargs):
+        super().set_oargs(**kwargs)
+        self.set_format()
 
     def setup(self):
         if self.use_header:
