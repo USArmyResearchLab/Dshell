@@ -23,7 +23,7 @@ class Output:
     Arguments:
         format : 'format string' to override default formatstring for output class
         timeformat : 'format string' for datetime representation
-        delim : set a delimiter for CSV or similar output
+        delimiter : set a delimiter for CSV or similar output
         nobuffer : true/false to run flush() after every relevant write
         noclobber : set to true to avoid overwriting existing files
         fh : existing open file handle
@@ -36,12 +36,12 @@ class Output:
     _DESCRIPTION = "Base output class"
 
     def __init__(
-            self, file=None, fh=None, mode='w', format=None, timeformat=None, delim=None, nobuffer=False,
+            self, file=None, fh=None, mode='w', format=None, timeformat=None, delimiter=None, nobuffer=False,
             noclobber=False, extra=None, **unused_kwargs
     ):
         self.format_fields = []
         self.timeformat = timeformat or self._DEFAULT_TIME_FORMAT
-        self.delim = delim or self._DEFAULT_DELIM
+        self.delimiter = delimiter or self._DEFAULT_DELIM
         self.nobuffer = nobuffer
         self.noclobber = noclobber
         self.extra = extra
@@ -81,6 +81,19 @@ class Output:
                 self.fh = open(filename, mode)
             else:
                 self.fh = open(filename, self.mode)
+
+    def set_oargs(self, format=None, noclobber=None, delimiter=None, timeformat=None, **unused_kwargs):
+        """
+        Process the standard oargs from the command line.
+        """
+        if delimiter:
+            self.delimiter = delimiter
+        if timeformat:
+            self.timeformat = timeformat
+        if noclobber:
+            self.noclobber = noclobber
+        if format:
+            self.set_format(format)
 
     def set_format(self, fmt):
         """Set the output format to a new format string"""
@@ -149,16 +162,19 @@ class Output:
             try:
                 outdict['ts'] = datetime.fromtimestamp(float(outdict['ts']))
                 outdict['ts'] = outdict['ts'].strftime(self.timeformat)
-                outdict['starttime'] = datetime.fromtimestamp(float(outdict['starttime']))
-                outdict['starttime'] = outdict['starttime'].strftime(self.timeformat)
-                outdict['endtime'] = datetime.fromtimestamp(float(outdict['endtime']))
-                outdict['endtime'] = outdict['endtime'].strftime(self.timeformat)
             except TypeError:
                 pass
             except KeyError:
                 pass
             except ValueError:
                 pass
+
+        if "starttime" in outdict and isinstance(outdict["starttime"], datetime):
+            outdict['starttime'] = outdict['starttime'].strftime(self.timeformat)
+        if "endtime" in outdict and isinstance(outdict["endtime"], datetime):
+            outdict['endtime'] = outdict['endtime'].strftime(self.timeformat)
+        if 'dt' in outdict and isinstance(outdict["dt"], datetime):
+            outdict['dt'] = outdict['dt'].strftime(self.timeformat)
 
         # Create directional arrows
         if 'dir_arrow' not in outdict:
@@ -181,7 +197,7 @@ class Output:
                     extras.append("%s=%s" % (key, val))
 
         # Dump the args into a 'data' field
-        outdict['data'] = self.delim.join(map(str, args))
+        outdict['data'] = self.delimiter.join(map(str, args))
 
         # Create an optional 'extra' field
         if self.extra:

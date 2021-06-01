@@ -65,20 +65,18 @@ def feed_plugin_chain(plugin_index: int, packet: Packet):
     Each plugin decides whether the packet(s) will proceed to the next
     plugin, i.e. act as a filter.
     """
-    global plugin_chain
+    if plugin_index >= len(plugin_chain):
+        # We are at the end of the chain.
+        return
 
     current_plugin = plugin_chain[plugin_index]
-    next_plugin_index = plugin_index + 1
-    if next_plugin_index >= len(plugin_chain):
-        next_plugin_index = None
 
     # Pass packet into plugin for processing.
     current_plugin.consume_packet(packet)
 
     # Process produced packets.
-    if next_plugin_index:
-        for _packet in current_plugin.produce_packets():
-            feed_plugin_chain(next_plugin_index, _packet)
+    for _packet in current_plugin.produce_packets():
+        feed_plugin_chain(plugin_index + 1, _packet)
 
 
 def clean_plugin_chain(plugin_index):
@@ -87,18 +85,20 @@ def clean_plugin_chain(plugin_index):
     It will go through the plugins and attempt to cleanup any connections
     that were not yet closed.
     """
+    if plugin_index >= len(plugin_chain):
+        # We are at the end of the chain
+        return
+
     current_plugin = plugin_chain[plugin_index]
-    next_plugin_index = plugin_index + 1
-    if next_plugin_index >= len(plugin_chain):
-        next_plugin_index = None
 
     # need to flush even if there are no more plugins in the chain to ensure all packets are processed.
     current_plugin.flush()
 
-    if next_plugin_index:
-        for _packet in current_plugin.produce_packets():
-            feed_plugin_chain(next_plugin_index, _packet)
-        clean_plugin_chain(next_plugin_index)
+    # Feed plugin chain with lingering packets released by flush.
+    for _packet in current_plugin.produce_packets():
+        feed_plugin_chain(plugin_index + 1, _packet)
+
+    clean_plugin_chain(plugin_index + 1)
 
 
 def decompress_file(filepath, extension, unzipdir):
@@ -207,26 +207,30 @@ def main(plugin_args=None, **kwargs):
     # If alternate output module is selected, tell each plugin to use that
     # instead
     if kwargs.get("omodule", None):
-        # Check if any user-defined output arguments are provided
-        oargs = {}
-        if kwargs.get("oargs", None):
-            for oarg in kwargs["oargs"]:
-                if '=' in oarg:
-                    key, val = oarg.split('=', 1)
-                    oargs[key] = val
-                else:
-                    oargs[oarg] = True
         try:
             # TODO: Create a factory classmethod in the base Output class (e.g. "from_name()") instead.
             omodule = import_module("dshell.output."+kwargs["omodule"])
             omodule = omodule.obj
             for plugin in plugin_chain:
                 # TODO: Should we have a single instance of the Output module used by all plugins?
-                oomodule = omodule(**oargs)
+                oomodule = omodule()
                 plugin.out = oomodule
         except ImportError as e:
             logger.error("Could not import module named '{}'. Use --list-output flag to see available modules".format(kwargs["omodule"]))
             sys.exit(1)
+
+    # Check if any user-defined output arguments are provided
+    if kwargs.get("oargs", None):
+        oargs = {}
+        for oarg in kwargs["oargs"]:
+            if '=' in oarg:
+                key, val = oarg.split('=', 1)
+                oargs[key] = val
+            else:
+                oargs[oarg] = True
+        logger.debug("oargs: %s" % oargs)
+        for plugin in plugin_chain:
+            plugin.out.set_oargs(**oargs)
 
     # If writing to a file, set for each output module here
     if kwargs.get("outfile", None):
@@ -503,11 +507,7 @@ def process_files(inputs, **kwargs):
 
         clean_plugin_chain(0)
         for plugin in plugin_chain:
-            try:
-                plugin._purge_connections()
-            except AttributeError:
-                # probably just a packet plugin
-                pass
+            plugin.purge()
             plugin._postfile()
 
 
@@ -588,7 +588,7 @@ def main_command_line():
                             help="Use specified output module for plugins instead of defaults. For example, --omodule=jsonout for JSON output.")
     output_group.add_argument("--oarg", type=str, metavar="ARG=VALUE",
                             dest="oargs", action="append",
-                            help="Supply a specific keyword argument to user-defined output module. Only used in conjunction with --omodule. Can be used multiple times for multiple arguments. Not using an equal sign will treat it as a flag and set the value to True. Example: --omodule=alertout --oarg \"timeformat=%%H %%M %%S\"")
+                            help="Supply a specific keyword argument to plugins' output modules. Can be used multiple times for multiple arguments. Not using an equal sign will treat it as a flag and set the value to True. Example: --oarg \"delimiter=:\" --oarg \"timeformat=%%H %%M %%S\"")
     output_group.add_argument("-q", "--quiet", action="store_true",
                             help="Disable logging")
     output_group.add_argument("-W", metavar="OUTFILE", dest="outfile",
