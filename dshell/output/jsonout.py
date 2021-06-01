@@ -25,7 +25,7 @@ class JSONOutput(Output):
             # before printing output
             self.extra = False
         if args and 'data' not in kwargs:
-            kwargs['data'] = self.delim.join(map(str, args))
+            kwargs['data'] = self.delimiter.join(map(str, args))
         jsondata = json.dumps(kwargs, ensure_ascii=self.ensure_ascii, default=self.json_default)
         super().write(jsondata=jsondata)
 
