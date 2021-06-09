@@ -390,7 +390,7 @@ def read_packets(input: str, interface=False, bpf=None, count=None) -> Iterable[
     if interface:
         # Listen on an interface if the option is set
         try:
-            capture = pcapy.open_live(input, 65536, True, 0)
+            capture = pcapy.open_live(input, 65536, True, 1)
         except pcapy.PcapError as e:
             # User probably doesn't have permission to listen on interface
             # In any case, print just the error without traceback
