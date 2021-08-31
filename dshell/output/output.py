@@ -82,7 +82,7 @@ class Output:
             else:
                 self.fh = open(filename, self.mode)
 
-    def set_oargs(self, format=None, noclobber=None, delimiter=None, timeformat=None, **unused_kwargs):
+    def set_oargs(self, format=None, noclobber=None, delimiter=None, timeformat=None, hex=None, **unused_kwargs):
         """
         Process the standard oargs from the command line.
         """
@@ -92,6 +92,8 @@ class Output:
             self.timeformat = timeformat
         if noclobber:
             self.noclobber = noclobber
+        if hex:
+            self.hexmode = hex
         if format:
             self.set_format(format)
 
