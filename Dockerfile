@@ -4,29 +4,30 @@ COPY . /src
 
 WORKDIR /src
 
-ARG BUILD_DEPS="curl gcc g++ libpcap-dev"
-ARG OUI_SRC="http://standards-oui.ieee.org/oui.txt"
+ARG OUI_SRC="http://standards-oui.ieee.org/oui/oui.txt"
 
-RUN apk add --no-cache ${BUILD_DEPS} && python -m venv "/opt/venv"
+ENV VIRTUAL_ENV="/opt/venv"
 
-RUN curl --location --silent --output "/src/dshell/data/oui.txt" "${OUI_SRC}"
+RUN apk add cargo curl g++ gcc rust libpcap-dev libffi-dev \
+    && python3 -m venv "${VIRTUAL_ENV}" \
+    && curl --location --silent --output "/src/dshell/data/oui.txt" "${OUI_SRC}"
 
-ENV PATH="/opt/venv/bin:${PATH}"
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
-RUN pip install --upgrade pip wheel && pip install --use-feature=2020-resolver .
+RUN pip install --upgrade pip wheel && pip install .
 
 FROM python:3-alpine
 
-ARG RUN_DEPS="bash libstdc++ libpcap"
+ENV VIRTUAL_ENV="/opt/venv"
 
-COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder "${VIRTUAL_ENV}/" "${VIRTUAL_ENV}/"
 
-RUN apk add --no-cache ${RUN_DEPS}
+RUN apk add --no-cache bash libstdc++ libpcap
 
 VOLUME ["/data"]
 
 WORKDIR "/data"
 
-ENV PATH="/opt/venv/bin:${PATH}"
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 ENTRYPOINT ["dshell"]
