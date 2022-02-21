@@ -1,6 +1,6 @@
-"""
+'''
 Bitcoin plugin
-"""
+'''
 
 import dshell.core
 from dshell.output.alertout import AlertOutput
@@ -147,35 +147,35 @@ Examples:
         clean_jobs = None 
 
         # If the payload contains JSON
-        if data_str.startswith('{"'):
+        if data_str.startswith('{''):
             self.JSON = True
             try:
                 # split JSON objects by newline
-                for rawjs in data_str.split("\n"):
+                for rawjs in data_str.split('\n'):
                     if rawjs:
                         js = json.loads(rawjs)
                         try:
-                            if "method" in js and js["method"]:
+                            if 'method' in js and js['method']:
                                 # Create a dictionary of sets of mining methods 
                                 #   indexed by their associated conn.addr (sip, dip, sport, dport) 
-                                self.methods.setdefault(conn.addr, set([])).add(js["method"])
+                                self.methods.setdefault(conn.addr, set([])).add(js['method'])
 
-                                if js["method"] == "mining.subscribe":
-                                    self.miners[conn.addr] = js["params"][0]
+                                if js['method'] == 'mining.subscribe':
+                                    self.miners[conn.addr] = js['params'][0]
 
-                                if js["method"] == "mining.authorize":
-                                    if "params" in js and js['params'][0]:
+                                if js['method'] == 'mining.authorize':
+                                    if 'params' in js and js['params'][0]:
                                         # Grab the Bitcoin User ID (sometimes a wallet id) 
                                         #   which is being authorized
-                                        self.auth_ids[conn.addr] = js["params"][0]
+                                        self.auth_ids[conn.addr] = js['params'][0]
 
                                         if js['params'][1]:
-                                            self.auth_ids[conn.addr] = "".join(( 
-                                                self.auth_ids[conn.addr], " / ",  str(js['params'][1]) ))
+                                            self.auth_ids[conn.addr] = ''.join(( 
+                                                self.auth_ids[conn.addr], ' / ',  str(js['params'][1]) ))
 
-                                if js["method"] == "mining.notify":
+                                if js['method'] == 'mining.notify':
                                     self.NOTIFY = True
-                                    if "params" in js and js['params']:
+                                    if 'params' in js and js['params']:
                                         job_id, prev_blk_hash, gen_tx1, gen_tx2, merkle_branches, blk_ver, difficulty, curr_time, clean_jobs = js['params']
                                         self.job_ids.setdefault(conn.addr, []).append(job_id)
                                         self.notify_params[conn.addr] = [self.job_ids, prev_blk_hash, gen_tx1,
@@ -184,9 +184,9 @@ Examples:
                                                                          clean_jobs]
 
                         except KeyError as e:
-                            self.logger.error("{} - Error extracting auth ID".format(str(e)))
+                            self.logger.error(f'{e} - Error extracting auth ID')
             except ValueError as e:
-                self.logger.error('{} - json data not found'.format(str(e)))
+                self.logger.error(f'{e} - json data not found')
                 return
 
 
@@ -221,7 +221,7 @@ Examples:
 
 
         # Pull pertinent information from packet's contents
-        self.size = '{0:.2f}'.format(data_len/1024.0)
+        self.size = f'{data_len/1024.0:.2f}'
         # Pull source MAC and dest MAC from first packet in each connection
         self.smac = blob.smac
         self.dmac = blob.dmac
@@ -250,10 +250,10 @@ Examples:
         if (self.size and self.smac and self.dmac and 
                 self.miners.get(conn.addr, None) and self.methods.get(conn.addr, None) and self.auth_ids.get(conn.addr, None)
                 and self.notify_params.get(conn.addr, None) and not self.gentx): 
-            self.write("\n\tNETWORK: \t{0:<15} \n\tSRC_MAC: \t{1:<20} \n\tDST_MAC: \t{2:<20} \n\tSIZE: \t\t{3:>3}KB\n\t" 
-                           "MINER: \t\t{4:<20} \n\tMETHODS: \t{5:<25} \n\tUSER ID/PW: \t{6:<50}\n\t"
-                           "JOB IDs: \t{7:<20} \n\tPREV BLK HASH: \t{8:<65} \n\tBLOCK VER: \t{9:<15}\n\t"
-                           "HASH DIFF: \t{10:<10}\n\n".format(
+            self.write('\n\tNETWORK: \t{0:<15} \n\tSRC_MAC: \t{1:<20} \n\tDST_MAC: \t{2:<20} \n\tSIZE: \t\t{3:>3}KB\n\t' 
+                           'MINER: \t\t{4:<20} \n\tMETHODS: \t{5:<25} \n\tUSER ID/PW: \t{6:<50}\n\t'
+                           'JOB IDs: \t{7:<20} \n\tPREV BLK HASH: \t{8:<65} \n\tBLOCK VER: \t{9:<15}\n\t'
+                           'HASH DIFF: \t{10:<10}\n\n'.format(
                     self.bc_net, self.smac, self.dmac, self.size, 
                     self.miners[conn.addr], ', '.join(self.methods[conn.addr]), self.auth_ids[conn.addr],
                     ', '.join(self.notify_params[conn.addr][0][conn.addr]), self.notify_params[conn.addr][1], 
@@ -270,10 +270,10 @@ Examples:
         elif (self.size and self.smac and self.dmac and 
                 self.miners.get(conn.addr, None) and self.methods.get(conn.addr, None) and self.auth_ids.get(conn.addr, None)
                 and self.notify_params.get(conn.addr, None) and self.gentx): 
-            self.write("\n\tNETWORK: \t{0:<15} \n\tSRC_MAC: \t{1:<20} \n\tDST_MAC: \t{2:<20} \n\tSIZE: \t\t{3:>3}KB\n\t" 
-                           "MINER: \t\t{4:<20} \n\tMETHODS: \t{5:<25} \n\tUSER ID/PW: \t{6:<50}\n\t"
-                           "JOB IDs: \t{7:<20} \n\tPREV BLK HASH: \t{8:<65} \n\tBLOCK VER: \t{9:<15}\n\t"
-                           "HASH DIFF: \t{10:<10}\n\n".format(
+            self.write('\n\tNETWORK: \t{0:<15} \n\tSRC_MAC: \t{1:<20} \n\tDST_MAC: \t{2:<20} \n\tSIZE: \t\t{3:>3}KB\n\t' 
+                           'MINER: \t\t{4:<20} \n\tMETHODS: \t{5:<25} \n\tUSER ID/PW: \t{6:<50}\n\t'
+                           'JOB IDs: \t{7:<20} \n\tPREV BLK HASH: \t{8:<65} \n\tBLOCK VER: \t{9:<15}\n\t'
+                           'HASH DIFF: \t{10:<10}\n\n'.format(
                     self.bc_net, self.smac, self.dmac, self.size, 
                     self.miners[conn.addr], ', '.join(self.methods[conn.addr]), self.auth_ids[conn.addr],
                     ', '.join(self.notify_params[conn.addr][0][conn.addr]), self.notify_params[conn.addr][1], 
@@ -286,21 +286,21 @@ Examples:
             # The extra information (JOB ID, BLOCK VER, etc.) will be useful in matching the 
             #   information outputted by the alerts to the payload containing the 
             #   generation transaction info and merkle branches
-            fout = open(self.gentx, "a+")  
-            fout.write(("\nJOB IDs: \t\t{0:<20} \nPREV BLK HASH: \t{1:<65} \n\nGEN TX1: \t\t{2:<20}" 
-                        "\n\nGEN TX2: \t\t{3:<20} \n\nMERKLE BRANCHES: {4:<20} \n\nBLOCK VER: \t\t{5:<20}" 
-                        "\nHASH DIFF: \t\t{6:<10}\n").format(
+            fout = open(self.gentx, 'a+')  
+            fout.write(('\nJOB IDs: \t\t{0:<20} \nPREV BLK HASH: \t{1:<65} \n\nGEN TX1: \t\t{2:<20}' 
+                        '\n\nGEN TX2: \t\t{3:<20} \n\nMERKLE BRANCHES: {4:<20} \n\nBLOCK VER: \t\t{5:<20}' 
+                        '\nHASH DIFF: \t\t{6:<10}\n').format(
                         ', '.join(self.notify_params[conn.addr][0][conn.addr]), self.notify_params[conn.addr][1],
                         self.notify_params[conn.addr][2], self.notify_params[conn.addr][3],
                         ', '.join(self.notify_params[conn.addr][4]), self.notify_params[conn.addr][5],
                         self.notify_params[conn.addr][6]))
-            fout.write(("\n" + "-"*100)*2)
+            fout.write(('\n' + '-'*100)*2)
 
 
         # Else if we dont have Bitcoin User IDs, or Block information 
         #   and the user doesn't want verbose block information (gentx)
         elif (self.size and self.smac and self.dmac and self.bc_net): 
-            self.write("\n\tNETWORK: \t{0:<15} \n\tSRC_MAC: \t{1:<20} \n\tDST_MAC: \t{2:<20} \n\tSIZE: \t\t{3:>3}KB\n\n".format(
+            self.write('\n\tNETWORK: \t{0:<15} \n\tSRC_MAC: \t{1:<20} \n\tDST_MAC: \t{2:<20} \n\tSIZE: \t\t{3:>3}KB\n\n'.format(
             self.bc_net, self.smac, self.dmac, self.size), ts=blob.starttime, sip=conn.sip, 
             dip=conn.dip, sport=conn.sport, dport=conn.dport, direction=blob.direction)
 
@@ -309,6 +309,6 @@ Examples:
 
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     print(DshellPlugin())
 

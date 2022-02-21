@@ -1,6 +1,6 @@
-"""
+'''
 NBNS plugin
-"""
+'''
 
 from struct import unpack
 
@@ -24,7 +24,7 @@ class DshellPlugin(dshell.core.PacketPlugin):
     def __init__(self):
         super().__init__(   name='nbns',
                             description='Extract client information from NBNS traffic',
-                            longdescription="""
+                            longdescription='''
 The nbns (NetBIOS Name Service) plugin will extract the Transaction ID, Protocol Info, 
 Client Hostname, and Client MAC address from every UDP NBNS packet found in the given 
 pcap using port 137.  UDP is the standard transport protocol for NBNS traffic.
@@ -72,7 +72,7 @@ Examples:
                     Client Hostname:        WPAD             
                     Client MAC:             00:0C:29:9D:B8:6D 
              **
-  """,
+  ''',
                             bpf='(udp and port 137)',
                             output=AlertOutput(label=__name__),
                             author='dek',
@@ -90,8 +90,7 @@ Examples:
         try:
             nbns_packet = nbns_packet.upper_layer
         except IndexError as e:
-            self.logger.error('{}: could not parse session data \
-                      (NBNS packet not found)'.format(str(e)))
+            self.logger.error(f'{e}: could not parse session data (NBNS packet not found)')
             # pypacker may throw an Exception here; could use 
             #   further testing
             return
@@ -102,7 +101,7 @@ Examples:
         try:
             nbns_name = unpack('32s', pkt.data[13:45])[0]
         except Exception as e:
-            self.logger.error('{}: (NBNS packet not found)'.format(str(e)))
+            self.logger.error(f'{e}: (NBNS packet not found)')
             return
 
 
@@ -121,14 +120,13 @@ Examples:
                 self.client_hostname = str(nbns_name)
 
         except ValueError as e:
-            self.logger.error('{}: Hostname in improper format \
-                      (NBNS packet not found)'.format(str(e)))
+            self.logger.error(f'{e}: Hostname in improper format (NBNS packet not found)')
             return
 
 
         # Extract the Transaction ID from the NBNS packet
         xid = unpack('2s', pkt.data[0:2])[0]
-        self.xid = "0x{}".format(xid.hex())
+        self.xid = f'0x{xid.hex()}'
 
         # Extract the opcode info from the NBNS Packet
         op = unpack('2s', pkt.data[2:4])[0]
@@ -141,20 +139,19 @@ Examples:
         try: 
             self.prot_info = nbns_op[op]
         except:
-            self.prot_info = "0x{}".format(op_hex)
+            self.prot_info = f'0x{op_hex}'
 
         # Extract the MAC address from the ethernet layer of the packet
         self.mac_address = pkt.smac 
 
         # Allow for unknown hostnames
         if not self.client_hostname:
-            self.client_hostname = "" 
+            self.client_hostname = '' 
 
         if self.xid and self.prot_info and self.client_hostname and self.mac_address:
-            self.write('\n\tTransaction ID:\t\t{:<8} \n\tInfo:\t\t\t{:<16} \n\tClient Hostname:\t{:<16} \n\tClient MAC:\t\t{:<18}\n'.format(
-                        self.xid, self.prot_info, self.client_hostname, self.mac_address), **pkt.info(), dir_arrow='->')
+            self.write(f'\n\tTransaction ID:\t\t{self.xid:<8} \n\tInfo:\t\t\t{self.prot_info:<16} \n\tClient Hostname:\t{self.client_hostname:<16} \n\tClient MAC:\t\t{self.mac_address:<18}\n'
             return pkt
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     print(DshellPlugin())

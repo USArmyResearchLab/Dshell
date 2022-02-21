@@ -1,6 +1,6 @@
-"""
+'''
 This output module converts plugin output into JSON
-"""
+'''
 
 from datetime import datetime
 import json
@@ -8,12 +8,12 @@ from dshell.output.output import Output
 from dshell.core import Packet, Blob, Connection
 
 class JSONOutput(Output):
-    """
+    '''
     Converts arguments for every write into JSON
     Can be called with ensure_ascii=True to pass flag on to the json module.
-    """
-    _DEFAULT_FORMAT = "%(jsondata)s\n"
-    _DESCRIPTION = "JSON format output"
+    '''
+    _DEFAULT_FORMAT = '%(jsondata)s\n'
+    _DESCRIPTION = 'JSON format output'
 
     def __init__(self, *args, **kwargs):
         self.ensure_ascii = kwargs.get('ensure_ascii', False)
@@ -30,10 +30,10 @@ class JSONOutput(Output):
         super().write(jsondata=jsondata)
 
     def json_default(self, obj):
-        """
+        '''
         JSON serializer for objects not serializable by default json code
         https://stackoverflow.com/a/22238613
-        """
+        '''
         if isinstance(obj, datetime):
             serial = obj.strftime(self.timeformat)
             return serial
@@ -43,6 +43,6 @@ class JSONOutput(Output):
         if isinstance(obj, (Connection, Blob, Packet)):
             serial = obj.info()
             return serial
-        raise TypeError ("Type not serializable ({})".format(str(type(obj))))
+        raise TypeError (f'Type not serializable ({str(type(obj))})')
 
 obj = JSONOutput

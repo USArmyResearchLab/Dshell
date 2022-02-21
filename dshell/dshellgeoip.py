@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""
+'''
 A wrapper around GeoIP2 that provides convenience functions for querying and
 collecting GeoIP data
-"""
+'''
 
 import datetime
 import logging
@@ -32,35 +32,35 @@ class DshellGeoIP(object):
         self.acc = acc
 
     def check_file_dates(self):
-        """
+        '''
         Check the data file age, and log a warning if it's over a year old.
-        """
+        '''
         cc_mtime = datetime.datetime.fromtimestamp(os.path.getmtime(self.geoccfile))
         asn_mtime = datetime.datetime.fromtimestamp(os.path.getmtime(self.geoasnfile))
         n = datetime.datetime.now()
         year = datetime.timedelta(days=365)
         if (n - cc_mtime) > year or (n - asn_mtime) > year:
-            logger.debug("GeoIP data file(s) over a year old, and possibly outdated.")
+            logger.debug('GeoIP data file(s) over a year old, and possibly outdated.')
 
     def geoip_country_lookup(self, ip):
-        """
+        '''
         Looks up the IP and returns the two-character country code.
-        """
+        '''
         location = self.geoip_location_lookup(ip)
         return location[0]
 
     def geoip_asn_lookup(self, ip):
-        """
+        '''
         Looks up the IP and returns an ASN string.
         Example:
-            print geoip_asn_lookup("74.125.26.103")
-            "AS15169 Google LLC"
-        """
+            print geoip_asn_lookup('74.125.26.103')
+            'AS15169 Google LLC'
+        '''
         try:
             return self.geo_asn_cache[ip]
         except KeyError:
             try:
-                template = "AS{0.autonomous_system_number} {0.autonomous_system_organization}"
+                template = 'AS{0.autonomous_system_number} {0.autonomous_system_organization}'
                 asn = template.format(self.geoasndb.asn(ip))
                 self.geo_asn_cache[ip] = asn
                 return asn
@@ -68,10 +68,10 @@ class DshellGeoIP(object):
                 return None
 
     def geoip_location_lookup(self, ip):
-        """
+        '''
         Looks up the IP and returns a tuple containing country code, latitude,
         and longitude.
-        """
+        '''
         try:
             return self.geo_loc_cache[ip]
         except KeyError:
@@ -86,10 +86,8 @@ class DshellGeoIP(object):
                 # Handle flag from plugin optional args to enable all 3 country codes
                 if self.acc:
                     try:
-                        cc = "{}/{}/{}".format(location.represented_country.iso_code,
-                                               location.registered_country.iso_code,
-                                               location.country.iso_code)
-                        cc = cc.replace("None", "--")
+                        cc = f'{location.represented_country.iso_code}/{location.registered_country.iso_code}/{location.country.iso_code}'
+                        cc = cc.replace('None', '--')
 
                     except KeyError:
                         pass
@@ -109,17 +107,17 @@ class DshellGeoIP(object):
             except geoip2.errors.AddressNotFoundError:
                 # Handle flag from plugin optional args to enable all 3 country codes
                 if self.acc:
-                    location = ("--/--/--", None, None)
+                    location = ('--/--/--', None, None)
                 else:
-                    location = ("--", None, None)
+                    location = ('--', None, None)
                 self.geo_loc_cache[ip] = location
                 return location
 
 
 class DshellFailedGeoIP(object):
-    """
+    '''
     Class used in place of DshellGeoIP if GeoIP database files are not found.
-    """
+    '''
 
     def __init__(self):
         self.geodir = os.path.join(get_data_path(), 'GeoIP')
@@ -130,22 +128,22 @@ class DshellFailedGeoIP(object):
         pass
 
     def geoip_country_lookup(self, ip):
-        return "??"
+        return '??'
 
     def geoip_asn_lookup(self, ip):
         return None
 
     def geoip_location_lookup(self, ip):
-        return ("??", None, None)
+        return ('??', None, None)
 
 
 class DshellGeoIPCache(OrderedDict):
-    """
+    '''
     A cache for storing recent IP lookups to improve performance.
-    """
+    '''
 
     def __init__(self, *args, **kwargs):
-        self.max_cache_size = kwargs.pop("max_cache_size", 500)
+        self.max_cache_size = kwargs.pop('max_cache_size', 500)
         OrderedDict.__init__(self, *args, **kwargs)
 
     def __setitem__(self, key, value):

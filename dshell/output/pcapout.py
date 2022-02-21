@@ -1,6 +1,6 @@
-"""
+'''
 This output module generates pcap output when given very specific arguments.
-"""
+'''
 
 from dshell.output.output import Output
 import struct
@@ -9,8 +9,8 @@ import sys
 # TODO get this module to work with ConnectionPlugins
 
 class PCAPOutput(Output):
-    "Writes data to a pcap file."
-    _DESCRIPTION = "Writes data to a pcap file (does not work with connection-based plugins)"
+    'Writes data to a pcap file.'
+    _DESCRIPTION = 'Writes data to a pcap file (does not work with connection-based plugins)'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, mode='wb', **kwargs)
@@ -22,7 +22,7 @@ class PCAPOutput(Output):
         self.header_written = False
 
     def write(self, *args, **kwargs):
-        """
+        '''
         Write a packet to the pcap file.
 
         Arguments:
@@ -31,7 +31,7 @@ class PCAPOutput(Output):
             ts      : timestamp
             link_layer_type :   link-layer type (optional) (default: 1)
                                 (e.g. 1 for Ethernet, 105 for 802.11, etc.)
-        """
+        '''
         # The first time write() is called, the pcap header is written.
         # This is to allow the plugin enough time to figure out what the
         # link-layer type is for the data.
@@ -49,7 +49,7 @@ class PCAPOutput(Output):
         rawpkt = kwargs.get('rawpkt', None)
         ts = kwargs.get('ts', None)
         if pktlen is None or rawpkt is None or ts is None:
-            raise TypeError("PCAPOutput.write() requires at least these arguments to write packet data: pktlen, rawpkt, and ts.\n\tIt is possible this plugin is not configured to handle pcap output.")
+            raise TypeError('PCAPOutput.write() requires at least these arguments to write packet data: pktlen, rawpkt, and ts.\n\tIt is possible this plugin is not configured to handle pcap output.')
 
         self.fh.write(
             struct.pack('II', int(ts), int((ts - int(ts)) * 1000000)))

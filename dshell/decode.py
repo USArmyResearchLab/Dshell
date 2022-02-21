@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
+'''
 This is the core script for running plugins.
 
 It works by grabbing individual packets from a file or interface and feeding
 them into a chain of plugins (plugin_chain). Each plugin in the chain
 decides if the packet will continue on to the next plugin or just fade away.
 
-In practice, users generally only use one plugin, so the "chain" will only
+In practice, users generally only use one plugin, so the 'chain' will only
 have one plugin, which is perfectly fine. The chain exists to allow plugins
 to alter or filter packets before passing them to more general plugins. For
 example, --plugin=country+netflow would pass packets through the country
@@ -17,7 +17,7 @@ country code before viewing flow data.
 Many things go into making this chain run smoothly, however. This includes
 reading in user arguments, setting filters, opening files/interfaces, etc. All
 of this largely takes place in the main() function.
-"""
+'''
 
 # standard Python library imports
 import bz2
@@ -59,12 +59,12 @@ plugin_chain = []
 
 
 def feed_plugin_chain(plugin_index: int, packet: Packet):
-    """
+    '''
     Every packet fed into Dshell goes through this function.
     Its goal is to pass each packet down the chain of selected plugins.
     Each plugin decides whether the packet(s) will proceed to the next
     plugin, i.e. act as a filter.
-    """
+    '''
     if plugin_index >= len(plugin_chain):
         # We are at the end of the chain.
         return
@@ -80,11 +80,11 @@ def feed_plugin_chain(plugin_index: int, packet: Packet):
 
 
 def clean_plugin_chain(plugin_index):
-    """
+    '''
     This is called at the end of packet capture.
     It will go through the plugins and attempt to cleanup any connections
     that were not yet closed.
-    """
+    '''
     if plugin_index >= len(plugin_chain):
         # We are at the end of the chain
         return
@@ -102,13 +102,13 @@ def clean_plugin_chain(plugin_index):
 
 
 def decompress_file(filepath, extension, unzipdir):
-    """
+    '''
     Attempts to decompress a provided file and write the data to a temporary
     file. The list of created temporary files is returned.
-    """
+    '''
     filename = os.path.split(filepath)[-1]
     openfiles = []
-    logger.debug("Attempting to decompress {!r}".format(filepath))
+    logger.debug(f'Attempting to decompress {filepath!r}')
     if extension == '.gz':
         f = gzip.open(filepath, 'rb')
         openfiles.append(f)
@@ -116,7 +116,7 @@ def decompress_file(filepath, extension, unzipdir):
         f = bz2.open(filepath, 'rb')
         openfiles.append(f)
     elif extension == '.zip':
-        pswd = getpass("Enter password for .zip file {!r} [default: none]: ".format(filepath))
+        pswd = getpass(f'Enter password for .zip file {filepath!r} [default: none]: ')
         pswd = pswd.encode() # TODO I'm not sure encoding to utf-8 will work in all cases
         try:
             z = zipfile.ZipFile(filepath)
@@ -124,7 +124,7 @@ def decompress_file(filepath, extension, unzipdir):
                 f = z.open(z2, 'r', pswd)
                 openfiles.append(f)
         except (RuntimeError, zipfile.BadZipFile) as e:
-            logger.error("Could not process .zip file {!r}. {!s}".format(filepath, e))
+            logger.error(f'Could not process .zip file {filepath!r}. {e!s}')
             return []
 
     tempfiles = []
@@ -134,7 +134,7 @@ def decompress_file(filepath, extension, unzipdir):
                 # check if this file is actually something decompressable
                 openfile.peek(1)
             except OSError as e:
-                logger.error("Could not process compressed file {!r}. {!s}".format(filepath, e))
+                logger.error(f'Could not process compressed file {filepath!r}. {e!s}')
                 continue
             with tempfile.NamedTemporaryFile(dir=unzipdir, delete=False, prefix=filename) as tfile:
                 for piece in openfile:
@@ -144,9 +144,9 @@ def decompress_file(filepath, extension, unzipdir):
 
 
 def print_plugins(plugins):
-    """
+    '''
     Print list of plugins with additional info.
-    """
+    '''
     headers = ['module', 'name', 'title', 'type', 'author', 'description']
     rows = []
     for name, module in sorted(plugins.items()):
@@ -176,18 +176,18 @@ def main(plugin_args=None, **kwargs):
     faulthandler.enable()
 
     if not plugin_chain:
-        logger.error("No plugin selected")
+        logger.error('No plugin selected')
         sys.exit(1)
 
-    plugin_chain[0].defrag_ip = kwargs.get("defrag", False)
+    plugin_chain[0].defrag_ip = kwargs.get('defrag', False)
 
     # Setup logging
-    log_format = "%(levelname)s (%(name)s) - %(message)s"
-    if kwargs.get("verbose", False):
+    log_format = '%(levelname)s (%(name)s) - %(message)s'
+    if kwargs.get('verbose', False):
         log_level = logging.INFO
-    elif kwargs.get("debug", False):
+    elif kwargs.get('debug', False):
         log_level = logging.DEBUG
-    elif kwargs.get("quiet", False):
+    elif kwargs.get('quiet', False):
         log_level = logging.CRITICAL
     else:
         log_level = logging.WARNING
@@ -195,9 +195,9 @@ def main(plugin_args=None, **kwargs):
 
     # since pypacker handles its own exceptions (loudly), this attempts to keep
     # it quiet
-    logging.getLogger("pypacker").setLevel(logging.CRITICAL)
+    logging.getLogger('pypacker').setLevel(logging.CRITICAL)
 
-    if kwargs.get("allcc", False):
+    if kwargs.get('allcc', False):
         # Activate all country code (allcc) mode to display all 3 GeoIP2 country
         # codes
         dshell.core.geoip.acc = True
@@ -206,44 +206,44 @@ def main(plugin_args=None, **kwargs):
 
     # If alternate output module is selected, tell each plugin to use that
     # instead
-    if kwargs.get("omodule", None):
+    if kwargs.get('omodule', None):
         try:
-            # TODO: Create a factory classmethod in the base Output class (e.g. "from_name()") instead.
-            omodule = import_module("dshell.output."+kwargs["omodule"])
+            # TODO: Create a factory classmethod in the base Output class (e.g. 'from_name()') instead.
+            omodule = import_module('dshell.output.'+kwargs['omodule'])
             omodule = omodule.obj
             for plugin in plugin_chain:
                 # TODO: Should we have a single instance of the Output module used by all plugins?
                 oomodule = omodule()
                 plugin.out = oomodule
         except ImportError as e:
-            logger.error("Could not import module named '{}'. Use --list-output flag to see available modules".format(kwargs["omodule"]))
+            logger.error(f'Could not import module named \'{kwargs["omodule"]}\'. Use --list-output flag to see available modules')
             sys.exit(1)
 
     # Check if any user-defined output arguments are provided
-    if kwargs.get("oargs", None):
+    if kwargs.get('oargs', None):
         oargs = {}
-        for oarg in kwargs["oargs"]:
+        for oarg in kwargs['oargs']:
             if '=' in oarg:
                 key, val = oarg.split('=', 1)
                 oargs[key] = val
             else:
                 oargs[oarg] = True
-        logger.debug("oargs: %s" % oargs)
+        logger.debug('oargs: %s' % oargs)
         for plugin in plugin_chain:
             plugin.out.set_oargs(**oargs)
 
     # If writing to a file, set for each output module here
-    if kwargs.get("outfile", None):
+    if kwargs.get('outfile', None):
         for plugin in plugin_chain:
-            plugin.out.reset_fh(filename=kwargs["outfile"])
+            plugin.out.reset_fh(filename=kwargs['outfile'])
 
     # Set nobuffer mode if that's what the user wants
-    if kwargs.get("nobuffer", False):
+    if kwargs.get('nobuffer', False):
         for plugin in plugin_chain:
             plugin.out.nobuffer = True
 
     # Set the extra flag for all output modules
-    if kwargs.get("extra", False):
+    if kwargs.get('extra', False):
         for plugin in plugin_chain:
             plugin.out.extra = True
             plugin.out.set_format(plugin.out.format)
@@ -252,37 +252,37 @@ def main(plugin_args=None, **kwargs):
     # Each plugin has its own default BPF that will be extended or replaced
     # based on --no-vlan, --ebpf, or --bpf arguments.
     for plugin in plugin_chain:
-        if kwargs.get("bpf", None):
-            plugin.bpf = kwargs.get("bpf", "")
+        if kwargs.get('bpf', None):
+            plugin.bpf = kwargs.get('bpf', '')
             continue
         if plugin.bpf:
-            if kwargs.get("ebpf", None):
-                plugin.bpf = "({}) and ({})".format(plugin.bpf, kwargs.get("ebpf", ""))
+            if kwargs.get('ebpf', None):
+                plugin.bpf = f"({plugin.bpf}) and ({kwargs.get('ebpf', '')})"
         else:
-            if kwargs.get("ebpf", None):
-                plugin.bpf = kwargs.get("ebpf", "")
-        if kwargs.get("novlan", False):
+            if kwargs.get('ebpf', None):
+                plugin.bpf = kwargs.get('ebpf', '')
+        if kwargs.get('novlan', False):
             plugin.vlan_bpf = False
 
     # Decide on the inputs to use for pcap
     # If --interface is set, ignore all files and listen live on the wire
     # Otherwise, use all of the files and globs to open offline pcap.
     # Recurse through any directories if the command-line flag is set.
-    if kwargs.get("interface", None):
-        inputs = [kwargs.get("interface")]
+    if kwargs.get('interface', None):
+        inputs = [kwargs.get('interface')]
     else:
         inputs = []
-        inglobs = kwargs.get("files", [])
+        inglobs = kwargs.get('files', [])
         infiles = []
         for inglob in inglobs:
             outglob = glob(inglob)
             if not outglob:
-                logger.warning("Could not find file(s) matching {!r}".format(inglob))
+                logger.warning(f'Could not find file(s) matching {inglob!r}')
                 continue
             infiles.extend(outglob)
         while len(infiles) > 0:
             infile = infiles.pop(0)
-            if kwargs.get("recursive", False) and os.path.isdir(infile):
+            if kwargs.get('recursive', False) and os.path.isdir(infile):
                 morefiles = os.listdir(infile)
                 for morefile in morefiles:
                     infiles.append(os.path.join(infile, morefile))
@@ -295,7 +295,7 @@ def main(plugin_args=None, **kwargs):
             if option in plugin_args.get(plugin, {}):
                 setattr(plugin, option, plugin_args[plugin][option])
             else:
-                setattr(plugin, option, args.get("default", None))
+                setattr(plugin, option, args.get('default', None))
         plugin.handle_plugin_options()
 
 
@@ -304,7 +304,7 @@ def main(plugin_args=None, **kwargs):
         plugin._premodule()
 
     # If we are not multiprocessing, simply pass the files for processing
-    if not kwargs.get("multiprocessing", False):
+    if not kwargs.get('multiprocessing', False):
         process_files(inputs, **kwargs)
     # If we are multiprocessing, things get more complicated.
     else:
@@ -328,16 +328,16 @@ def main(plugin_args=None, **kwargs):
         running = []
         max_writes_per_batch = 50
         while processes or running:
-            if processes and len(running) < kwargs.get("process_max", 4):
+            if processes and len(running) < kwargs.get('process_max', 4):
                 # Start a process and move it to the 'running' list
                 proc = processes.pop(0)
                 proc.start()
-                logger.debug("Started process {}".format(proc.pid))
+                logger.debug(f'Started process {proc.pid}')
                 running.append(proc)
             for proc in running:
                 if not proc.is_alive():
                     # Remove finished processes from 'running' list
-                    logger.debug("Ended process {} (exit code: {})".format(proc.pid, proc.exitcode))
+                    logger.debug(f'Ended process {proc.pid} (exit code: {proc.exitcode})')
                     running.remove(proc)
             try:
                 # Process write commands in the output queue.
@@ -375,7 +375,7 @@ datalink_map = {
 
 
 def read_packets(input: str, interface=False, bpf=None, count=None) -> Iterable[dshell.Packet]:
-    """
+    '''
     Yields packets from input pcap file or device.
 
     :param str input: device or pcap file path
@@ -385,7 +385,7 @@ def read_packets(input: str, interface=False, bpf=None, count=None) -> Iterable[
 
     :yields: packets defined by pypacker.
         NOTE: Timestamp and frame id are added to packet for convenience.
-    """
+    '''
 
     if interface:
         # Listen on an interface if the option is set
@@ -401,7 +401,7 @@ def read_packets(input: str, interface=False, bpf=None, count=None) -> Iterable[
         try:
             capture = pcapy.open_offline(input)
         except pcapy.PcapError as e:
-            logger.error("Could not open '{}': {!s}".format(input, e))
+            logger.error(f'Could not open \'{input}\': {e!s}')
             return
 
     # TODO: We may want to allow all packets to go through and then allow the plugin to filter
@@ -413,14 +413,14 @@ def read_packets(input: str, interface=False, bpf=None, count=None) -> Iterable[
         if bpf:
             capture.setfilter(bpf)
     except pcapy.PcapError as e:
-        if str(e).startswith("no VLAN support for data link type"):
-            logger.error("Cannot use VLAN filters for {!r}. Recommend running with --no-vlan argument.".format(input))
+        if str(e).startswith('no VLAN support for data link type'):
+            logger.error(f'Cannot use VLAN filters for {input!r}. Recommend running with --no-vlan argument.')
             return
-        elif "syntax error" in str(e) or "link layer applied in wrong context" == str(e):
-            logger.error("Could not compile BPF: {!s} ({!r})".format(e, bpf))
+        elif 'syntax error' in str(e) or 'link layer applied in wrong context' == str(e):
+            logger.error(f'Could not compile BPF: {e!s} ({bpf!r})')
             return
-        elif "802.11 link-layer types supported only on 802.11" == str(e):
-            logger.error("BPF incompatible with pcap file: {!s}".format(e))
+        elif '802.11 link-layer types supported only on 802.11' == str(e):
+            logger.error(f'BPF incompatible with pcap file: {e!s}')
             return
         else:
             raise e
@@ -431,14 +431,14 @@ def read_packets(input: str, interface=False, bpf=None, count=None) -> Iterable[
     for plugin in plugin_chain:
         # TODO Find way around libpcap bug that segfaults when certain BPFs
         #      are used with certain datalink types
-        #      (e.g. datalink=204, bpf="ip")
+        #      (e.g. datalink=204, bpf='ip')
         plugin.link_layer_type = datalink
         plugin.recompile_bpf()
 
     # Get correct pypacker class based on datalink layer.
     packet_class = datalink_map.get(datalink, ethernet.Ethernet)
 
-    logger.info(f"Datalink: {datalink} - {packet_class.__name__}")
+    logger.info(f'Datalink: {datalink} - {packet_class.__name__}')
 
     # Iterate over the file/interface and yield Packet objects.
     frame = 1  # Start with 1 because Wireshark starts with 1.
@@ -465,11 +465,11 @@ def read_packets(input: str, interface=False, bpf=None, count=None) -> Iterable[
 
         except pcapy.PcapError as e:
             estr = str(e)
-            eformat = "Error processing '{i}' - {e}"
-            if estr.startswith("truncated dump file"):
+            eformat = f'Error processing \'{i}\' - {e}'
+            if estr.startswith('truncated dump file'):
                 logger.error(eformat.format(i=input, e=estr))
                 logger.debug(e, exc_info=True)
-            elif estr.startswith("bogus savefile header"):
+            elif estr.startswith('bogus savefile header'):
                 logger.error(eformat.format(i=input, e=estr))
                 logger.debug(e, exc_info=True)
             else:
@@ -481,10 +481,10 @@ def read_packets(input: str, interface=False, bpf=None, count=None) -> Iterable[
 #   and difficult to follow the code flow.
 def process_files(inputs, **kwargs):
     # Iterate over each of the input files
-    # For live capture, the "input" would just be the name of the interface
+    # For live capture, the 'input' would just be the name of the interface
     global plugin_chain
-    interface = kwargs.get("interface", False)
-    count = kwargs.get("count", None)
+    interface = kwargs.get('interface', False)
+    count = kwargs.get('count', None)
     # Try and use the first plugin's BPF as the initial filter
     # The BPFs for other plugins will be applied along the chain as needed
     bpf = plugin_chain[0].bpf
@@ -494,8 +494,8 @@ def process_files(inputs, **kwargs):
 
         # Check if file needs to be decompressed by its file extension
         extension = os.path.splitext(input0)[-1]
-        if extension in (".gz", ".bz2", ".zip") and "interface" not in kwargs:
-            tempfiles = decompress_file(input0, extension, kwargs.get("unzipdir", tempfile.gettempdir()))
+        if extension in ('.gz', '.bz2', '.zip') and 'interface' not in kwargs:
+            tempfiles = decompress_file(input0, extension, kwargs.get('unzipdir', tempfile.gettempdir()))
             inputs = tempfiles + inputs
             continue
 
@@ -529,101 +529,101 @@ def main_command_line():
     # The main argument parser. It will have every command line option
     # available and should be used when actually parsing
     parser = DshellArgumentParser(
-        usage="%(prog)s [options] [plugin options] file1 file2 ... fileN",
+        usage='%(prog)s [options] [plugin options] file1 file2 ... fileN',
         add_help=False)
     parser.add_argument('-c', '--count', type=int, default=0,
                       help='Number of packets to process')
-    parser.add_argument('--debug', action="store_true",
-                      help="Show debug messages")
-    parser.add_argument('-v', '--verbose', action="store_true",
-                      help="Show informational messages")
-    parser.add_argument('-acc', '--allcc', action="store_true",
-                      help="Show all 3 GeoIP2 country code types (represented_country/registered_country/country)")
+    parser.add_argument('--debug', action='store_true',
+                      help='Show debug messages')
+    parser.add_argument('-v', '--verbose', action='store_true',
+                      help='Show informational messages')
+    parser.add_argument('-acc', '--allcc', action='store_true',
+                      help='Show all 3 GeoIP2 country code types (represented_country/registered_country/country)')
     parser.add_argument('-d', '-p', '--plugin', dest='plugin', type=str,
-                      action='append', metavar="PLUGIN",
-                      help="Use a specific plugin module. Can be chained with '+'.")
+                      action='append', metavar='PLUGIN',
+                      help='Use a specific plugin module. Can be chained with '+'.')
     parser.add_argument('--defragment', dest='defrag', action='store_true',
                       help='Reconnect fragmented IP packets')
     parser.add_argument('-h', '-?', '--help', dest='help',
-                      help="Print common command-line flags and exit", action='store_true',
+                      help='Print common command-line flags and exit', action='store_true',
                       default=False)
     parser.add_argument('-i', '--interface', default=None, type=str,
-                        help="Listen live on INTERFACE instead of reading pcap")
-    parser.add_argument('-l', '--ls', '--list', action="store_true",
+                        help='Listen live on INTERFACE instead of reading pcap')
+    parser.add_argument('-l', '--ls', '--list', action='store_true',
                       help='List all available plugins', dest='list')
     parser.add_argument('-r', '--recursive', dest='recursive', action='store_true',
                       help='Recursively process all PCAP files under input directory')
-    parser.add_argument('--unzipdir', type=str, metavar="DIRECTORY",
+    parser.add_argument('--unzipdir', type=str, metavar='DIRECTORY',
                       default=tempfile.gettempdir(),
                       help='Directory to use when decompressing input files (.gz, .bz2, and .zip only)')
 
-    multiprocess_group = parser.add_argument_group("multiprocessing arguments")
+    multiprocess_group = parser.add_argument_group('multiprocessing arguments')
     multiprocess_group.add_argument('-P', '--parallel', dest='multiprocessing', action='store_true',
                       help='Handle each file in separate parallel processes')
     multiprocess_group.add_argument('-n', '--nprocs', type=int, default=4,
                       metavar='NUMPROCS', dest='process_max',
                       help='Define max number of parallel processes (default: 4)')
 
-    filter_group = parser.add_argument_group("filter arguments")
+    filter_group = parser.add_argument_group('filter arguments')
     filter_group.add_argument('--bpf', default='', type=str,
-                        help="Overwrite all BPFs and use provided input. Use carefully!")
-    filter_group.add_argument('--ebpf', default='', type=str, metavar="BPF",
-                        help="Extend existing BPFs with provided input for additional filtering. It will transform input into \"(<original bpf>) and (<ebpf>)\"")
-    filter_group.add_argument("--no-vlan", action="store_true", dest="novlan",
-                        help="Ignore packets with VLAN headers")
+                        help='Overwrite all BPFs and use provided input. Use carefully!')
+    filter_group.add_argument('--ebpf', default='', type=str, metavar='BPF',
+                        help='Extend existing BPFs with provided input for additional filtering. It will transform input into \'(<original bpf>) and (<ebpf>)\'')
+    filter_group.add_argument('--no-vlan', action='store_true', dest='novlan',
+                        help='Ignore packets with VLAN headers')
 
-    output_group = parser.add_argument_group("output arguments")
-    output_group.add_argument("--lo", "--list-output", action="store_true",
-                            help="List available output modules",
-                            dest="listoutput")
-    output_group.add_argument("--no-buffer", action="store_true",
-                            help="Do not buffer plugin output",
-                            dest="nobuffer")
-    output_group.add_argument("-x", "--extra", action="store_true",
-                            help="Appends extra data to all plugin output.")
+    output_group = parser.add_argument_group('output arguments')
+    output_group.add_argument('--lo', '--list-output', action='store_true',
+                            help='List available output modules',
+                            dest='listoutput')
+    output_group.add_argument('--no-buffer', action='store_true',
+                            help='Do not buffer plugin output',
+                            dest='nobuffer')
+    output_group.add_argument('-x', '--extra', action='store_true',
+                            help='Appends extra data to all plugin output.')
     # TODO Figure out how to make --extra flag play nicely with user-only
     #      output modules, like jsonout and csvout
-    output_group.add_argument("-O", "--omodule", type=str, dest="omodule",
-                            metavar="MODULE",
-                            help="Use specified output module for plugins instead of defaults. For example, --omodule=jsonout for JSON output.")
-    output_group.add_argument("--oarg", type=str, metavar="ARG=VALUE",
-                            dest="oargs", action="append",
-                            help="Supply a specific keyword argument to plugins' output modules. Can be used multiple times for multiple arguments. Not using an equal sign will treat it as a flag and set the value to True. Example: --oarg \"delimiter=:\" --oarg \"timeformat=%%H %%M %%S\"")
-    output_group.add_argument("-q", "--quiet", action="store_true",
-                            help="Disable logging")
-    output_group.add_argument("-W", metavar="OUTFILE", dest="outfile",
-                            help="Write to OUTFILE instead of stdout")
+    output_group.add_argument('-O', '--omodule', type=str, dest='omodule',
+                            metavar='MODULE',
+                            help='Use specified output module for plugins instead of defaults. For example, --omodule=jsonout for JSON output.')
+    output_group.add_argument('--oarg', type=str, metavar='ARG=VALUE',
+                            dest='oargs', action='append',
+                            help='Supply a specific keyword argument to plugins\' output modules. Can be used multiple times for multiple arguments. Not using an equal sign will treat it as a flag and set the value to True. Example: --oarg \'delimiter=:\' --oarg \'timeformat=%%H %%M %%S\'')
+    output_group.add_argument('-q', '--quiet', action='store_true',
+                            help='Disable logging')
+    output_group.add_argument('-W', metavar='OUTFILE', dest='outfile',
+                            help='Write to OUTFILE instead of stdout')
 
     parser.add_argument('files', nargs='*',
-                        help="pcap files or globs to process")
+                        help='pcap files or globs to process')
 
     # A short argument parser, meant to only hold the simplified list of
     # arguments for when a plugin is called without a pcap file.
     # DO NOT USE for any serious argument parsing.
     parser_short = DshellArgumentParser(
-        usage="%(prog)s [options] [plugin options] file1 file2 ... fileN",
+        usage='%(prog)s [options] [plugin options] file1 file2 ... fileN',
         add_help=False)
     parser_short.add_argument('-h', '-?', '--help', dest='help',
-                            help="Print common command-line flags and exit", action='store_true',
+                            help='Print common command-line flags and exit', action='store_true',
                             default=False)
     parser.add_argument('--version', action='version',
-                        version="Dshell " + str(dshell.core.__version__))
+                        version='Dshell ' + str(dshell.core.__version__))
     parser_short.add_argument('-d', '-p', '--plugin', dest='plugin', type=str,
-                      action='append', metavar="PLUGIN",
-                      help="Use a specific plugin module")
-    parser_short.add_argument('--ebpf', default='', type=str, metavar="BPF",
-                        help="Extend existing BPFs with provided input for additional filtering. It will transform input into \"(<original bpf>) and (<ebpf>)\"")
+                      action='append', metavar='PLUGIN',
+                      help='Use a specific plugin module')
+    parser_short.add_argument('--ebpf', default='', type=str, metavar='BPF',
+                        help='Extend existing BPFs with provided input for additional filtering. It will transform input into \'(<original bpf>) and (<ebpf>)\'')
     parser_short.add_argument('-i', '--interface',
-                        help="Listen live on INTERFACE instead of reading pcap")
-    parser_short.add_argument('-l', '--ls', '--list', action="store_true",
+                        help='Listen live on INTERFACE instead of reading pcap')
+    parser_short.add_argument('-l', '--ls', '--list', action='store_true',
                       help='List all available plugins', dest='list')
-    parser_short.add_argument("--lo", "--list-output", action="store_true",
-                            help="List available output modules")
+    parser_short.add_argument('--lo', '--list-output', action='store_true',
+                            help='List available output modules')
     # FIXME: Should this duplicate option be removed?
-    parser_short.add_argument("-o", "--omodule", type=str, metavar="MODULE",
-                            help="Use specified output module for plugins instead of defaults. For example, --omodule=jsonout for JSON output.")
+    parser_short.add_argument('-o', '--omodule', type=str, metavar='MODULE',
+                            help='Use specified output module for plugins instead of defaults. For example, --omodule=jsonout for JSON output.')
     parser_short.add_argument('files', nargs='*',
-                              help="pcap files or globs to process")
+                              help='pcap files or globs to process')
 
     # Start parsing the arguments
     # Specifically, we want to grab the desired plugin list
@@ -642,7 +642,7 @@ def main_command_line():
                 # Be nice and ignore this minor infraction.
                 continue
             if plugin not in plugin_map:
-                parser_short.epilog = "ERROR! Invalid plugin provided: '{}'".format(plugin)
+                parser_short.epilog = f'ERROR! Invalid plugin provided: \'{plugin}\''
                 parser_short.print_help()
                 sys.exit(1)
             # While we're at it, go ahead and import the plugin modules now
@@ -670,18 +670,18 @@ def main_command_line():
 
     if xopts:
         for xopt in xopts:
-            logger.warning('Could not understand argument {!r}'.format(xopt))
+            logger.warning(f'Could not understand argument {xopt!r}')
 
     if opts.help:
         # Just print the full help message and exit
         parser.print_help()
-        print("\n")
+        print('\n')
         for plugin in plugin_chain:
-            print("############### {}".format(plugin.name))
+            print(f'############### {plugin.name}')
             print(plugin.longdescription)
-            print("\n")
-            print('Default BPF: "{}"'.format(plugin.bpf))
-        print("\n")
+            print('\n')
+            print(f'Default BPF: \'{plugin.bpf}\'')
+        print('\n')
         sys.exit()
 
     if opts.list:
@@ -696,24 +696,24 @@ def main_command_line():
         output_map = get_output_modules(get_output_path())
         for modulename in sorted(output_map):
             try:
-                module = import_module("dshell.output."+modulename)
+                module = import_module('dshell.output.'+modulename)
                 module = module.obj
             except Exception as e:
                 etype = e.__class__.__name__
-                logger.debug("Could not load {} module. ({}: {!s})".format(modulename, etype, e))
+                logger.debug(f'Could not load {modulename} module. ({etype}: {e!s})')
             else:
-                print("\t{:<25} {}".format(modulename, module._DESCRIPTION))
+                print(f'\t{modulename:<25} {module._DESCRIPTION}')
         sys.exit()
 
     if not opts.plugin:
         # If a plugin isn't provided, print the short help message
-        parser_short.epilog = "Select a plugin to use with -d or --plugin"
+        parser_short.epilog = 'Select a plugin to use with -d or --plugin'
         parser_short.print_help()
         sys.exit()
 
     if not opts.files and not opts.interface:
         # If no files are provided, print the short help message
-        parser_short.epilog = "Include a pcap file to get started. Use --help for more information."
+        parser_short.epilog = 'Include a pcap file to get started. Use --help for more information.'
         parser_short.print_help()
         sys.exit()
 
@@ -729,5 +729,5 @@ def main_command_line():
     main(plugin_args=plugin_args, **vars(opts))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main_command_line()

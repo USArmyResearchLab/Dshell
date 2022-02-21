@@ -1,6 +1,6 @@
-"""
+'''
 Detects failed attempts to connect (SYN followed by RST/ACK)
-"""
+'''
 
 import dshell.core
 from dshell.output.alertout import AlertOutput
@@ -11,10 +11,10 @@ class DshellPlugin(dshell.core.PacketPlugin):
 
     def __init__(self):
         super().__init__(
-            name="SYN/RST",
-            description="Detects failed attempts to connect (SYN followed by RST/ACK)",
-            author="bg",
-            bpf="(ip and (tcp[13]=2 or tcp[13]=20)) or (ip6 and tcp)",
+            name='SYN/RST',
+            description='Detects failed attempts to connect (SYN followed by RST/ACK)',
+            author='bg',
+            bpf='(ip and (tcp[13]=2 or tcp[13]=20)) or (ip6 and tcp)',
             output=AlertOutput(label=__name__)
         )
 
@@ -38,15 +38,13 @@ class DshellPlugin(dshell.core.PacketPlugin):
 
         if tcpp.flags == tcp.TH_SYN:
             seqnum = tcpp.seq
-            key = "{}|{}|{}|{}|{}".format(
-                pkt.sip, pkt.sport, seqnum, pkt.dip, pkt.dport)
+            key = f'{pkt.sip}|{pkt.sport}|{seqnum}|{pkt.dip}|{pkt.dport}'
             self.tracker[key] = pkt
         elif tcpp.flags == tcp.TH_RST|tcp.TH_ACK:
             acknum = tcpp.ack - 1
-            tmpkey = "{}|{}|{}|{}|{}".format(
-                pkt.dip, pkt.dport, acknum, pkt.sip, pkt.sport)
+            tmpkey = f'{pkt.dip}|{pkt.dport}|{acknum}|{pkt.sip}|{pkt.sport}'
             if tmpkey in self.tracker:
-                msg = "Failed connection [initiated by {}]".format(pkt.dip)
+                msg = f'Failed connection [initiated by {pkt.dip}]'
                 self.write(msg, **pkt.info())
                 oldpkt = self.tracker[tmpkey]
                 del self.tracker[tmpkey]

@@ -1,7 +1,7 @@
-"""
+'''
 XOR the data in every packet with a user-provided key. Multiple keys can be used
 for different data directions.
-"""
+'''
 
 import struct
 
@@ -12,40 +12,40 @@ from dshell.output.output import Output
 class DshellPlugin(dshell.core.ConnectionPlugin):
     def __init__(self):
         super().__init__(
-            name="xor",
-            description="XOR every packet with a given key",
+            name='xor',
+            description='XOR every packet with a given key',
             output=Output(label=__name__),
-            bpf="tcp",
-            author="twp,dev195",
+            bpf='tcp',
+            author='twp,dev195',
             optiondict={
-                "key": {
-                    "type": str,
-                    "default": "0xff",
-                    "help": "xor key in hex format (default: 0xff)",
-                    "metavar": "0xHH"
+                'key': {
+                    'type': str,
+                    'default': '0xff',
+                    'help': 'xor key in hex format (default: 0xff)',
+                    'metavar': '0xHH'
                 },
-                "cskey": {
-                    "type": str,
-                    "default": None,
-                    "help": "xor key to use for client-to-server data (default: None)",
-                    "metavar": "0xHH"
+                'cskey': {
+                    'type': str,
+                    'default': None,
+                    'help': 'xor key to use for client-to-server data (default: None)',
+                    'metavar': '0xHH'
                 },
-                "sckey": {
-                    "type": str,
-                    "default": None,
-                    "help": "xor key to use for server-to-client data (default: None)",
-                    "metavar": "0xHH"
+                'sckey': {
+                    'type': str,
+                    'default': None,
+                    'help': 'xor key to use for server-to-client data (default: None)',
+                    'metavar': '0xHH'
                 },
-                "resync": {
-                    "action": "store_true",
-                    "help": "resync the key index if the key is seen in the data"
+                'resync': {
+                    'action': 'store_true',
+                    'help': 'resync the key index if the key is seen in the data'
                 }
             }
         )
 
     def __make_key(self, key):
-        "Convert a user-provided key into a standard format plugin can use."
-        if key.startswith("0x") or key.startswith("\\x"):
+        'Convert a user-provided key into a standard format plugin can use.'
+        if key.startswith('0x') or key.startswith('\\x'):
             # Convert a hex key
             oldkey = key[2:]
             newkey = b''
@@ -53,7 +53,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
                 try:
                     newkey += struct.pack('B', int(oldkey[i:i + 2], 16))
                 except ValueError as e:
-                    self.logger.warning("Error converting hex. Will treat as raw string. - {!s}".format(e))
+                    self.logger.warning(f'Error converting hex. Will treat as raw string. - {e!s}')
                     newkey = key.encode('ascii')
                     break
         else:
@@ -64,7 +64,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
             except ValueError:
                 # otherwise, convert string key to bytes as it is
                 newkey = key.encode('ascii')
-        self.logger.debug("__make_key: {!r} -> {!r}".format(key, newkey))
+        self.logger.debug(f'__make_key: {key!r} -> {newkey!r}')
         return newkey
 
     def premodule(self):
@@ -87,7 +87,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
                 # grab the data from the TCP layer and down
                 data = pkt.data
                 # data = pkt.pkt.upper_layer.upper_layer.body_bytes
-                self.logger.debug("Original:\n{}".format(dshell.util.hex_plus_ascii(data)))
+                self.logger.debug(f'Original:\n{dshell.util.hex_plus_ascii(data)}')
                 # XOR the data and store it in new_data
                 new_data = b''
                 for i in range(len(data)):
@@ -99,5 +99,5 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
                 pkt.data = new_data
                 # # rebuild the packet by adding together each of the layers
                 # pkt.rawpkt = pkt.pkt.header_bytes + pkt.pkt.upper_layer.header_bytes + pkt.pkt.upper_layer.upper_layer.header_bytes + new_data
-                self.logger.debug("New:\n{}".format(dshell.util.hex_plus_ascii(new_data)))
+                self.logger.debug(f'New:\n{dshell.util.hex_plus_ascii(new_data)}')
         return conn

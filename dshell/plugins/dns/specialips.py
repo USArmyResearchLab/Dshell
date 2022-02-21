@@ -1,4 +1,4 @@
-"""
+'''
 Identifies DNS resolutions that fall into special IP spaces (i.e. private,
 reserved, loopback, multicast, link-local, or unspecified).
 
@@ -10,7 +10,7 @@ will include the type of special IP in parentheses:
     (multicast)
     (link-local)
     (unspecified)
-"""
+'''
 
 from dshell.plugins import dnsplugin
 from dshell.output.alertout import AlertOutput
@@ -24,12 +24,12 @@ class DshellPlugin(dnsplugin.DNSPlugin):
 
     def __init__(self, *args, **kwargs):
         super().__init__(
-            name="special-ips",
-            description="identify DNS resolutions that fall into special IP (IPv4 and IPv6) spaces (i.e. private, reserved, loopback, multicast, link-local, or unspecified)",
-            bpf="port 53",
-            author="dev195",
+            name='special-ips',
+            description='identify DNS resolutions that fall into special IP (IPv4 and IPv6) spaces (i.e. private, reserved, loopback, multicast, link-local, or unspecified)',
+            bpf='port 53',
+            author='dev195',
             output=AlertOutput(label=__name__),
-            longdescription="""
+            longdescription='''
 Identifies DNS resolutions that fall into special IP spaces (i.e. private,
 reserved, loopback, multicast, link-local, or unspecified).
 
@@ -43,21 +43,21 @@ will include the type of special IP in parentheses:
     (unspecified)
 
 For example, to look for responses with private IPs:
-    Dshell> decode -d specialips ~/pcap/SkypeIRC.cap  |grep "(private)"
+    Dshell> decode -d specialips ~/pcap/SkypeIRC.cap  |grep '(private)'
     [special-ips] 2006-08-25 15:31:06      192.168.1.2:2128  --      192.168.1.1:53    ** ID: 12579, A? voyager.home., A: 192.168.1.1 (private) (ttl 10000s) **
 
 Finding can also be written to a separate pcap file by chaining:
-    Dshell> decode -d specialips+pcapwriter --pcapwriter_outfile="special-dns.pcap" ~/pcap/example.pcap
-""",
+    Dshell> decode -d specialips+pcapwriter --pcapwriter_outfile='special-dns.pcap' ~/pcap/example.pcap
+''',
         )
 
 
     def dns_handler(self, conn, requests, responses):
-        """
+        '''
         Stores the DNS request, then iterates over responses looking for
         special IP addresses. If it finds one, it will print an alert for the
         request/response pair.
-        """
+        '''
         msg = []
 
         if requests:
@@ -66,9 +66,9 @@ Finding can also be written to a separate pcap file by chaining:
             id = request.id
             for query in request.queries:
                 if query.type == dns.DNS_A:
-                    msg.append("A? {}".format(query.name_s))
+                    msg.append(f'A? {query.name_s}')
                 elif query.type == dns.DNS_AAAA:
-                    msg.append("AAAA? {}".format(query.name_s))
+                    msg.append(f'AAAA? {query.name_s}')
 
 
         if responses:
@@ -79,7 +79,7 @@ Finding can also be written to a separate pcap file by chaining:
                     if answer.type == dns.DNS_A or answer.type == dns.DNS_AAAA:
                         answer_ip = ipaddress.ip_address(answer.address)
                         msg_fields = {}
-                        msg_format = "A: {ip} ({type}) (ttl {ttl}s)"
+                        msg_format = 'A: {ip} ({type}) (ttl {ttl}s)'
                         msg_fields['ip'] = str(answer_ip)
                         msg_fields['ttl'] = str(answer.ttl)
                         msg_fields['type'] = ''
@@ -103,8 +103,8 @@ Finding can also be written to a separate pcap file by chaining:
                             keep_responses = True
                         msg.append(msg_format.format(**msg_fields))
             if keep_responses:
-                msg.insert(0, "ID: {}".format(id))
-                msg = ", ".join(msg)
+                msg.insert(0, f'ID: {id}')
+                msg = ', '.join(msg)
                 self.write(msg, **conn.info())
                 return conn, requests, responses
 

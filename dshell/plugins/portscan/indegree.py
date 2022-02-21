@@ -1,6 +1,6 @@
-"""
+'''
 Parse traffic to detect scanners based on connection to IPs that are rarely touched by others
-"""
+'''
 
 import dshell.core
 
@@ -31,5 +31,4 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
             if S > 2 or target_count < 5:
                 continue
             # TODO implement whitelist
-            self.write("Scanning IP: {} / S score: {:.1f} / Number of records: {}".format(clientip, S, target_count))
-
+            self.write(f'Scanning IP: {clientip} / S score: {Ы:.1f} / Number of records: {target_count}')

@@ -1,6 +1,6 @@
-"""
+'''
 DHCP Plugin
-"""
+'''
 
 import dshell.core
 import dshell.util
@@ -15,7 +15,7 @@ class DshellPlugin(dshell.core.PacketPlugin):
     def __init__(self, **kwargs):
         super().__init__(name='dhcp',
                          description='extract client information from DHCP messages',
-                         longdescription="""
+                         longdescription='''
 The dhcp plugin will extract the Transaction ID, Hostname, and
 Client ID (MAC address) from every UDP DHCP packet found in the given pcap
 using port 67.  DHCP uses BOOTP as its transport protocol.
@@ -45,7 +45,7 @@ Examples:
 [dhcp] 2015-03-03 14:08:40   172.16.101.196:68    ->  255.255.255.255:67    ** Transaction ID: 0x6a482406   Client ID (MAC): 38:2C:4A:3D:EF:01    Hostname: Gregory-PC **
 [dhcp] 2015-03-03 14:10:11   172.16.101.196:68    ->     172.16.101.1:67    ** Transaction ID: 0xe74b17fe   Client ID (MAC): 38:2C:4A:3D:EF:01    Hostname: Gregory-PC **
 [dhcp] 2015-03-03 14:12:50   172.16.101.196:68    ->  255.255.255.255:67    ** Transaction ID: 0xd62614a0   Client ID (MAC): 38:2C:4A:3D:EF:01    Hostname: Gregory-PC **
-""",
+''',
                             bpf='(udp and port 67)',
                             output=AlertOutput(label=__name__),
                             author='dek',
@@ -91,12 +91,11 @@ Examples:
 
         # Allow for unknown hostnames
         if not self.client_hostname:
-            self.client_hostname = ""
+            self.client_hostname = ''
 
         if self.xid and self.mac_address:
-            self.write('Transaction ID: {0:<12} Client ID (MAC): {1:<20} Hostname: {2:<}'.format(
-                       self.xid, self.mac_address, self.client_hostname), **pkt.info(), dir_arrow='->')
+            self.write(f'Transaction ID: {self.xid:<12} Client ID (MAC): {self.mac_address:<20} Hostname: {self.client_hostname:<}', **pkt.info(), dir_arrow='->')
             return pkt
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     print(DshellPlugin())

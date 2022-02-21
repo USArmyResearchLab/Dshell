@@ -1,7 +1,7 @@
-"""
+'''
 A filter for connections by IP address country code. Will generally be chained
 with other plugins.
-"""
+'''
 
 import dshell.core
 from dshell.output.netflowout import NetflowOutput
@@ -10,10 +10,10 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 
     def __init__(self, *args, **kwargs):
         super().__init__(
-            name="Country Filter",
+            name='Country Filter',
             bpf='ip or ip6',
-            description="filter connections by IP address country code",
-            longdescription="""
+            description='filter connections by IP address country code',
+            longdescription='''
 country: filter connections on geolocation (country code)
 
 Mandatory option:
@@ -44,8 +44,8 @@ Example:
 
   decode -d country+pcapwriter traffic.pcap --pcapwriter_outfile=USonly.pcap --country_code US
   decode -d country+followstream traffic.pcap --country_code US --country_notboth
-""",
-            author="tp",
+''',
+            author='tp',
             output=NetflowOutput(label=__name__),
             optiondict={
                 'code': {'type': str, 'help': 'two-char country code', 'metavar':'CC'},
@@ -60,7 +60,7 @@ Example:
         # Several of the args are mutually exclusive
         # Check if more than one is set, and print a warning if so
         if (self.neither + self.both + self.notboth) > 1:
-            self.logger.warning("Can only use one of these args at a time: 'neither', 'both', or 'notboth'")
+            self.logger.warning('Can only use one of these args at a time: 'neither', 'both', or 'notboth'')
 
     def connection_handler(self, conn):
         # If no country code specified, pass all traffic through
@@ -99,5 +99,5 @@ Example:
         return None
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     print(DshellPlugin())

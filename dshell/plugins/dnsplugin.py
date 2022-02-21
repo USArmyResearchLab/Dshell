@@ -1,4 +1,4 @@
-"""
+'''
 This is a base-level plugin intended to handle DNS lookups and responses
 
 It inherits from the base ConnectionPlugin and provides a new handler
@@ -6,7 +6,7 @@ function: dns_handler(conn, requests, responses)
 
 It automatically pairs request/response packets by ID and passes them to the
 handler for a custom plugin, such as dns.py, to use.
-"""
+'''
 
 import logging
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def basic_cname_decode(request, answer):
-    """
+    '''
     DIRTY HACK ALERT
 
     This function exists to convert DNS CNAME responses into human-readable
@@ -30,26 +30,26 @@ def basic_cname_decode(request, answer):
 
     Feed it the bytes (query.name) of the first request and the bytes for the
     answer (answer.address) with a CNAME, and it will return the parsed string.
-    """
+    '''
 
-    if b"\xc0" not in answer:
+    if b'\xc0' not in answer:
         # short-circuit if there is no pointer
         return dns_name_decode(answer)
     # Get the offset into the question by grabbing the number after \xc0
     # Then, offset the offset by subtracting the query header length (12)
-    snip_index = answer[answer.index(b"\xc0") + 1] - 12
+    snip_index = answer[answer.index(b'\xc0') + 1] - 12
     # Grab the necessary piece from the request
     snip = request[snip_index:]
     # Reassemble and return
-    rebuilt = answer[:answer.index(b"\xc0")] + snip
+    rebuilt = answer[:answer.index(b'\xc0')] + snip
     return dns_name_decode(rebuilt)
 
 
 class DNSPlugin(dshell.ConnectionPlugin):
-    """
+    '''
     A base-level plugin that overwrites the connection_handler in
     ConnectionPlugin. It provides a new handler function: dns_handler.
-    """
+    '''
 
     def __init__(self, **kwargs):
         dshell.ConnectionPlugin.__init__(self, **kwargs)
@@ -75,7 +75,7 @@ class DNSPlugin(dshell.ConnectionPlugin):
                 rcode = dnsp.flags & 15
                 setattr(pkt, 'qr', qr_flag)
                 setattr(pkt, 'rcode', rcode)
-#                print("{0:016b}".format(dnsp.flags))
+#                print('{0:016b}'.format(dnsp.flags))
                 if qr_flag == dns.DNS_Q:
                     requests.setdefault(dnsp.id, []).append(pkt)
                 elif qr_flag == dns.DNS_A:
@@ -100,17 +100,17 @@ class DNSPlugin(dshell.ConnectionPlugin):
                     blob.hidden = False
             try:
                 if dns_handler_out and not isinstance(dns_handler_out[0], dshell.Connection):
-                    logger.warning("The output from {} dns_handler must be a list with a dshell.Connection as the first element! Chaining plugins from here may not be possible.".format(self.name))
+                    logger.warning(f'The output from {self.name} dns_handler must be a list with a dshell.Connection as the first element! Chaining plugins from here may not be possible.')
                     continue
             except TypeError:
-                logger.warning("The output from {} dns_handler must be a list with a dshell.Connection as the first element! Chaining plugins from here may not be possible.".format(self.name))
+                logger.warning(f'The output from {self.name} dns_handler must be a list with a dshell.Connection as the first element! Chaining plugins from here may not be possible.')
                 continue
             keep_connection = True
         if keep_connection:
             return conn
 
     def dns_handler(self, conn, requests, responses):
-        """
+        '''
         A placeholder.
 
         Plugins will be able to overwrite this to perform custom activites
@@ -124,7 +124,7 @@ class DNSPlugin(dshell.ConnectionPlugin):
         in as arguments (i.e. return (conn, requests, responses)). This is
         mostly a consistency thing, as only the Connection is passed along to
         other plugins.
-        """
+        '''
         return (conn, requests, responses)
 
 

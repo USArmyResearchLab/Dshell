@@ -1,8 +1,8 @@
-"""
+'''
 Generates packet or reconstructed stream output as a HTML page.
 
 Based on colorout module originally written by amm
-"""
+'''
 
 from dshell.output.output import Output
 import dshell.util
@@ -10,26 +10,26 @@ import dshell.core
 from xml.sax.saxutils import escape
 
 class HTMLOutput(Output):
-    _DESCRIPTION = "HTML format output"
-    _PACKET_FORMAT = """<h1>Packet %(counter)s (%(protocol)s)</h1><h2>Start: %(ts)s
+    _DESCRIPTION = 'HTML format output'
+    _PACKET_FORMAT = '''<h1>Packet %(counter)s (%(protocol)s)</h1><h2>Start: %(ts)s
 %(sip)s:%(sport)s -> %(dip)s:%(dport)s (%(bytes)s bytes)
 </h2>
 %(data)s
-"""
-    _CONNECTION_FORMAT = """<h1>Connection %(counter)s (%(protocol)s)</h1><h2>Start: %(starttime)s
+'''
+    _CONNECTION_FORMAT = '''<h1>Connection %(counter)s (%(protocol)s)</h1><h2>Start: %(starttime)s
 End: %(endtime)s
 %(clientip)s:%(clientport)s -> %(serverip)s:%(serverport)s (%(clientbytes)s bytes)
 %(serverip)s:%(serverport)s -> %(clientip)s:%(clientport)s (%(serverbytes)s bytes)
 </h2>
 %(data)s
-"""
+'''
     _DEFAULT_FORMAT = _PACKET_FORMAT
-    _DEFAULT_DELIM = "<br />"
+    _DEFAULT_DELIM = '<br />'
 
-    _HTML_HEADER = """
+    _HTML_HEADER = '''
 <html>
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta http-equiv='Content-Type' content='text/html; charset=UTF-8' />
     <title>Dshell Output</title>
     <style>
         body {
@@ -53,15 +53,15 @@ End: %(endtime)s
     </style>
 </head>
 <body>
-"""
+'''
 
-    _HTML_FOOTER = """
+    _HTML_FOOTER = '''
 </body>
 </html>
-"""
+'''
 
     def __init__(self, *args, **kwargs):
-        "Can be called with an optional 'hex' argument to display output in hex"
+        'Can be called with an optional \'hex\' argument to display output in hex'
         super().__init__(*args, **kwargs)
         self.counter = 1
         self.colors = {
@@ -84,7 +84,7 @@ End: %(endtime)s
             self.format_is_set = True
 
         # a template string for data output
-        colorformat = '<span style="color:%s;">%s</span>'
+        colorformat = '<span style=\'color:%s;\'>%s</span>'
 
         # Iterate over the args and try to parse out any raw data strings
         rawdata = []

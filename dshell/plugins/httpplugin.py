@@ -1,4 +1,4 @@
-"""
+'''
 This is a base-level plugin inteded to handle HTTP connections.
 
 It inherits from the base ConnectionPlugin and provides a new handler
@@ -7,7 +7,7 @@ function: http_handler(conn, request, response).
 It automatically pairs requests/responses, parses headers, reassembles bodies,
 and collects them into HTTPRequest and HTTPResponse objects that are passed
 to the http_handler.
-"""
+'''
 
 import logging
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def parse_headers(obj, f):
-    """Return dict of HTTP headers parsed from a file object."""
+    '''Return dict of HTTP headers parsed from a file object.'''
     # Logic lifted mostly from dpkt's http module
     d = {}
     while 1:
@@ -34,7 +34,7 @@ def parse_headers(obj, f):
             break
         l = line.split(None, 1)
         if not l[0].endswith(':'):
-            raise dshell.core.DataError("Invalid header {!r}".format(line))
+            raise dshell.core.DataError(f'Invalid header {line!r}')
         k = l[0][:-1].lower()
         v = len(l) != 1 and l[1] or ''
         if k in d:
@@ -47,7 +47,7 @@ def parse_headers(obj, f):
 
 
 def parse_body(obj, f, headers):
-    """Return HTTP body parsed from a file object, given HTTP header dict."""
+    '''Return HTTP body parsed from a file object, given HTTP header dict.'''
     # Logic lifted mostly from dpkt's http module
     if headers.get('transfer-encoding', '').lower() == 'chunked':
         l = []
@@ -77,7 +77,7 @@ def parse_body(obj, f, headers):
         n = int(headers['content-length'])
         body = f.read(n)
         if len(body) != n:
-            obj.errors.append(dshell.core.DataError('short body (missing {} bytes)'.format(n - len(body))))
+            obj.errors.append(dshell.core.DataError(f'short body (missing {n - len(body)} bytes)'))
     elif 'content-type' in headers:
         body = f.read()
     else:
@@ -87,7 +87,7 @@ def parse_body(obj, f, headers):
 
 
 class HTTPRequest(object):
-    """
+    '''
     A class for HTTP requests
 
     Attributes:
@@ -95,10 +95,10 @@ class HTTPRequest(object):
         errors  : a list of caught exceptions from parsing
         method  : the method of the request (e.g. GET, PUT, POST, etc.)
         uri     : the URI being requested (host not included)
-        version : the HTTP version (e.g. "1.1" for "HTTP/1.1")
+        version : the HTTP version (e.g. '1.1' for 'HTTP/1.1')
         headers : a dictionary containing the headers and values
         body    : bytestring of the reassembled body, after the headers
-    """
+    '''
     _methods = (
         'GET', 'PUT', 'ICY',
         'COPY', 'HEAD', 'LOCK', 'MOVE', 'POLL', 'POST',
@@ -126,7 +126,7 @@ class HTTPRequest(object):
             line = ''
         l = line.strip().split()
         if len(l) != 3 or l[0] not in self._methods or not l[2].startswith('HTTP'):
-            self.errors.append(dshell.core.DataError('invalid HTTP request: {!r}'.format(rawline)))
+            self.errors.append(dshell.core.DataError(f'invalid HTTP request: {rawline!r}'))
             self.method = ''
             self.uri = ''
             self.version = ''
@@ -140,18 +140,18 @@ class HTTPRequest(object):
 
 
 class HTTPResponse(object):
-    """
+    '''
     A class for HTTP responses
 
     Attributes:
         blob    : the Blob instance of the request
         errors  : a list of caught exceptions from parsing
-        version : the HTTP version (e.g. "1.1" for "HTTP/1.1")
-        status  : the status code of the response (e.g. "200" or "304")
-        reason  : the status text of the response (e.g. "OK" or "Not Modified")
+        version : the HTTP version (e.g. '1.1' for 'HTTP/1.1')
+        status  : the status code of the response (e.g. '200' or '304')
+        reason  : the status text of the response (e.g. 'OK' or 'Not Modified')
         headers : a dictionary containing the headers and values
         body    : bytestring of the reassembled body, after the headers
-    """
+    '''
     def __init__(self, blob):
         self.errors = []
         self.headers = {}
@@ -164,8 +164,8 @@ class HTTPResponse(object):
         except UnicodeDecodeError:
             line = ''
         l = line.strip().split(None, 2)
-        if len(l) < 2 or not l[0].startswith("HTTP") or not l[1].isdigit():
-            self.errors.append(dshell.core.DataError('invalid HTTP response: {!r}'.format(rawline)))
+        if len(l) < 2 or not l[0].startswith('HTTP') or not l[1].isdigit():
+            self.errors.append(dshell.core.DataError(f'invalid HTTP response: {rawline!r}'))
             self.version = ''
             self.status = ''
             self.reason = ''
@@ -178,23 +178,23 @@ class HTTPResponse(object):
         self.body = parse_body(self, data, self.headers)
 
     def decompress_gzip_content(self):
-        """
-        If this response has Content-Encoding set to something with "gzip",
+        '''
+        If this response has Content-Encoding set to something with 'gzip',
         this function will decompress it and store it in the body.
-        """
-        if "gzip" in self.headers.get("content-encoding", ""):
+        '''
+        if 'gzip' in self.headers.get('content-encoding', ''):
             try:
                 iobody = io.BytesIO(self.body)
             except TypeError as e:
                 # TODO: Why would body ever not be bytes? If it's not bytes, then that means
                 #   we have a bug somewhere in the code and therefore should just allow the
                 #   original exception to be raised.
-                self.errors.append(dshell.core.DataError("Body was not a byte string ({!s}). Could not decompress.".format(type(self.body))))
+                self.errors.append(dshell.core.DataError(f'Body was not a byte string ({type(self.body)!s}). Could not decompress.'))
                 return
             try:
                 self.body = gzip.GzipFile(fileobj=iobody).read()
             except OSError as e:
-                self.errors.append(OSError("Could not gunzip body. {!s}".format(e)))
+                self.errors.append(OSError(f'Could not gunzip body. {e!s}'))
                 return
 
 
@@ -202,11 +202,11 @@ class HTTPPlugin(dshell.core.ConnectionPlugin):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Use "gunzip" argument to automatically decompress gzipped responses
-        self.gunzip = kwargs.get("gunzip", False)
+        # Use 'gunzip' argument to automatically decompress gzipped responses
+        self.gunzip = kwargs.get('gunzip', False)
 
     def connection_handler(self, conn):
-        """
+        '''
         Goes through each Blob in a Connection, assuming they appear in pairs
         of requests and responses, and builds HTTPRequest and HTTPResponse
         objects.
@@ -214,7 +214,7 @@ class HTTPPlugin(dshell.core.ConnectionPlugin):
         After a response (or only a request at the end of a connection),
         http_handler is called. If it returns nothing, the respective blobs
         are marked as hidden so they won't be passed to additional plugins.
-        """
+        '''
         request = None
         response = None
         for blob in conn.blobs:
@@ -225,12 +225,12 @@ class HTTPPlugin(dshell.core.ConnectionPlugin):
                 # client-to-server request
                 request = HTTPRequest(blob)
                 for req_error in request.errors:
-                    self.debug("Request Error: {!r}".format(req_error))
+                    self.debug(f'Request Error: {req_error!r}')
             elif blob.direction == 'sc':
                 # server-to-client response
                 response = HTTPResponse(blob)
                 for rep_error in response.errors:
-                    self.debug("Response Error: {!r}".format(rep_error))
+                    self.debug(f'Response Error: {rep_error!r}')
                 if self.gunzip:
                     response.decompress_gzip_content()
                 http_handler_out = self.http_handler(conn=conn, request=request, response=response)
@@ -248,7 +248,7 @@ class HTTPPlugin(dshell.core.ConnectionPlugin):
         return conn
 
     def http_handler(self, conn, request, response):
-        """
+        '''
         A placeholder.
 
         Plugins will be able to overwrite this to perform custom activites
@@ -264,7 +264,7 @@ class HTTPPlugin(dshell.core.ConnectionPlugin):
             conn:       a Connection object
             request:    a HTTPRequest object
             response:   a HTTPResponse object
-        """
+        '''
         return conn, request, response
 
 DshellPlugin = None

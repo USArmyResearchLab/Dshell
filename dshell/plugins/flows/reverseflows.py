@@ -1,4 +1,4 @@
-"""
+'''
 Generate an alert when a client transmits more data than the server.
 
 Additionally, the user can specify a threshold. This means that an alert
@@ -20,7 +20,7 @@ Examples:
 3) decode -d reverse-flow <pcap> --reverse-flow_threshold 61  --reverse-flow_zero
     Generates an alert for all client transmissions that are 61 times greater
     than the server transmission.
-"""
+'''
 
 import dshell.core
 from dshell.output.alertout import AlertOutput
@@ -29,10 +29,10 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 
     def __init__(self):
         super().__init__(
-            name="reverse-flows",
-            description="Generate an alert if the client transmits more data than the server",
-            author="me",
-            bpf="tcp or udp",
+            name='reverse-flows',
+            description='Generate an alert if the client transmits more data than the server',
+            author='me',
+            bpf='tcp or udp',
             output=AlertOutput(label=__name__),
             optiondict={
                'threshold': {'type':float, 'default':3.0,
@@ -42,7 +42,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
                'zero': {'action':'store_true', 'default':False,
                         'help':'alert if the server transmits zero bytes [default: false]'},
             },
-            longdescription="""
+            longdescription='''
 Generate an alert when a client transmits more data than the server.
 
 Additionally, the user can specify a threshold. This means that an alert
@@ -64,21 +64,21 @@ Examples:
 3) decode -d reverse-flow <pcap> --reverse-flow_threshold 61  --reverse-flow_zero
     Generates an alert for all client transmissions that are 61 times greater
     than the server transmission.
-            """,
+            ''',
         )
 
     def premodule(self):
         if self.threshold < 0:
-            self.logger.warning("Cannot have a negative threshold. Defaulting to 3.0. (threshold: {0})".format(self.threshold))
+            self.logger.warning(f'Cannot have a negative threshold. Defaulting to 3.0. (threshold: {self.threshold})')
             self.threshold = 3.0
         elif not self.threshold:
-            self.logger.warning("Threshold not set. Displaying all client-server transmissions (threshold: {0})".format(self.threshold))
+            self.logger.warning(f'Threshold not set. Displaying all client-server transmissions (threshold: {self.threshold})')
 
     def connection_handler(self, conn):
         if conn.clientbytes < self.minimum:
             return
 
         if self.zero or (conn.serverbytes and float(conn.clientbytes)/conn.serverbytes > self.threshold):
-            self.write('client sent {:>6.2f} more than the server'.format(conn.clientbytes/float(conn.serverbytes)), **conn.info(), dir_arrow="->")
+            self.write(f'client sent {conn.clientbytes/float(conn.serverbytes):>6.2f} more than the server', **conn.info(), dir_arrow='->')
             return conn
 
