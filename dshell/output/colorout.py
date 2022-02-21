@@ -1,23 +1,23 @@
-"""
+'''
 Generates packet or reconstructed stream output with ANSI color codes.
 
 Based on output module originally written by amm
-"""
+'''
 
 from dshell.output.output import Output
 import dshell.core
 import dshell.util
 
 class ColorOutput(Output):
-    _DESCRIPTION = "Reconstructed output with ANSI color codes"
-    _PACKET_FORMAT = """Packet %(counter)s (%(proto)s)
+    _DESCRIPTION = 'Reconstructed output with ANSI color codes'
+    _PACKET_FORMAT = '''Packet %(counter)s (%(proto)s)
 Start: %(ts)s
 %(sip)16s:%(sport)6s -> %(dip)16s:%(dport)6s (%(bytes)s bytes)
 
 %(data)s
 
-"""
-    _CONNECTION_FORMAT = """Connection %(counter)s (%(protocol)s)
+'''
+    _CONNECTION_FORMAT = '''Connection %(counter)s (%(protocol)s)
 Start: %(starttime)s
 End:   %(endtime)s
 %(clientip)16s:%(clientport)6s -> %(serverip)16s:%(serverport)6s (%(clientbytes)s bytes)
@@ -25,9 +25,9 @@ End:   %(endtime)s
 
 %(data)s
 
-"""
+'''
     _DEFAULT_FORMAT = _PACKET_FORMAT
-    _DEFAULT_DELIM = "\n\n"
+    _DEFAULT_DELIM = '\n\n'
 
 
     def __init__(self, *args, **kwargs):
@@ -50,7 +50,7 @@ End:   %(endtime)s
             self.format_is_set = True
 
         # a template string for data output
-        colorformat = "\x1b[%sm%s\x1b[0m"
+        colorformat = '\x1b[%sm%s\x1b[0m'
 
         # Iterate over the args and try to parse out any raw data strings
         rawdata = []

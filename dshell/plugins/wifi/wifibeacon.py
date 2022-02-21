@@ -1,6 +1,6 @@
-"""
+'''
 Shows 802.11 wireless beacons and related information
-"""
+'''
 
 from collections import defaultdict
 from datetime import datetime
@@ -10,17 +10,17 @@ from dshell.output.output import Output
 
 class DshellPlugin(dshell.core.PacketPlugin):
 
-    OUTPUT_FORMAT = "[%(plugin)s]\t%(dt)s\tInterval: %(interval)s TU,\tSSID: %(ssid)s\t%(count)s\n"
+    OUTPUT_FORMAT = '[%(plugin)s]\t%(dt)s\tInterval: %(interval)s TU,\tSSID: %(ssid)s\t%(count)s\n'
 
     def __init__(self, *args, **kwargs):
         super().__init__(
-            name="Wi-fi Beacons",
-            description="Show SSIDs of 802.11 wireless beacons",
-            author="dev195",
-            bpf="wlan type mgt subtype beacon",
+            name='Wi-fi Beacons',
+            description='Show SSIDs of 802.11 wireless beacons',
+            author='dev195',
+            bpf='wlan type mgt subtype beacon',
             output=Output(label=__name__, format=self.OUTPUT_FORMAT),
             optiondict={
-                "group": {"action": "store_true", "help": "Group beacons together with counts"},
+                'group': {'action': 'store_true', 'help': 'Group beacons together with counts'},
             }
         )
         self.group_counts = defaultdict(int)
@@ -39,12 +39,12 @@ class DshellPlugin(dshell.core.PacketPlugin):
 
         # Extract SSID from frame
         beacon = frame.beacon
-        ssid = ""
+        ssid = ''
         try:
             for param in beacon.params:
                 # Find the SSID parameter
                 if param.id == 0:
-                    ssid = param.body_bytes.decode("utf-8")
+                    ssid = param.body_bytes.decode('utf-8')
                     break
         except IndexError:
             # Sometimes pypacker fails to parse a packet

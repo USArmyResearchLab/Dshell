@@ -1,7 +1,7 @@
-"""
+'''
 Shows MAC address information and optionally filters by it. It is highly
 recommended that oui.txt be included in the share/ directory (see README).
-"""
+'''
 
 import os
 
@@ -10,17 +10,17 @@ from dshell.output.output import Output
 from dshell.util import get_data_path
 
 class DshellPlugin(dshell.core.PacketPlugin):
-    OUTPUT_FORMAT = "[%(plugin)s] %(dt)s   %(sip)-15s %(smac)-18s %(smac_org)-35s ->  %(dip)-15s %(dmac)-18s %(dmac_org)-35s %(byte_count)d\n"
+    OUTPUT_FORMAT = '[%(plugin)s] %(dt)s   %(sip)-15s %(smac)-18s %(smac_org)-35s ->  %(dip)-15s %(dmac)-18s %(dmac_org)-35s %(byte_count)d\n'
 
     def __init__(self, *args, **kwargs):
         super().__init__(
-            name="Ethernet",
-            description="Show MAC address information and optionally filter by it",
-            author="dev195",
+            name='Ethernet',
+            description='Show MAC address information and optionally filter by it',
+            author='dev195',
             output=Output(label=__name__, format=self.OUTPUT_FORMAT),
             optiondict={
-                "org": {"default":[], "action":"append", "metavar":"ORGANIZATION", "help":"Organizations owning MAC address to inclusively filter on (exact match only). Can be used multiple times to look for multiple organizations."},
-                "org_exclusive": {"default":False, "action":"store_true", "help":"Set organization filter to be exclusive"},
+                'org': {'default':[], 'action':'append', 'metavar':'ORGANIZATION', 'help':'Organizations owning MAC address to inclusively filter on (exact match only). Can be used multiple times to look for multiple organizations.'},
+                'org_exclusive': {'default':False, 'action':'store_true', 'help':'Set organization filter to be exclusive'},
                 'quiet': {'action': 'store_true', 'default':False, 'help':'disable alerts for this plugin'}
             }
         )
@@ -31,9 +31,9 @@ class DshellPlugin(dshell.core.PacketPlugin):
         # http://standards-oui.ieee.org/oui.txt
         ouifilepath = os.path.join(get_data_path(), 'oui.txt')
         try:
-            with open(ouifilepath, encoding="utf-8") as ouifile:
+            with open(ouifilepath, encoding='utf-8') as ouifile:
                 for line in ouifile:
-                    if "(hex)" not in line:
+                    if '(hex)' not in line:
                         continue
                     line = line.strip().split(None, 2)
                     prefix = line[0].replace('-', ':')
@@ -42,7 +42,7 @@ class DshellPlugin(dshell.core.PacketPlugin):
         except FileNotFoundError:
             # user probably did not download it
             # print warning and continue
-            self.logger.warning("Could not find {} (see README). Will not be able to determine MAC organizations.".format(ouifilepath))
+            self.logger.warning(f'Could not find {ouifilepath} (see README). Will not be able to determine MAC organizations.')
 
     def packet_handler(self, pkt):
         if not pkt.smac or not pkt.dmac:
@@ -60,9 +60,9 @@ class DshellPlugin(dshell.core.PacketPlugin):
                 return
 
         if not self.quiet:
-            self.write("", smac_org=smac_org, dmac_org=dmac_org, **pkt.info())
+            self.write('', smac_org=smac_org, dmac_org=dmac_org, **pkt.info())
         return pkt
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     print(DshellPlugin())

@@ -1,4 +1,4 @@
-"""
+'''
 Generates pcap output
 
 Can be used alone or chained at the end of plugins for a kind of filter.
@@ -12,7 +12,7 @@ Example uses include:
    (decode -d track+pcapwriter --track_source=192.168.1.1 --pcapwriter_outfile=merged.pcap ~/pcap/*)
  - getting pcap output from plugins that can't use pcapout
    (decode -d web+pcapwriter ~/pcap/*)
-"""
+'''
 
 import struct
 
@@ -22,9 +22,9 @@ class DshellPlugin(dshell.core.PacketPlugin):
 
     def __init__(self, *args, **kwargs):
         super().__init__(
-            name="pcap writer",
-            description="Used to generate pcap output for plugins that can't use -o pcapout",
-            longdescription="""Generates pcap output
+            name='pcap writer',
+            description='Used to generate pcap output for plugins that can't use -o pcapout',
+            longdescription='''Generates pcap output
 
 Can be used alone or chained at the end of plugins for a kind of filter.
 
@@ -34,13 +34,13 @@ Example uses include:
  - merging multiple pcap files into one (decode -d pcapwriter ~/pcap/* --pcapwriter_outfile=merged.pcap)
  - saving relevant traffic by chaining with another plugin (decode -d track+pcapwriter --track_source=192.168.1.1 --pcapwriter_outfile=merged.pcap ~/pcap/*)
  - getting pcap output from plugins that can't use pcapout (decode -d web+pcapwriter ~/pcap/*)
-""",
-            author="dev195",
+''',
+            author='dev195',
             optiondict={
-                "outfile": {
-                    "type": str,
-                    "help": "Write to FILE instead of stdout",
-                    "metavar": "FILE",
+                'outfile': {
+                    'type': str,
+                    'help': 'Write to FILE instead of stdout',
+                    'metavar': 'FILE',
                 }
             }
         )
@@ -50,7 +50,7 @@ Example uses include:
     def prefile(self, infile=None):
         # Default to setting pcap output filename based on first input file.
         if not self.outfile:
-            self.outfile = (infile or self.current_pcap_file) + ".pcap"
+            self.outfile = (infile or self.current_pcap_file) + '.pcap'
 
     def packet_handler(self, packet: dshell.Packet):
         # If we don't have a pcap file handle, this is our first packet.
@@ -58,7 +58,7 @@ Example uses include:
         # NOTE: We want to create the file on the first packet instead of premodule so we
         #   have a chance to use the input file as part of our output filename.
         if not self.pcap_fh:
-            self.pcap_fh = open(self.outfile, mode="wb")
+            self.pcap_fh = open(self.outfile, mode='wb')
             link_layer_type = self.link_layer_type or 1
             # write the header:
             # magic_number, version_major, version_minor, thiszone, sigfigs,
@@ -80,5 +80,5 @@ Example uses include:
             self.pcap_fh.close()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     print(DshellPlugin())

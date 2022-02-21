@@ -1,4 +1,4 @@
-"""
+'''
 The core Dshell library
 
 This library contains the base level plugins that all others will inherit.
@@ -12,7 +12,7 @@ for handling reassembled connections.
 It also contains class definitions used by the plugins, including definitions
 for Blob, Connection, and Packet.
 
-"""
+'''
 
 # standard Python imports
 import datetime
@@ -38,21 +38,21 @@ from pypacker.layer4 import tcp, udp
 
 logger = logging.getLogger(__name__)
 
-__version__ = "3.2.1"
+__version__ = '3.2.1'
 
 class SequenceNumberError(Exception):
-    """
+    '''
     Raised when reassembling connections and data is missing or overlapping.
     See Blob.reassemble function
-    """
+    '''
     pass
 
 
 class DataError(Exception):
-    """
+    '''
     Raised when any data being handled just isn't right.
     For example, invalid headers in httpplugin.py
-    """
+    '''
     pass
 
 
@@ -61,12 +61,12 @@ try:
     geoip = DshellGeoIP()
 except FileNotFoundError:
     logger.warning(
-        "Could not find GeoIP data files! Country and ASN lookups will not be possible. Check README for instructions on where to find and install necessary data files.")
+        'Could not find GeoIP data files! Country and ASN lookups will not be possible. Check README for instructions on where to find and install necessary data files.')
     geoip = DshellFailedGeoIP()
 
 
 def print_handler_exception(e, plugin, handler):
-    """
+    '''
     A convenience function to display an error message when a handler raises
     an exception.
 
@@ -76,16 +76,14 @@ def print_handler_exception(e, plugin, handler):
         e:          the exception object
         plugin:    the plugin object
         handler:    name of the handler function
-    """
+    '''
     etype = e.__class__.__name__
-    logger.error(
-        "The {!s} for the {!r} plugin raised an exception and failed! ({}: {!s})".format(
-            handler, plugin.name, etype, e))
+    logger.error(f'The {handler!s} for the {plugin.name!r} plugin raised an exception and failed! ({etype}: {e!s})')
     logger.debug(e, exc_info=True)
 
 
 class PacketPlugin(object):
-    """
+    '''
     Base level class that plugins will inherit.
 
     This plugin handles individual packets. To handle reconstructed
@@ -109,7 +107,7 @@ class PacketPlugin(object):
         out:            output module instance
         link_layer_type:    numeric label for link layer
         defrag_ip:      rebuild fragmented IP packets (default: True)
-    """
+    '''
 
     # TODO: Move attributes like name, author, and description to be class attributes instead of instance.
     def __init__(self, **kwargs):
@@ -118,7 +116,7 @@ class PacketPlugin(object):
         self.longdescription = kwargs.get('longdescription', self.description)
         self.bpf = kwargs.get('bpf', '')
         self.compiled_bpf = kwargs.get('compiled_bpf', None)
-        self.vlan_bpf = kwargs.get("vlan_bpf", True)
+        self.vlan_bpf = kwargs.get('vlan_bpf', True)
         self.author = kwargs.get('author', '')
         self.logger = logging.getLogger(inspect.getmodule(self).__name__)
 
@@ -151,34 +149,34 @@ class PacketPlugin(object):
         # a holder for IP packet fragments when attempting to reassemble them
         self._packet_fragments = defaultdict(dict)
 
-    def produce_packets(self) -> Iterable["Packet"]:
-        """
+    def produce_packets(self) -> Iterable['Packet']:
+        '''
         Produces packets ready to be processed by the next plugin in the chain.
-        """
+        '''
         while self._packet_queue:
             yield self._packet_queue.pop(0)
 
     def flush(self):
-        """
+        '''
         Triggers plugin to finish processing any remaining packets that are being held onto.
-        """
+        '''
         # By default we don't need to do anything because any consumed packet is placed onto the queue
         # right away.
         pass
 
     def purge(self):
-        """
+        '''
         When finished with handling a pcap file, calling this will clear all
         caches in preparation for next file.
-        """
+        '''
         self._packet_queue = []
         self._packet_fragments = defaultdict(dict)
 
     def write(self, *args, **kwargs):
-        """
+        '''
         Sends information to the output formatter, after adding some
         additional fields.
-        """
+        '''
         if 'plugin' not in kwargs:
             kwargs['plugin'] = self.name
         if 'pcapfile' not in kwargs:
@@ -186,64 +184,64 @@ class PacketPlugin(object):
         self.out.write(*args, **kwargs)
 
     def log(self, msg, level=logging.INFO):
-        """
+        '''
         Logs msg argument at specified level
         (default of INFO is for -v/--verbose output)
 
         Arguments:
             msg:        text string to log
             level:      logging level (default: logging.INFO)
-        """
-        warnings.warn("log() function is deprecated. Please use logging library instead.", DeprecationWarning)
+        '''
+        warnings.warn('log() function is deprecated. Please use logging library instead.', DeprecationWarning)
         logger.log(level, msg)
 
     def debug(self, msg):
-        """
+        '''
         Logs msg argument at debug level
-        """
-        warnings.warn("debug() function is deprecated. Please use logging library instead.", DeprecationWarning)
+        '''
+        warnings.warn('debug() function is deprecated. Please use logging library instead.', DeprecationWarning)
         logger.debug(msg)
 
     def warn(self, msg):
-        """
+        '''
         Logs msg argument at warning level
-        """
-        warnings.warn("warn() function is deprecated. Please use logging library instead.", DeprecationWarning)
+        '''
+        warnings.warn('warn() function is deprecated. Please use logging library instead.', DeprecationWarning)
         logger.warning(msg)
 
     def error(self, msg):
-        """
+        '''
         Logs msg argument at error level.
-        """
-        warnings.warn("error() function is deprecated. Please use logging library instead.", DeprecationWarning)
+        '''
+        warnings.warn('error() function is deprecated. Please use logging library instead.', DeprecationWarning)
         logger.warning(msg)
 
     def __str__(self):
-        return "<{}: {}>".format("Plugin", self.name)
+        return f'<Plugin: {self.name}>'
 
     def __repr__(self):
-        return '<{}: {}/{}/{}>'.format("Plugin", self.name, self.bpf,
+        return '<{}: {}/{}/{}>'.format('Plugin', self.name, self.bpf,
                              ','.join([('%s=%s' % (x, str(self.__dict__.get(x)))) for x in self.optiondict]))
 
     # TODO: Perhaps make bpf a property which auto-triggers this when the property value is set.
     def recompile_bpf(self):
-        """
+        '''
         Compile the BPF stored in the .bpf attribute
-        """
+        '''
         # This function is normally only called by the decode.py script,
         # but can also be called by plugins that need to dynamically update
         # their filter.
         if not self.bpf:
-            logger.debug("Cannot compile BPF: .bpf attribute not set for plugin {!r}.".format(self.name))
+            logger.debug(f'Cannot compile BPF: .bpf attribute not set for plugin {self.name!r}.')
             self.compiled_bpf = None
             return
 
         # Add VLAN wrapper, if necessary
         if self.vlan_bpf:
-            bpf = "({0}) or (vlan and {0})".format(self.bpf)
+            bpf = f'({self.bpf}) or (vlan and {self.bpf})'
         else:
             bpf = self.bpf
-        logger.debug("Compiling BPF as {!r}".format(bpf))
+        logger.debug(f'Compiling BPF as {bpf!r}')
 
         # Compile BPF and handle any expected errors
         try:
@@ -251,17 +249,17 @@ class PacketPlugin(object):
                 self.link_layer_type, 65536, bpf, True, 0xffffffff
             )
         except pcapy.PcapError as e:
-            if str(e).startswith("no VLAN support for data link type"):
-                logger.error("Cannot use VLAN filters for {!r} plugin. Recommend running with --no-vlan argument.".format(self.name))
-            elif str(e) == "syntax error":
-                raise ValueError("Fatal error when compiling BPF: {!r}".format(bpf))
+            if str(e).startswith('no VLAN support for data link type'):
+                logger.error(f'Cannot use VLAN filters for {self.name!r} plugin. Recommend running with --no-vlan argument.')
+            elif str(e) == 'syntax error':
+                raise ValueError(f'Fatal error when compiling BPF: {bpf!r}')
             else:
                 raise e
 
     def ipdefrag(self, pkt):
-        """
+        '''
         IP fragment reassembly
-        """
+        '''
         if isinstance(pkt, ip.IP):  # IPv4
             f = self._packet_fragments[(pkt.src, pkt.dst, pkt.id)]
             f[pkt.offset] = pkt
@@ -280,7 +278,7 @@ class PacketPlugin(object):
             return pkt
 
     def handle_plugin_options(self):
-        """
+        '''
         A placeholder.
 
         This function is called immediately after plugin args are processed
@@ -288,62 +286,62 @@ class PacketPlugin(object):
         actions based on the arg values as soon as they are set, before
         decode.py does any further processing (e.g. updating a BPF based on
         provided arguments before handling --ebpf and --bpf flags).
-        """
+        '''
         pass
 
     def _premodule(self):
-        """
+        '''
         _premodule is called before capture starts or files are read. It will
         attempt to call the child plugin's premodule function.
-        """
+        '''
         self.premodule()
         self.out.setup()
         #        self.debug('{}'.format(pprint.pformat(self.__dict__)))
         self.debug(str(self.__dict__))
 
     def premodule(self):
-        """
+        '''
         A placeholder.
 
         A plugin can overwrite this function to perform an action before
         capture starts or files are read.
-        """
+        '''
         pass
 
     def _postmodule(self):
-        """
+        '''
         _postmodule is called when capture ends. It will attempt to call the
         child plugin's postmodule function. It will also print stats if in
         debug mode.
-        """
+        '''
         self.postmodule()
         self.out.close()
         logger.info(
-            f"{self.seen_packet_count.value} seen packets, "
-            f"{self.handled_packet_count.value} handled packets "
+            f'{self.seen_packet_count.value} seen packets, '
+            f'{self.handled_packet_count.value} handled packets '
         )
 
     def postmodule(self):
-        """
+        '''
         A placeholder.
 
         A plugin can overwrite this function to perform an action after
         capture ends or all files are processed.
-        """
+        '''
         pass
 
     def _prefile(self, infile=None):
-        """
+        '''
         _prefile is called just before an individual file is processed.
         Stores the current pcap file string and calls the child plugin's
         prefile function.
-        """
+        '''
         self.current_pcap_file = infile
         self.prefile(infile)
-        logger.info('working on file "{}"'.format(infile))
+        logger.info(f'working on file \'{infile}\'')
 
     def prefile(self, infile=None):
-        """
+        '''
         A placeholder.
 
         A plugin will be able to overwrite this function to perform an action
@@ -351,33 +349,33 @@ class PacketPlugin(object):
 
         Arguments:
             infile:     filepath or interface that will be processed
-        """
+        '''
         pass
 
     def _postfile(self):
-        """
+        '''
         _postfile is called just after an individual file is processed.
         It may expand some day, but for now it just calls a child's postfile
         function.
-        """
+        '''
         self.postfile()
 
     def postfile(self):
-        """
+        '''
         A placeholder.
 
         A plugin will be able to overwrite this function to perform an action
         after an individual file is processed.
-        """
+        '''
         pass
 
     def filter(self, packet) -> bool:
-        """
+        '''
         Determines if plugin accepts the packet or it should be filtered out.
 
         :param packet: dshell.Packet object
         :return:
-        """
+        '''
         # By default we filter by running the compiled bpf, but a plugin can
         # inherit this to do extra stuff if desired.
         if not self.compiled_bpf:
@@ -385,11 +383,11 @@ class PacketPlugin(object):
         return bool(self.compiled_bpf.filter(packet.rawpkt))
 
     # NOTE: This was originally called '_packet_handler'
-    def consume_packet(self, packet: "Packet"):
-        """
+    def consume_packet(self, packet: 'Packet'):
+        '''
         Filters and defragments packet and then passes the packet along to the packet_handler()
         function to determine whether we should pass the packet(s) along to the next plugin.
-        """
+        '''
         # First apply filter to packet.
         if not self.filter(packet):
             return
@@ -417,8 +415,8 @@ class PacketPlugin(object):
             print_handler_exception(e, self, 'packet_handler')
             return
         failed_msg = (
-            f"The output from {self.name} packet_handler must be of type dshell.Packet or a list of "
-            f"such objects! Handling connections or chaining from this plugin may not be possible."
+            f'The output from {self.name} packet_handler must be of type dshell.Packet or a list of '
+            f'such objects! Handling connections or chaining from this plugin may not be possible.'
         )
         if isinstance(packet_handler_out, (list, tuple)):
             for phout in packet_handler_out:
@@ -435,8 +433,8 @@ class PacketPlugin(object):
         elif packet_handler_out:
             logger.warning(failed_msg)
 
-    def packet_handler(self, pkt: "Packet"):
-        """
+    def packet_handler(self, pkt: 'Packet'):
+        '''
         A placeholder.
 
         Plugins will be able to overwrite this to perform custom activites on
@@ -447,16 +445,16 @@ class PacketPlugin(object):
 
         Arguments:
             pkt:    a Packet object
-        """
+        '''
         return pkt
 
 
 class ConnectionPlugin(PacketPlugin):
-    """
+    '''
     Base level class that plugins will inherit.
 
     This plugin reassembles connections from packets.
-    """
+    '''
 
     # Determines whether to filter out packets based on blobs or to produce packets directly.
     # Turning this off if the plugin doesn't mark any blobs as hidden can help improve speed.
@@ -486,9 +484,9 @@ class ConnectionPlugin(PacketPlugin):
         # maximum number of blobs a connection will store before calling
         # connection_handler
         # it defaults to infinite, but this should be lowered for huge datasets
-        self.maxblobs = float("inf")  # infinite
+        self.maxblobs = float('inf')  # infinite
 
-        # how long do we wait before deciding a connection is "finished"
+        # how long do we wait before deciding a connection is 'finished'
         # time is checked by iterating over cached connections and checking if
         # the timestamp of the connection's last packet is older than the
         # timestamp of the current packet, minus this value
@@ -501,19 +499,19 @@ class ConnectionPlugin(PacketPlugin):
         self.max_open_connections = 1000
 
     def _postmodule(self):
-        """
+        '''
         Overwriting _postmodule to add log info about connection counts.
-        """
+        '''
         super()._postmodule()
         logger.info(
-            f"{self.seen_conn_count.value} seen connections, "
-            f"{self.handled_conn_count.value} handled connections"
+            f'{self.seen_conn_count.value} seen connections, '
+            f'{self.handled_conn_count.value} handled connections'
         )
 
-    def produce_connections(self) -> Iterable["Connection"]:
-        """
+    def produce_connections(self) -> Iterable['Connection']:
+        '''
         Produces recently closed connections ready to be passed down to the next plugin in the chain.
-        """
+        '''
         # Avoid producing connections if we are still waiting for an older connection to close.
         # This helps to ensure connections are produced in the right order.... for the most part.
         if not self._production_ready:
@@ -529,10 +527,10 @@ class ConnectionPlugin(PacketPlugin):
             yield connection
         self._production_ready = False
 
-    def produce_packets(self) -> Iterable["Packet"]:
-        """
+    def produce_packets(self) -> Iterable['Packet']:
+        '''
         Produces packets ready to be processed by the next plugin in the chain.
-        """
+        '''
         # Produce connections
         for connection in self.produce_connections():
             if self.blob_filtering:
@@ -540,10 +538,10 @@ class ConnectionPlugin(PacketPlugin):
                     if not blob.hidden:
                         yield from blob.packets
             else:
-                # TODO: Perhaps have a "hidden" field on the packet itself?
+                # TODO: Perhaps have a 'hidden' field on the packet itself?
                 yield from connection.packets
 
-    def consume_packet(self, packet: "Packet"):
+    def consume_packet(self, packet: 'Packet'):
         # First run super() to handle the individual packets.
         super().consume_packet(packet)
 
@@ -552,16 +550,16 @@ class ConnectionPlugin(PacketPlugin):
             self._connection_handler(_packet)
 
     def flush(self):
-        """
+        '''
         Triggers plugin to finish processing any remaining packets that are being held onto.
-        """
+        '''
         super().flush()
         # Call cleanup_connections() to force close any remaining open connections so they are
         # on the queue ready to be passed down the chain.
         self._cleanup_connections()
 
-    def _connection_handler(self, packet: "Packet"):
-        """
+    def _connection_handler(self, packet: 'Packet'):
+        '''
         Accepts a single Packet object and tracks the connection it belongs to.
 
         If it is the first packet in a connection, it creates a new Connection
@@ -575,7 +573,7 @@ class ConnectionPlugin(PacketPlugin):
 
         Finally, if this packet is a FIN or RST, it will determine if the
         connection should close.
-        """
+        '''
         # Sort the addr value for consistent dictionary key purposes
         addr = tuple(sorted(packet.addr))
 
@@ -597,7 +595,7 @@ class ConnectionPlugin(PacketPlugin):
         # TODO: Do we need this? This flag is set to False when the connection is initialized and not
         #   set to true until it is closed.
         #   Is there any scenario where we would want to undo a True handled state?
-        # # If connection data is about to change, we set it to a "dirty" state
+        # # If connection data is about to change, we set it to a 'dirty' state
         # # for future calls to connection_handler
         # if pkt.data:
         #     conn.handled = False
@@ -620,9 +618,9 @@ class ConnectionPlugin(PacketPlugin):
             self._timeout_connections(packet.dt)
 
     def _close_connection(self, conn, full=False):
-        """
+        '''
         Runs through some standard actions to close a connection
-        """
+        '''
         # Add connection to queue ready to be processed, based on order they were received on the wire.
         heapq.heappush(self._connection_queue, (conn.packets[0].frame, full, conn))
 
@@ -632,12 +630,12 @@ class ConnectionPlugin(PacketPlugin):
         except KeyError:
             pass
 
-    def _handle_connection(self, conn: "Connection", full=False) -> bool:
-        """
+    def _handle_connection(self, conn: 'Connection', full=False) -> bool:
+        '''
         Handles produced connections.
 
         :returns: True if connection was handled successfully.
-        """
+        '''
         try:
             connection_handler_out = self.connection_handler(conn)
         except Exception as e:
@@ -648,8 +646,7 @@ class ConnectionPlugin(PacketPlugin):
         # TODO: Perhaps connection_handler() just returns a True or False indicating success?
         if connection_handler_out and not isinstance(connection_handler_out, Connection):
             logger.warning(
-                "The output from {} connection_handler must be of type dshell.Connection! Chaining plugins from here may not be possible.".format(
-                    self.name))
+                f'The output from {self.name} connection_handler must be of type dshell.Connection! Chaining plugins from here may not be possible.')
             connection_handler_out = None
 
         if not connection_handler_out:
@@ -666,10 +663,10 @@ class ConnectionPlugin(PacketPlugin):
         return True
 
     def _timeout_connections(self, timestamp: datetime.datetime):
-        """
+        '''
         Checks for and force closes connections that have been alive for too long.
         It also closes the oldest connections if too many connections are open.
-        """
+        '''
         # Force close any connections that have timed out.
         # This is based on comparing the time of the current packet, minus
         # self.timeout, to each connection's current endtime value.
@@ -687,37 +684,37 @@ class ConnectionPlugin(PacketPlugin):
         self._production_ready = True
 
     def _cleanup_connections(self):
-        """
+        '''
         decode.py will often reach the end of packet capture before all of the
         connections are closed properly. This function is called at the end
         of things to process those dangling connections.
 
         NOTE: Because the connections did not close cleanly,
         connection_close_handler will not be called.
-        """
+        '''
         for conn in list(self._connection_tracker.values()):
             if not conn.handled:
                 self._close_connection(conn)
         self._production_ready = True
 
     def purge(self):
-        """
+        '''
         When finished with handling a pcap file, calling this will clear all
         caches in preparation for next file.
-        """
+        '''
         super().purge()
         self._connection_queue = []
         self._connection_tracker = {}
         self._production_ready = False
 
     # TODO: Have blobs handled with consumer/producer model just like Packets and Connections?
-    def _blob_handler(self, conn: "Connection", blob: "Blob"):
-        """
+    def _blob_handler(self, conn: 'Connection', blob: 'Blob'):
+        '''
         Accepts a Connection and a Blob.
 
         It doesn't really do anything except call the blob_handler and is only
         here for consistency and possible future features.
-        """
+        '''
         try:
             blob_handler_out = self.blob_handler(conn, blob)
         except Exception as e:
@@ -727,14 +724,14 @@ class ConnectionPlugin(PacketPlugin):
             connection, blob = blob_handler_out
             if not isinstance(connection, Connection) or not isinstance(blob, Blob):
                 logger.warning(
-                    "The output from {} blob_handler must be of type (dshell.Connection, dshell.Blob)! Chaining plugins from here may not be possible.".format(
-                        self.name))
+                    f'The output from {self.name} blob_handler must be of type (dshell.Connection, dshell.Blob)! Chaining plugins from here may not be possible.'
+                    )
                 blob_handler_out = None
         if not blob_handler_out:
             blob.hidden = True
 
-    def blob_handler(self, conn: "Connection", blob: "Blob"):
-        """
+    def blob_handler(self, conn: 'Connection', blob: 'Blob'):
+        '''
         A placeholder.
 
         Plugins will be able to overwrite this to perform custom activites on
@@ -746,11 +743,11 @@ class ConnectionPlugin(PacketPlugin):
         Args:
             conn: Connection object
             blob: Blob object
-        """
+        '''
         return conn, blob
 
-    def connection_init_handler(self, conn: "Connection"):
-        """
+    def connection_init_handler(self, conn: 'Connection'):
+        '''
         A placeholder.
 
         Plugins will be able to overwrite this to perform custom activites on
@@ -758,11 +755,11 @@ class ConnectionPlugin(PacketPlugin):
 
         Args:
             conn: Connection object
-        """
+        '''
         return
 
-    def connection_handler(self, conn: "Connection"):
-        """
+    def connection_handler(self, conn: 'Connection'):
+        '''
         A placeholder.
 
         Plugins will be able to overwrite this to perform custom activites on
@@ -772,11 +769,11 @@ class ConnectionPlugin(PacketPlugin):
 
         Args:
             conn: Connection object
-        """
+        '''
         return conn
 
-    def connection_close_handler(self, conn: "Connection"):
-        """
+    def connection_close_handler(self, conn: 'Connection'):
+        '''
         A placeholder.
 
         Plugins will be able to overwrite this to perform custom activites on
@@ -784,12 +781,12 @@ class ConnectionPlugin(PacketPlugin):
 
         Args:
             conn: Connection object
-        """
+        '''
         return
 
 
 class Packet(object):
-    """
+    '''
     Class for holding data of individual packets
 
     def __init__(self, plugin, pktlen, pkt, ts):
@@ -828,7 +825,7 @@ class Packet(object):
         sequence_number:    TCP sequence number, or None
         ack_number:         TCP ACK number, or None
         tcp_flags:  TCP header flags, or None
-    """
+    '''
 
     IP_PROTOCOL_MAP = dict((v, k[9:]) for k, v in ip.__dict__.items() if
                            type(v) == int and k.startswith('IP_PROTO_') and k != 'IP_PROTO_HOPOPTS')
@@ -947,12 +944,12 @@ class Packet(object):
 
     @property
     def addr(self):
-        """
+        '''
         A standard representation of the address:
         ((self.sip, self.sport), (self.dip, self.dport))
         or
         ((self.smac, self.sport), (self.dmac, self.dport))
-        """
+        '''
         # try using IP addresses first
         if self.sip or self.dip:
             return (self.sip, self.sport), (self.dip, self.dport)
@@ -965,33 +962,33 @@ class Packet(object):
 
     @property
     def byte_count(self) -> int:
-        """
+        '''
         Total number of payload bytes in the packet.
-        """
+        '''
         if self._byte_count is None:
             self._byte_count = len(self.data)
         return self._byte_count
 
     @property
     def packet_tuple(self):
-        """
+        '''
         A standard representation of the raw packet tuple:
         (self.pktlen, self.rawpkt, self.ts)
-        """
+        '''
         return self.pktlen, self.rawpkt, self.ts
 
     @property
     def rawpkt(self):
-        """
+        '''
         The raw data that represents the full packet.
-        """
+        '''
         return self.pkt.bin()
 
     @property
     def data(self):
-        """
+        '''
         Retrieve data bytes from TCP/UDP data layer. Backtracks to data from highest layer.
-        """
+        '''
         if self._data is None:
             # NOTE: Using cached layers because pypacker's __getitem__ is slow.
             # best_layer = self.pkt[tcp.TCP] or self.pkt[udp.UDP] or self.pkt.highest_layer
@@ -1016,9 +1013,9 @@ class Packet(object):
 
     @data.setter
     def data(self, data):
-        """
+        '''
         Sets data bytes to TCP/UDP data layer. Backtracks to setting data at highest layer.
-        """
+        '''
         # NOTE: Using cached layers because pypacker's __getitem__ is slow.
         # best_layer = self.pkt[tcp.TCP] or self.pkt[udp.UDP] or self.pkt.highest_layer
         best_layer = self._tcp_layer or self._udp_layer or self._highest_layer
@@ -1042,14 +1039,14 @@ class Packet(object):
         # TODO: Rebuild packet object to allow for pypacker to do its thing.
 
     def __repr__(self):
-        return "%s  %16s :%-5s -> %5s :%-5s (%s -> %s)" % (
+        return '%s  %16s :%-5s -> %5s :%-5s (%s -> %s)' % (
             self.dt, self.sip, self.sport, self.dip, self.dport, self.sipcc, self.dipcc)
 
     def info(self):
-        """
+        '''
         Provides a dictionary with information about a packet. Useful for
         calls to a plugin's write() function, e.g. self.write(\\*\\*pkt.info())
-        """
+        '''
         d = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
         d['byte_count'] = self.byte_count
         del d['pkt']
@@ -1057,7 +1054,7 @@ class Packet(object):
 
 
 class Connection(object):
-    """
+    '''
     Class for holding data about connections
 
     def __init__(self, plugin, first_packet)
@@ -1104,8 +1101,8 @@ class Connection(object):
         dt:         datetime of first packet
         starttime:  datetime of first packet
         endtime:    datetime of last packet
-        client_state:   the TCP state on the client side ("init",
-                        "established", "closed", etc.)
+        client_state:   the TCP state on the client side ('init',
+                        'established', 'closed', etc.)
         server_state:   the TCP state on server side
         blobs:      list of reassembled half-stream Blobs
         stop:       if True, stop following connection
@@ -1113,25 +1110,25 @@ class Connection(object):
                     a plugin's connection_handler function. Resets when new
                     data for a connection comes in.
 
-    """
+    '''
 
     # status
     # NOTE: Using strings instead of int enum to stay backwards compatible.
-    INIT = "init"
-    ESTABLISHED = "established"
-    FINISHING = "finishing"
-    CLOSED = "closed"
+    INIT = 'init'
+    ESTABLISHED = 'established'
+    FINISHING = 'finishing'
+    CLOSED = 'closed'
 
     def __init__(self, first_packet):
-        """
+        '''
         Initializes Connection object
 
         Args:
             first_packet:   the first Packet object to initialize connection
-        """
+        '''
         self.addr = first_packet.addr
-        # TODO: Rename these variables to something more verbose like "source_ip"
-        #   I keep getting confused whether the "s" stands for "source" or "server".
+        # TODO: Rename these variables to something more verbose like 'source_ip'
+        #   I keep getting confused whether the 's' stands for 'source' or 'server'.
         self.sip = first_packet.sip
         self.smac = first_packet.smac
         self.sport = first_packet.sport
@@ -1176,9 +1173,9 @@ class Connection(object):
 
     @property
     def duration(self):
-        """
+        '''
         Total seconds from start_time to end_time.
-        """
+        '''
         tdelta = self.endtime - self.starttime
         return tdelta.total_seconds()
 
@@ -1191,12 +1188,12 @@ class Connection(object):
         return self.client_state == self.ESTABLISHED and self.server_state == self.ESTABLISHED
 
     @property
-    def blobs(self) -> Iterable["Blob"]:
-        """
+    def blobs(self) -> Iterable['Blob']:
+        '''
         Iterates the blobs (or messages) contained in this tcp connection
 
         This is dynamically generated on-demand based on the current set of packets in the connection.
-        """
+        '''
         blobs = []
 
         for packet in self.packets:
@@ -1230,13 +1227,13 @@ class Connection(object):
         yield from blobs
 
     def add_packet(self, packet: Packet):
-        """
+        '''
         Adds packet to connection.
 
         :param packet: a Packet object to add to the connection
-        """
+        '''
         if packet.sip not in (self.sip, self.dip):
-            raise ValueError(f"Address {repr(packet.sip)} is not part of connection.")
+            raise ValueError(f'Address {repr(packet.sip)} is not part of connection.')
 
         self.packets.append(packet)
 
@@ -1265,13 +1262,13 @@ class Connection(object):
             self.endtime = packet.dt
 
     def info(self):
-        """
+        '''
         Provides a dictionary with information about a connection. Useful for
         calls to a plugin's write() function, e.g. self.write(\\*\\*conn.info())
 
         Returns:
             Dictionary with information
-        """
+        '''
         d = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
         d['duration'] = self.duration
         d['clientbytes'] = self.clientbytes
@@ -1295,31 +1292,31 @@ class Connection(object):
 
     @property
     def clientbytes(self) -> int:
-        """
+        '''
         The total number of bytes form the client.
-        """
+        '''
         return sum(packet.byte_count for packet in self._client_packets())
 
     @property
     def clientpackets(self) -> int:
-        """
+        '''
         The total number of packets from the client.
-        """
+        '''
         # (Only counting packets with data.)
         return sum(bool(packet.byte_count) for packet in self._client_packets())
 
     @property
     def serverbytes(self) -> int:
-        """
+        '''
         The total number of bytes form the server.
-        """
+        '''
         return sum(packet.byte_count for packet in self._server_packets())
 
     @property
     def serverpackets(self) -> int:
-        """
+        '''
         The total number of packets from the server.
-        """
+        '''
         # (Only counting packets with data.)
         return sum(bool(packet.byte_count) for packet in self._server_packets())
 
@@ -1340,9 +1337,9 @@ class Connection(object):
         )
 
 
-# TODO: Rename this "TCPBlob" and then have a more generic "Blob" class it inherits from.
+# TODO: Rename this 'TCPBlob' and then have a more generic 'Blob' class it inherits from.
 class Blob(object):
-    """
+    '''
     Class for holding and reassembling pieces of a connection.
 
     A Blob holds the packets and reassembled data for traffic moving in one
@@ -1379,7 +1376,7 @@ class Blob(object):
                     next plugin. Can theoretically be overruled in, say, a
                     connection_handler to force a Blob to be passed to next
                     plugin.
-    """
+    '''
 
     # max offset before wrap, default is MAXINT32 for TCP sequence numbers
     MAX_OFFSET = 0xffffffff
@@ -1431,7 +1428,7 @@ class Blob(object):
 
     @property
     def all_packets(self):
-        warnings.warn("all_packets has been replaced with packets attribute", DeprecationWarning)
+        warnings.warn('all_packets has been replaced with packets attribute', DeprecationWarning)
         return self.packets
 
     @property
@@ -1452,16 +1449,16 @@ class Blob(object):
 
     @property
     def frames(self) -> List[int]:
-        """
+        '''
         The frame identifiers for the packets which contain the message.
-        """
+        '''
         return [packet.frame for packet in self.packets]
 
-    def get_packets(self, start, end=None) -> List["Packet"]:
-        """
+    def get_packets(self, start, end=None) -> List['Packet']:
+        '''
         Returns the packets that contain data for the given start offset up to the end offset.
         If end offset is not provided, just the packet containing the start offset is provided.
-        """
+        '''
         packets = []
 
         # TODO: Double check logic on this.
@@ -1495,26 +1492,26 @@ class Blob(object):
         return packets
 
     def get_frames(self, start, end=None) -> List[int]:
-        """
+        '''
         Returns frame identifiers for the packets that contain data for the given start offset
         up to the end offset.
         If end offset is not provided, just the frame identifier for the packet containing the
         start offset is provided.
-        """
+        '''
         return [packet.frame for packet in self.get_packets(start, end=end)]
 
     @property
     def sequence_numbers(self) -> List[int]:
-        """
+        '''
         The starting sequence numbers found within the packets.
-        """
+        '''
         return list(self._seq_map.keys())
 
     @property
     def sequence_range(self) -> range:
-        """
+        '''
         The range of sequence numbers found within the packets.
-        """
+        '''
         sequence_numbers = self.sequence_numbers
         if not sequence_numbers:
             return range(0, 0)
@@ -1524,10 +1521,10 @@ class Blob(object):
         return range(min_seq, max_seq + len(self._seq_map[max_seq].data))
 
     @property
-    def segments(self) -> List[Tuple[int, "Packet"]]:
-        """
+    def segments(self) -> List[Tuple[int, 'Packet']]:
+        '''
         List of valid (sequence number, packet) tuples in order by sequence number.
-        """
+        '''
         if self._segments is not None:
             return self._segments
 
@@ -1545,8 +1542,8 @@ class Blob(object):
                 missing_num_bytes = seq - expected_seq
                 if missing_num_bytes:
                     logger.debug(
-                        f"Missing {missing_num_bytes} bytes of data between packets "
-                        f"{prev_packet and prev_packet.frame} and {packet.frame}"
+                        f'Missing {missing_num_bytes} bytes of data between packets '
+                        f'{prev_packet and prev_packet.frame} and {packet.frame}'
                     )
                 expected_seq += missing_num_bytes + len(packet.data)
                 prev_packet = packet
@@ -1555,7 +1552,7 @@ class Blob(object):
             # Otherwise, we have some overlap in data and need to remove the invalid segment/packet
             # and ignoring adding it to the segments list.
             else:
-                logger.debug(f"Packet {packet.frame} contains overlapped data. Removing...")
+                logger.debug(f'Packet {packet.frame} contains overlapped data. Removing...')
                 self._remove_packet(packet)
 
         self._segments = segments  # cache for next time.
@@ -1563,9 +1560,9 @@ class Blob(object):
 
     @property
     def data(self):
-        """
+        '''
         Raw data of tcp message.
-        """
+        '''
         # Return cache if set.
         if self._data is not None:
             return self._data
@@ -1595,11 +1592,11 @@ class Blob(object):
 
     @data.setter
     def data(self, data):
-        """
+        '''
         Replaces message data with new data.
 
         WARNING: Currently, data must match original length.
-        """
+        '''
         # TODO: Support different amount of bytes by adding packets or padding/removing packets.
         orig_len = len(self.data)
         if len(data) != orig_len:
@@ -1627,8 +1624,8 @@ class Blob(object):
             relative_seq = seq - initial_seq
             if relative_seq < written_bytes:
                 raise RuntimeError(
-                    "Relative sequence is less then written byte count. "
-                    "Sequence numbers have be miss-calculated."
+                    'Relative sequence is less then written byte count. '
+                    'Sequence numbers have be miss-calculated.'
                 )
             # Skip holes in data. (User should have put padding in these areas)
             elif relative_seq != written_bytes:
@@ -1643,7 +1640,7 @@ class Blob(object):
     # TODO: Merge this in with the add_packet() logic, however I am unsure how using acknowledge numbers
     #   works if we are only looking at one side.
     def reassemble(self, allow_padding=True, allow_overlap=True, padding=b'\x00'):
-        """
+        '''
         Rebuild the data string from the current list of data packets
         For each packet, the TCP sequence number is checked.
 
@@ -1660,8 +1657,8 @@ class Blob(object):
                                     kept.
             padding:    Byte character(s) to use to fill in missing data. Used
                         in conjunction with allow_padding (default: b'\\\\x00')
-        """
-        data = b""
+        '''
+        data = b''
         unacknowledged_data = []
         acknowledged_data = {}
         for pkt in self.packets:
@@ -1712,12 +1709,12 @@ class Blob(object):
                     if allow_padding:
                         data += padding * (offset - nextoffset)
                     else:
-                        raise SequenceNumberError("Missing data for sequence number %d %s" % (nextoffset, self.addr))
+                        raise SequenceNumberError('Missing data for sequence number %d %s' % (nextoffset, self.addr))
                 elif offset < nextoffset:
                     # data is overlapping
                     if not allow_overlap:
                         raise SequenceNumberError(
-                            "Overlapping data for sequence number %d %s" % (nextoffset, self.addr))
+                            'Overlapping data for sequence number %d %s' % (nextoffset, self.addr))
 
                 nextoffset = (offset + len(segments[offset])) & self.MAX_OFFSET
                 data = data[:offset - startoffset] + \
@@ -1754,11 +1751,11 @@ class Blob(object):
     #                if allow_padding:
     #                    data += padding * (offset - nextoffset)
     #                else:
-    #                    raise SequenceNumberError("Missing data for sequence number %d %s" % (nextoffset, self.addr))
+    #                    raise SequenceNumberError('Missing data for sequence number %d %s' % (nextoffset, self.addr))
     #            elif offset < nextoffset:
     #                # data is overlapping
     #                if not allow_overlap:
-    #                    raise SequenceNumberError("Overlapping data for sequence number %d %s" % (nextoffset, self.addr))
+    #                    raise SequenceNumberError('Overlapping data for sequence number %d %s' % (nextoffset, self.addr))
     ##            nextoffset = (offset + len(segments[offset][dup])) & self.MAX_OFFSET
     ##            if nextoffset in self.ack_sequence_numbers:
     #            if offset in self.ack_sequence_numbers:
@@ -1781,13 +1778,13 @@ class Blob(object):
     #        return data
 
     def info(self):
-        """
+        '''
         Provides a dictionary with information about a blob. Useful for
         calls to a plugin's write() function, e.g. self.write(\\*\\*conn.info())
 
         Returns:
             Dictionary with information
-        """
+        '''
         d = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
         del d['hidden']
         del d['packets']
@@ -1800,12 +1797,12 @@ class Blob(object):
     #   Do we want to ensure all segments are acknowledged or should we avoid that so we can handle
     #   partial/corrupt pcaps?
     def add_packet(self, packet):
-        """
+        '''
         Accepts a Packet object and stores it.
 
         Args:
             packet: a Packet object
-        """
+        '''
         # Clear old data and segment cache.
         self._data = None
         self._segments = None
@@ -1867,9 +1864,9 @@ class Blob(object):
             self._remove_packet(packet_)
 
     def _remove_packet(self, packet):
-        """
+        '''
         Removes packet from Blob. (internal use only)
-        """
+        '''
         # Clear old data and segment cache.
         self._data = None
         self._segments = None

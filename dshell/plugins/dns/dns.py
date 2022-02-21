@@ -1,6 +1,6 @@
-"""
+'''
 Extracts and summarizes DNS queries and responses.
-"""
+'''
 
 import dshell.core
 from dshell.plugins import dnsplugin
@@ -12,25 +12,25 @@ from pypacker.layer567 import dns
 import ipaddress
 
 RESPONSE_ERRORS = {
-    dns.DNS_RCODE_FORMERR: "FormErr",
-    dns.DNS_RCODE_SERVFAIL: "ServFail",
-    dns.DNS_RCODE_NXDOMAIN: "NXDOMAIN",
-    dns.DNS_RCODE_NOTIMP: "NotImp",
-    dns.DNS_RCODE_REFUSED: "Refused",
-    dns.DNS_RCODE_YXDOMAIN: "YXDp,aom",
-    dns.DNS_RCODE_YXRRSET: "YXRRSet",
-    dns.DNS_RCODE_NXRRSET: "NXRRSet",
-    dns.DNS_RCODE_NOTAUTH: "NotAuth",
-    dns.DNS_RCODE_NOTZONE: "NotZone",
+    dns.DNS_RCODE_FORMERR: 'FormErr',
+    dns.DNS_RCODE_SERVFAIL: 'ServFail',
+    dns.DNS_RCODE_NXDOMAIN: 'NXDOMAIN',
+    dns.DNS_RCODE_NOTIMP: 'NotImp',
+    dns.DNS_RCODE_REFUSED: 'Refused',
+    dns.DNS_RCODE_YXDOMAIN: 'YXDp,aom',
+    dns.DNS_RCODE_YXRRSET: 'YXRRSet',
+    dns.DNS_RCODE_NXRRSET: 'NXRRSet',
+    dns.DNS_RCODE_NOTAUTH: 'NotAuth',
+    dns.DNS_RCODE_NOTZONE: 'NotZone',
 }
 
 class DshellPlugin(dnsplugin.DNSPlugin):
 
     def __init__(self, *args, **kwargs):
         super().__init__(
-            name="DNS",
-            description="Extract and summarize DNS queries/responses",
-            longdescription="""
+            name='DNS',
+            description='Extract and summarize DNS queries/responses',
+            longdescription='''
 The DNS plugin extracts and summarizes DNS queries and their responses. If
 possible, each query is paired with its response(s).
 
@@ -46,13 +46,13 @@ Additional information for responses can be seen with --dns_country and
 piped to grep for filtering results.
 
 For example, to look for all traffic from Germany:
-    decode -d dns --dns_country |grep "country: DE"
+    decode -d dns --dns_country |grep 'country: DE'
 
 To look for non-US traffic, try:
-    decode -d dns --dns_country |grep "country:" |grep -v "country: US"
-""",
-            author="bg/twp",
-            bpf="udp and port 53",
+    decode -d dns --dns_country |grep 'country:' |grep -v 'country: US'
+''',
+            author='bg/twp',
+            bpf='udp and port 53',
             output=AlertOutput(label=__name__),
             optiondict={'show_noanswer': {'action': 'store_true', 'help': 'report unanswered queries alongside other queries'},
                         'show_norequest': {'action': 'store_true', 'help': 'report unsolicited responses alongside other responses'},
@@ -90,21 +90,21 @@ To look for non-US traffic, try:
             id = request.id
             for query in request.queries:
                 if query.type == dns.DNS_A:
-                    msg.append("A? {}".format(query.name_s))
+                    msg.append(f'A? {query.name_s}')
                 elif query.type == dns.DNS_AAAA:
-                    msg.append("AAAA? {}".format(query.name_s))
+                    msg.append(f'AAAA? {query.name_s}')
                 elif query.type == dns.DNS_CNAME:
-                    msg.append("CNAME? {}".format(query.name_s))
+                    msg.append(f'CNAME? {query.name_s}')
                 elif query.type == dns.DNS_LOC:
-                    msg.append("LOC? {}".format(query.name_s))
+                    msg.append(f'LOC? {query.name_s}')
                 elif query.type == dns.DNS_MX:
-                    msg.append("MX? {}".format(query.name_s))
+                    msg.append(f'MX? {query.name_s}')
                 elif query.type == dns.DNS_PTR:
-                    msg.append("PTR? {}".format(query.name_s))
+                    msg.append(f'PTR? {query.name_s}')
                 elif query.type == dns.DNS_SRV:
-                    msg.append("SRV? {}".format(query.name_s))
+                    msg.append(f'SRV? {query.name_s}')
                 elif query.type == dns.DNS_TXT:
-                    msg.append("TXT? {}".format(query.name_s))
+                    msg.append(f'TXT? {query.name_s}')
         else:
             request = None
 
@@ -120,21 +120,21 @@ To look for non-US traffic, try:
                     msg.append(err)
                     continue
                 # Get the response counts
-                msg.append("{}/{}/{}".format(response.answers_amount, response.authrr_amount, response.addrr_amount))
+                msg.append(f'{response.answers_amount}/{response.authrr_amount}/{response.addrr_amount}')
                 # Parse the answers from the response
                 for answer in response.answers:
                     if answer.type == dns.DNS_A or answer.type == dns.DNS_AAAA:
                         msg_fields = {}
-                        msg_format = "A: {ip} (ttl {ttl}s)"
+                        msg_format = 'A: {ip} (ttl {ttl}s)'
                         answer_ip = ipaddress.ip_address(answer.address)
                         msg_fields['ip'] = str(answer_ip)
                         msg_fields['ttl'] = str(answer.ttl)
                         if self.country:
                             msg_fields['country'] = dshell.core.geoip.geoip_country_lookup(msg_fields['ip']) or '--'
-                            msg_format += " (country: {country})"
+                            msg_format += ' (country: {country})'
                         if self.asn:
                             msg_fields['asn'] = dshell.core.geoip.geoip_asn_lookup(msg_fields['ip'])
-                            msg_format += " (ASN: {asn})"
+                            msg_format += ' (ASN: {asn})'
                         msg.append(msg_format.format(**msg_fields))
                     # TODO pypacker doesn't really parse CNAMEs out. We try
                     #      to get what we can manually, but keep checking if
@@ -144,26 +144,26 @@ To look for non-US traffic, try:
                             cname = dnsplugin.basic_cname_decode(request.queries[0].name, answer.address)
                         else:
                             cname = dns_name_decode(answer.address)
-                        msg.append('CNAME: {!r}'.format(cname))
+                        msg.append(f'CNAME: {cname!r}')
                     elif answer.type == dns.DNS_LOC:
-                        msg.append("LOC: {!s}".format(answer.address))
+                        msg.append(f'LOC: {answer.address!s}')
                     elif answer.type == dns.DNS_MX:
-                        msg.append('MX: {!s}'.format(answer.address))
+                        msg.append(f'MX: {answer.address!s}')
                     elif answer.type == dns.DNS_NS:
-                        msg.append('NS: {!s}'.format(answer.address))
+                        msg.append(f'NS: {answer.address!s}')
                     elif answer.type == dns.DNS_PTR:
                         ptr = dns_name_decode(answer.address)
-                        msg.append('PTR: {!s}'.format(ptr))
+                        msg.append(f'PTR: {ptr!s}')
                     elif answer.type == dns.DNS_SRV:
-                        msg.append('SRV: {!s}'.format(answer.address))
+                        msg.append(f'SRV: {answer.address!s}')
                     elif answer.type == dns.DNS_TXT:
-                        msg.append('TXT: {!s}'.format(answer.address))
+                        msg.append(f'TXT: {answer.address!s}')
 
         else:
-            msg.append("No response")
+            msg.append('No response')
 
-        msg.insert(0, "ID: {}".format(id))
-        msg = ", ".join(msg)
+        msg.insert(0, f'ID: {id}')
+        msg = ', '.join(msg)
         if request:
             self.write(msg, **request_pkt.info())
         elif response:

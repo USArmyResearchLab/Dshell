@@ -9,30 +9,30 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 
     def __init__(self):
         super().__init__(
-            name="search",
-            author="dev195",
-            bpf="tcp or udp",
-            description="Search for patterns in connections",
-            longdescription="""
+            name='search',
+            author='dev195',
+            bpf='tcp or udp',
+            description='Search for patterns in connections',
+            longdescription='''
 Reconstructs streams and searches the content for a user-provided regular
 expression. Requires definition of the --search_expression argument. Additional
 options can be provided to alter behavior.
-            """,
+            ''',
             output=AlertOutput(label=__name__),
             optiondict={
-                "expression": {
-                    "help": "Search expression",
-                    "type": str,
-                    "metavar": "REGEX"},
-                "ignorecase": {
-                    "help": "Ignore case when searching",
-                    "action": "store_true"},
-                "invert": {
-                    "help": "Return connections that DO NOT match expression",
-                    "action": "store_true"},
-                "quiet": {
-                    "help": "Do not display matches from this plugin. Useful when chaining plugins.",
-                    "action": "store_true"}
+                'expression': {
+                    'help': 'Search expression',
+                    'type': str,
+                    'metavar': 'REGEX'},
+                'ignorecase': {
+                    'help': 'Ignore case when searching',
+                    'action': 'store_true'},
+                'invert': {
+                    'help': 'Return connections that DO NOT match expression',
+                    'action': 'store_true'},
+                'quiet': {
+                    'help': 'Do not display matches from this plugin. Useful when chaining plugins.',
+                    'action': 'store_true'}
             })
 
 
@@ -40,7 +40,7 @@ options can be provided to alter behavior.
     def premodule(self):
         # make sure the user actually provided an expression to search for
         if not self.expression:
-            self.error("Must define an expression to search for using --search_expression")
+            self.error('Must define an expression to search for using --search_expression')
             sys.exit(1)
 
         # define the regex flags, based on arguments
@@ -55,16 +55,16 @@ options can be provided to alter behavior.
             byte_expression = bytes(self.expression, 'utf-8')
             self.regex = re.compile(byte_expression, re_flags)
         except Exception as e:
-            self.error("Could not compile regex ({0})".format(e))
+            self.error(f'Could not compile regex ({e})')
             sys.exit(1)
 
 
 
     def connection_handler(self, conn):
-        """
+        '''
         Go through the data of each connection.
         If anything is a hit, return the entire connection.
-        """
+        '''
 
         match_found = False
         for blob in conn.blobs:
@@ -76,9 +76,9 @@ options can be provided to alter behavior.
                     match_found = True
                     if not self.quiet:
                         if blob.sip == conn.sip:
-                            self.write(printable_text(line, False), **conn.info(), dir_arrow="->")
+                            self.write(printable_text(line, False), **conn.info(), dir_arrow='->')
                         else:
-                            self.write(printable_text(line, False), **conn.info(), dir_arrow="<-")
+                            self.write(printable_text(line, False), **conn.info(), dir_arrow='<-')
                 elif self.invert and not match:
                     if not self.quiet:
                         self.write(**conn.info())
@@ -88,5 +88,5 @@ options can be provided to alter behavior.
 
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     print(DshellPlugin())

@@ -1,4 +1,4 @@
-"""
+'''
  Author: MM - https://github.com/1modm
 
  The Session Initiation Protocol (SIP) is the IETF protocol for VOIP and other
@@ -44,7 +44,7 @@
          |------------------------------------------------->|
          |                                                  |
 
-"""
+'''
 
 import dshell.core
 from dshell.output.colorout import ColorOutput
@@ -56,12 +56,12 @@ class DshellPlugin(dshell.core.PacketPlugin):
 
     def __init__(self):
         super().__init__(
-            name="SIP",
-            author="mm/dev195",
+            name='SIP',
+            author='mm/dev195',
             output=ColorOutput(label=__name__),
-            bpf="udp",
-            description="(UNFINISHED) Session Initiation Protocol (SIP) capture plugin",
-            longdescription="""
+            bpf='udp',
+            description='(UNFINISHED) Session Initiation Protocol (SIP) capture plugin',
+            longdescription='''
 The Session Initiation Protocol (SIP) plugin will extract the Call ID, User agent, Codec, Method, 
 SIP call, Host, and Client MAC address from every SIP request or response packet found in the given pcap.  
 
@@ -95,7 +95,7 @@ Output:
     Sequence and Method: 1 ACK
     From: 10.5.1.8:5060 (00:20:80:a1:13:db) to 10.5.1.7:5060 (15:2a:01:b4:0f:47)
     Via: SIP/2.0/UDP 10.5.1.8:5060;branch=z9hG4bK940bdac4-8a13-1410-9e58-08002772a6e9;rport
-    SIP call: "M" <sip:M@10.5.1.8>;tag=0ba2d5c4-8a13-1910-9d56-08002772a6e9  -->  "miguel" <sip:demo-alice@10.5.1.7>;tag=84538c9d-ba7e-e611-937f-68a3c4f0d6ce
+    SIP call: 'M' <sip:M@10.5.1.8>;tag=0ba2d5c4-8a13-1910-9d56-08002772a6e9  -->  'miguel' <sip:demo-alice@10.5.1.7>;tag=84538c9d-ba7e-e611-937f-68a3c4f0d6ce
     Call ID: 0ba2d5c4-8a13-1910-9d57-08002772a6e9@M-PC
 
     --> SIP Response <-- 
@@ -103,7 +103,7 @@ Output:
     Sequence and Method: 1 INVITE
     From: 10.5.1.7:5060 (02:0a:40:12:30:23) to 10.5.1.8:5060 (d5:02:03:94:31:1b)
     Via: SIP/2.0/UDP 10.5.1.8:5060;branch=z9hG4bK26a8d5c4-8a13-1910-9d58-08002772a6e9;rport=5060;received=10.5.1.8
-    SIP call: "M" <sip:M@10.5.1.8>;tag=0ba2d5c4-8a13-1910-9d56-08002772a6e9  -->  "miguel" <sip:demo-alice@10.5.1.7>;tag=84538c9d-ba7e-e611-937f-68a3c4f0d6ce
+    SIP call: 'M' <sip:M@10.5.1.8>;tag=0ba2d5c4-8a13-1910-9d56-08002772a6e9  -->  'miguel' <sip:demo-alice@10.5.1.7>;tag=84538c9d-ba7e-e611-937f-68a3c4f0d6ce
     Call ID: 0ba2d5c4-8a13-1910-9d57-08002772a6e9@M-PC
     Codec selected: PCMU 
     Rate selected: 8000 
@@ -116,7 +116,7 @@ Detailed Output:
     SIP/2.0 100 Trying
     content-length: 0
     via: SIP/2.0/UDP 10.5.1.8:5060;branch=z9hG4bK26a8d5c4-8a13-1910-9d58-08002772a6e9;rport=5060;received=10.5.1.8
-    from: "M" <sip:M@10.5.1.8>;tag=0ba2d5c4-8a13-1910-9d56-08002772a6e9
+    from: 'M' <sip:M@10.5.1.8>;tag=0ba2d5c4-8a13-1910-9d56-08002772a6e9
     to: <sip:demo-alice@10.5.1.7>
     cseq: 1 INVITE
     call-id: 0ba2d5c4-8a13-1910-9d57-08002772a6e9@M-PC
@@ -127,21 +127,21 @@ Detailed Output:
     SIP/2.0 180 Ringing
     content-length: 0
     via: SIP/2.0/UDP 10.5.1.8:5060;branch=z9hG4bK26a8d5c4-8a13-1910-9d58-08002772a6e9;rport=5060;received=10.5.1.8
-    from: "M" <sip:M@10.5.1.8>;tag=0ba2d5c4-8a13-1910-9d56-08002772a6e9
+    from: 'M' <sip:M@10.5.1.8>;tag=0ba2d5c4-8a13-1910-9d56-08002772a6e9
     require: 100rel
     rseq: 694867676
     user-agent: Ekiga/4.0.1
-    to: "miguel" <sip:demo-alice@10.5.1.7>;tag=84538c9d-ba7e-e611-937f-68a3c4f0d6ce
-    contact: "miguel" <sip:miguel@10.5.1.7>
+    to: 'miguel' <sip:demo-alice@10.5.1.7>;tag=84538c9d-ba7e-e611-937f-68a3c4f0d6ce
+    contact: 'miguel' <sip:miguel@10.5.1.7>
     cseq: 1 INVITE
     allow: INVITE,ACK,OPTIONS,BYE,CANCEL,SUBSCRIBE,NOTIFY,REFER,MESSAGE,INFO,PING,PRACK
     call-id: 0ba2d5c4-8a13-1910-9d57-08002772a6e9@M-PC
-""",
+''',
             optiondict={
-                "showpkt": {
-                    "action": "store_true",
-                    "default": False,
-                    "help": "Display the full SIP response or request body"
+                'showpkt': {
+                    'action': 'store_true',
+                    'default': False,
+                    'help': 'Display the full SIP response or request body'
                 }
             }
        )
@@ -166,9 +166,9 @@ Detailed Output:
 
         # Check if exists SIP Request
         if sip.SIP(udpp.body_bytes):
-            siptxt = "<-- SIP Request -->"
+            siptxt = '<-- SIP Request -->'
             sippkt = sip.SIP(udpp.body_bytes)
-            self.direction = "sc"
+            self.direction = 'sc'
             self.output = True
 
         # TODO finish SIP plugin (pypacker needs to finish SIP, too)

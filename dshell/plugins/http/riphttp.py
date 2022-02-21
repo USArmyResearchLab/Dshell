@@ -1,7 +1,7 @@
-"""
+'''
 Identifies HTTP traffic and reassembles file transfers before writing them to
 files.
-"""
+'''
 
 import os
 import re
@@ -13,10 +13,10 @@ from dshell.output.alertout import AlertOutput
 class DshellPlugin(HTTPPlugin):
     def __init__(self):
         super().__init__(
-            name="rip-http",
-            author="bg,twp",
-            bpf="tcp and (port 80 or port 8080 or port 8000)",
-            description="Rips files from HTTP traffic",
+            name='rip-http',
+            author='bg,twp',
+            bpf='tcp and (port 80 or port 8080 or port 8000)',
+            description='Rips files from HTTP traffic',
             output=AlertOutput(label=__name__),
             optiondict={'append_conn':
                             {'action': 'store_true',
@@ -26,7 +26,7 @@ class DshellPlugin(HTTPPlugin):
                              'help': 'append timestamp to filename'},
                         'direction':
                             {'help': 'cs=only capture client POST, sc=only capture server GET response',
-                             'metavar': '"cs" OR "sc"',
+                             'metavar': ''cs' OR 'sc'',
                              'default': None},
                         'outdir':
                             {'help': 'directory to write output files (Default: current directory)',
@@ -43,7 +43,7 @@ class DshellPlugin(HTTPPlugin):
 
     def premodule(self):
         if self.direction not in ('cs', 'sc', None):
-            self.logger.warning("Invalid value for direction: {!r}. Argument must be either 'sc' for server-to-client or 'cs' for client-to-server.".format(self.direction))
+            self.logger.warning(f'Invalid value for direction: {self.direction!r}. Argument must be either \'sc\' for server-to-client or \'cs\' for client-to-server.')
             sys.exit(1)
 
         if self.content_filter:
@@ -57,12 +57,11 @@ class DshellPlugin(HTTPPlugin):
             try:
                 os.makedirs(self.outdir)
             except (IOError, OSError) as e:
-                self.error("Could not create output directory: {!r}: {!s}"
-                           .format(self.outdir, e))
+                self.error(f'Could not create output directory: {self.outdir!r}: {e!s}')
                 sys.exit(1)
 
     def http_handler(self, conn, request, response):
-        if (not self.direction or self.direction == 'cs') and request and request.method == "POST" and request.body:
+        if (not self.direction or self.direction == 'cs') and request and request.method == 'POST' and request.body:
             if not self.content_filter or self.content_filter.search(request.headers.get('content-type', '')):
                 payload = request
         elif (not self.direction or self.direction == 'sc') and response and response.status[0] == '2':
@@ -81,7 +80,7 @@ class DshellPlugin(HTTPPlugin):
         if url in self.openfiles:
             # File is already open, so just insert the new data
             s, e = self.openfiles[url].handleresponse(response)
-            self.logger.debug("{0!r} --> Range: {1} - {2}".format(url, s, e))
+            self.logger.debug(f'{url!r} --> Range: {s} - {e}')
         else:
             # A new file!
             filename = request.uri.split('?', 1)[0].split('/')[-1]
@@ -90,29 +89,29 @@ class DshellPlugin(HTTPPlugin):
                 return
             if not filename:
                 # Assume index.html if there is no filename
-                filename = "index.html"
+                filename = 'index.html'
             if self.append_conn:
-                filename += "_{0}-{1}".format(conn.serverip, conn.clientip)
+                filename += f'_{conn.serverip}-{conn.clientip}'
             if self.append_ts:
-                filename += "_{}".format(conn.ts)
+                filename += f'_{conn.ts}'
             while os.path.exists(os.path.join(self.outdir, filename)):
-                filename += "_"
-            self.write("New file {} ({})".format(filename, url), **conn.info(), dir_arrow="<-")
+                filename += '_'
+            self.write(f'New file {filename} ({url})', **conn.info(), dir_arrow='<-')
             self.openfiles[url] = HTTPFile(os.path.join(self.outdir, filename), self)
             s, e = self.openfiles[url].handleresponse(payload)
-            self.logger.debug("{0!r} --> Range: {1} - {2}".format(url, s, e))
+            self.logger.debug(f'{url!r} --> Range: {s} - {e}')
         if self.openfiles[url].done():
-            self.write("File done {} ({})".format(filename, url), **conn.info(), dir_arrow="<-")
+            self.write(f'File done {filename} ({url})', **conn.info(), dir_arrow='<-')
             del self.openfiles[url]
 
         return conn, request, response
 
 
 class HTTPFile(object):
-    """
+    '''
     An internal class used to hold metadata for open HTTP files.
     Used mostly to reassemble fragmented transfers.
-    """
+    '''
 
     def __init__(self, filename, plugin_instance):
         self.complete = False
@@ -126,8 +125,7 @@ class HTTPFile(object):
         try:
             self.fh = open(filename, 'wb')
         except IOError as e:
-            self.plugin.error(
-                "Could not create file {!r}: {!s}".format(filename, e))
+            self.plugin.error(f'Could not create file {filename!r}: {e!s}')
             self.fh = None
 
     def __del__(self):
@@ -135,17 +133,16 @@ class HTTPFile(object):
             return
         self.fh.close()
         if not self.done():
-            self.plugin.warning("Incomplete file: {!r}".format(self.filename))
+            self.plugin.warning(f'Incomplete file: {self.filename!r}')
             try:
-                os.rename(self.filename, self.filename + "_INCOMPLETE")
+                os.rename(self.filename, self.filename + '_INCOMPLETE')
             except:
                 pass
             ls = 0
             le = 0
             for s, e in self.ranges:
                 if s > le + 1:
-                    self.plugin.warning(
-                        "Missing bytes between {0} and {1}".format(le, s))
+                    self.plugin.warning(f'Missing bytes between {le} and {s}')
                 ls, le = s, e
 
     def handleresponse(self, response):
@@ -202,5 +199,5 @@ class HTTPFile(object):
         return foundgap
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     print(DshellPlugin())

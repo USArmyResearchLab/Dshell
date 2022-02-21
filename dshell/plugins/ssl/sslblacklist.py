@@ -1,8 +1,8 @@
-"""
+'''
 Looks for certificates in SSL/TLS traffic and tries to find any hashes that
 match those in the abuse.ch blacklist.
 (https://sslbl.abuse.ch/blacklist/)
-"""
+'''
 
 # handy reference:
 # http://blog.fourthbit.com/2014/12/23/traffic-analysis-of-an-ssl-slash-tls-session
@@ -43,11 +43,11 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 
     def __init__(self):
         super().__init__(
-            name="sslblacklist",
-            author="dev195",
-            bpf="tcp and (port 443 or port 993 or port 1443 or port 8531)",
-            description="Looks for certificate SHA1 matches in the abuse.ch blacklist",
-            longdescription="""
+            name='sslblacklist',
+            author='dev195',
+            bpf='tcp and (port 443 or port 993 or port 1443 or port 8531)',
+            description='Looks for certificate SHA1 matches in the abuse.ch blacklist',
+            longdescription='''
     Looks for certificates in SSL/TLS traffic and tries to find any hashes that
     match those in the abuse.ch blacklist.
 
@@ -56,13 +56,13 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 
     If the CSV is not in the current directory, use the --sslblacklist_csv
     argument to provide a file path.
-""",
+''',
             output=AlertOutput(label=__name__),
             optiondict={
-                "csv": {
-                    "help": "filepath to the sslblacklist.csv file",
-                    "default": "./sslblacklist.csv",
-                    "metavar": "FILEPATH"
+                'csv': {
+                    'help': 'filepath to the sslblacklist.csv file',
+                    'default': './sslblacklist.csv',
+                    'metavar': 'FILEPATH'
                 },
             }
         )
@@ -71,7 +71,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
         self.parse_blacklist_csv(self.csv)
 
     def parse_blacklist_csv(self, filepath):
-        "parses the SSL blacklist CSV, given the 'filepath'"
+        'parses the SSL blacklist CSV, given the 'filepath''
         # Python's standard csv module doesn't seem to handle it properly
         self.hashes = {}
         with open(filepath, 'r') as csv:
@@ -93,27 +93,27 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
         # Iterate over each layer of the connection, paying special attention to the certificate
         while True:
             try:
-                content_type, proto_version, record_len = struct.unpack("!BHH", data.read(5))
+                content_type, proto_version, record_len = struct.unpack('!BHH', data.read(5))
             except struct.error:
                 break
             if proto_version not in (SSL3_VERSION, TLS1_VERSION, TLS1_1_VERSION, TLS1_2_VERSION):
                 return None
             if content_type == SSL3_RT_HANDSHAKE:
-                handshake_type = struct.unpack("!B", data.read(1))[0]
-                handshake_len = struct.unpack("!I", b"\x00"+data.read(3))[0]
+                handshake_type = struct.unpack('!B', data.read(1))[0]
+                handshake_len = struct.unpack('!I', b'\x00'+data.read(3))[0]
                 if handshake_type == SSL3_MT_CERTIFICATE:
                     # Process the certificate itself
-                    cert_chain_len = struct.unpack("!I", b"\x00"+data.read(3))[0]
+                    cert_chain_len = struct.unpack('!I', b'\x00'+data.read(3))[0]
                     bytes_processed = 0
                     while (bytes_processed < cert_chain_len):
                         try:
-                            cert_data_len = struct.unpack("!I", b"\x00"+data.read(3))[0]
+                            cert_data_len = struct.unpack('!I', b'\x00'+data.read(3))[0]
                             cert_data = data.read(cert_data_len)
                             bytes_processed = 3 + cert_data_len
                             sha1 = hashlib.sha1(cert_data).hexdigest()
                             if sha1 in self.hashes:
                                 bad_guy = self.hashes[sha1]
-                                self.write("Certificate hash match: {}".format(bad_guy), **conn.info())
+                                self.write(f'Certificate hash match: {bad_guy}', **conn.info())
                         except struct.error as e:
                             break
                 else:

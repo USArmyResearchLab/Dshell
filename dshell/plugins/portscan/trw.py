@@ -1,10 +1,10 @@
-"""
+'''
 Uses the Threshold Random Walk algorithm described in this paper:
 
 Limitations to threshold random walk scan detection and mitigating enhancements
 Written by: Mell, P.; Harang, R.
 http://ieeexplore.ieee.org/xpls/icp.jsp?arnumber=6682723
-"""
+'''
 
 import dshell.core
 from dshell.output.output import Output
@@ -23,20 +23,20 @@ min_detect_prob = 0.99
 hi_threshold = min_detect_prob / max_fp_prob
 lo_threshold = max_fp_prob / min_detect_prob
 
-OUTPUT_FORMAT = "(%(plugin)s) %(data)s\n"
+OUTPUT_FORMAT = '(%(plugin)s) %(data)s\n'
 
 class DshellPlugin(dshell.core.PacketPlugin):
     def __init__(self, *args, **kwargs):
         super().__init__(
-            name="trw",
-            author="dev195",
-            bpf="tcp",
+            name='trw',
+            author='dev195',
+            bpf='tcp',
             output=Output(label=__name__, format=OUTPUT_FORMAT),
-            description="Uses Threshold Random Walk to detect network scanners",
+            description='Uses Threshold Random Walk to detect network scanners',
             optiondict={
-                "mark_benigns": {
-                    "action": "store_true",
-                    "help": "Use an upper threshold to mark IPs as benign, thus removing them from consideration as scanners"
+                'mark_benigns': {
+                    'action': 'store_true',
+                    'help': 'Use an upper threshold to mark IPs as benign, thus removing them from consideration as scanners'
                 }
             }
         )
@@ -46,10 +46,10 @@ class DshellPlugin(dshell.core.PacketPlugin):
 
     def check_score(self, ip, score):
         if self.mark_benigns and score >= hi_threshold:
-            self.write("IP {} is benign (score: {})".format(ip, score))
+            self.write(f'IP {ip} is benign (score: {score})')
             self.classified_ips.add(ip)
         elif score <= lo_threshold:
-            self.write("IP {} IS A SCANNER! (score: {})".format(ip, score))
+            self.write(f'IP {ip} IS A SCANNER! (score: {score})')
             self.classified_ips.add(ip)
 
     def packet_handler(self, pkt):

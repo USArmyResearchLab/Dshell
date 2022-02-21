@@ -1,9 +1,9 @@
-"""
+'''
 This output module converts plugin output into JSON and indexes it into
 an Elasticsearch datastore
 
 NOTE: This module requires the third-party 'elasticsearch' Python module
-"""
+'''
 
 import ipaddress
 import json
@@ -13,21 +13,21 @@ from elasticsearch import Elasticsearch
 import dshell.output.jsonout
 
 class ElasticOutput(dshell.output.jsonout.JSONOutput):
-    """
+    '''
     Elasticsearch output module
     Use with --output=elasticsearchout
 
     It is recommended that it be run with some options set:
         host:       server hosting the database (localhost)
         port:       HTTP port listening (9200)
-        index:      name of index storing results ("dshell")
-        type:       the type for each alert ("alerts")
+        index:      name of index storing results ('dshell')
+        type:       the type for each alert ('alerts')
 
     Example use:
-        decode --output=elasticout --oargs="index=dshellalerts" --oargs="type=netflowout" -d netflow ~/pcap/example.pcap
-    """
+        decode --output=elasticout --oargs='index=dshellalerts' --oargs='type=netflowout' -d netflow ~/pcap/example.pcap
+    '''
 
-    _DESCRIPTION = "Automatically insert data into an elasticsearch instance"
+    _DESCRIPTION = 'Automatically insert data into an elasticsearch instance'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs.copy())
@@ -41,7 +41,7 @@ class ElasticOutput(dshell.output.jsonout.JSONOutput):
         self.es = Elasticsearch([self.options['host']], port=self.options['port'])
 
     def write(self, *args, **kwargs):
-        "Converts alert's keyword args to JSON and indexes it into Elasticsearch datastore."
+        'Converts alert's keyword args to JSON and indexes it into Elasticsearch datastore.'
         if args and 'data' not in kwargs:
             kwargs['data'] = self.delimiter.join(map(str, args))
 

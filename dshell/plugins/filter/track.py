@@ -1,7 +1,7 @@
-"""
+'''
 Only follows connections that match user-provided IP addresses and ports. Is
 generally chained with other plugins.
-"""
+'''
 
 import ipaddress
 import sys
@@ -12,10 +12,10 @@ from dshell.output.alertout import AlertOutput
 class DshellPlugin(dshell.core.ConnectionPlugin):
     def __init__(self, **kwargs):
         super().__init__(
-            name="track",
-            author="twp,dev195",
-            description="Only follow connections that match user-provided IP addresses and ports",
-            longdescription="""Only follow connections that match user-provided IP addresses
+            name='track',
+            author='twp,dev195',
+            description='Only follow connections that match user-provided IP addresses and ports',
+            longdescription='''Only follow connections that match user-provided IP addresses
 
 IP addresses can be specified with --track_source and --track_target.
 Multiple IPs can be used with commas (e.g. --track_source=192.168.1.1,127.0.0.1).
@@ -25,30 +25,30 @@ CIDR notation is okay (e.g. --track_source=196.168.0.0/16).
 
 --track_source : used to limit connections by the IP that initiated the connection (usually the client)
 --trace_target : used to limit connections by the IP that received the connection (usually the server)
---track_alerts : used to display optional alerts indicating when a connection starts/ends""",
-            bpf="ip or ip6",
+--track_alerts : used to display optional alerts indicating when a connection starts/ends''',
+            bpf='ip or ip6',
             output=AlertOutput(label=__name__),
             optiondict={
-                "target": {
-                    "default": [],
-                    "action": "append",
-                    "metavar": "IPpPORT"},
-                "source": {
-                    "default": [],
-                    "action": "append",
-                    "metavar": "IPpPORT"},
-                "alerts": {
-                    "action": "store_true"}
+                'target': {
+                    'default': [],
+                    'action': 'append',
+                    'metavar': 'IPpPORT'},
+                'source': {
+                    'default': [],
+                    'action': 'append',
+                    'metavar': 'IPpPORT'},
+                'alerts': {
+                    'action': 'store_true'}
                 }
             )
         self.sources = []
         self.targets = []
 
     def __split_ips(self, input):
-        """
+        '''
         Used to split --track_target and --track_source arguments into
         list-of-lists used in the connection handler
-        """
+        '''
         return_val = []
         for piece in input.split(','):
             if 'p' in piece:
@@ -56,10 +56,10 @@ CIDR notation is okay (e.g. --track_source=196.168.0.0/16).
                 try:
                     port = int(port)
                 except ValueError as e:
-                    self.error("Could not parse port number in {!r} - {!s}".format(piece, e))
+                    self.error(f'Could not parse port number in {piece!r} - {e!s}')
                     sys.exit(1)
                 if 0 < port > 65535:
-                    self.error("Could not parse port number in {!r} - must be in valid port range".format(piece))
+                    self.error(f'Could not parse port number in {piece!r} - must be in valid port range')
                     sys.exit(1)
             else:
                 ip, port = piece, None
@@ -67,13 +67,13 @@ CIDR notation is okay (e.g. --track_source=196.168.0.0/16).
                 try:
                     ip = ipaddress.ip_network(ip)
                 except ValueError as e:
-                    self.error("Could not parse CIDR netrange - {!s}".format(e))
+                    self.error(f'Could not parse CIDR netrange - {e!s}')
                     sys.exit(1)
             elif ip:
                 try:
                     ip = ipaddress.ip_address(ip)
                 except ValueError as e:
-                    self.error("Could not parse IP address - {!s}".format(e))
+                    self.error(f'Could not parse IP address - {e!s}')
                     sys.exit(1)
             else:
                 ip = None
@@ -81,7 +81,7 @@ CIDR notation is okay (e.g. --track_source=196.168.0.0/16).
         return return_val
 
     def __check_ips(self, masterip, masterport, checkip, checkport):
-        "Checks IPs and ports for matches against the user-selected values"
+        'Checks IPs and ports for matches against the user-selected values'
         # masterip, masterport are the values selected by the user
         # checkip, checkport are the values to be checked against masters
         ip_okay = False
@@ -114,8 +114,8 @@ CIDR notation is okay (e.g. --track_source=196.168.0.0/16).
         if self.source:
             for sstr in self.source:
                 self.sources.extend(self.__split_ips(sstr))
-        self.logger.debug("targets: {!s}".format(self.targets))
-        self.logger.debug("sources: {!s}".format(self.sources))
+        self.logger.debug(f'targets: {self.targets!s}')
+        self.logger.debug(f'sources: {self.sources!s}')
 
     def connection_handler(self, conn):
         if self.targets:
@@ -145,9 +145,9 @@ CIDR notation is okay (e.g. --track_source=196.168.0.0/16).
                 return
 
         if self.alerts:
-            self.write("matching connection", **conn.info())
+            self.write('matching connection', **conn.info())
 
         return conn
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     print(DshellPlugin())

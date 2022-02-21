@@ -1,4 +1,4 @@
-"""
+'''
 TFTP Plugin
 In short:
  Goes through UDP traffic, packet by packet, and ties together TFTP file
@@ -36,7 +36,7 @@ Example:
     rfc1350.txt  rfc1350.txt_01
  Note: The two files have the same name in the traffic, but have incremented
  filenames when saved
-"""
+'''
 
 import os
 import struct
@@ -48,7 +48,7 @@ import dshell.util
 from dshell.output.alertout import AlertOutput
 
 class DshellPlugin(dshell.core.PacketPlugin):
-    "Primary plugin class"
+    'Primary plugin class'
     # packet opcodes (http://www.networksorcery.com/enp/default1101.htm)
     RRQ = 1  # read request
     WRQ = 2  # write request
@@ -59,20 +59,20 @@ class DshellPlugin(dshell.core.PacketPlugin):
 
     def __init__(self, **kwargs):
         super().__init__(
-            name="tftp",
-            bpf="udp",
-            description="Find TFTP streams and, optionally, extract the files",
-            author="dev195",
+            name='tftp',
+            bpf='udp',
+            description='Find TFTP streams and, optionally, extract the files',
+            author='dev195',
             output=AlertOutput(label=__name__),
             optiondict={
-                "rip": {
-                    "action": "store_true",
-                    "help": "Rip files from traffic (default: off)",
-                    "default": False},
-                "outdir": {
-                    "help": "Directory to place files when using --rip (default: tftp_out)",
-                    "default": "./tftp_out",
-                    "metavar": "DIRECTORY"}
+                'rip': {
+                    'action': 'store_true',
+                    'help': 'Rip files from traffic (default: off)',
+                    'default': False},
+                'outdir': {
+                    'help': 'Directory to place files when using --rip (default: tftp_out)',
+                    'default': './tftp_out',
+                    'metavar': 'DIRECTORY'}
             }
         )
 
@@ -95,27 +95,27 @@ class DshellPlugin(dshell.core.PacketPlugin):
         self.unset_read_streams = {}
 
     def premodule(self):
-        "if needed, create the directory for file output"
+        'if needed, create the directory for file output'
         if self.rip and not os.path.exists(self.outdir):
             try:
                 os.makedirs(self.outdir)
             except OSError:
-                self.error("Could not create directory {!r}. Files will not be dumped.".format(self.outdir))
+                self.error(f'Could not create directory {self.outdir!r}. Files will not be dumped.')
                 self.rip = False
 
     def postmodule(self):
-        "cleanup any unfinished streams"
-        self.logger.debug("Unset Read Streams: {!s}".format(self.unset_read_streams))
-        self.logger.debug("Unset Write Streams: {!s}".format(self.unset_write_streams))
+        'cleanup any unfinished streams'
+        self.logger.debug(f'Unset Read Streams: {self.unset_read_streams!s}')
+        self.logger.debug(f'Unset Write Streams: {self.unset_write_streams!s}')
         while(len(self.open_streams) > 0):
             k = list(self.open_streams)[0]
-            self.__closeStream(k, "POSSIBLY INCOMPLETE")
+            self.__closeStream(k, 'POSSIBLY INCOMPLETE')
 
     def packet_handler(self, pkt):
-        """
+        '''
         Handles each UDP packet. It checks the TFTP opcode and parses
         accordingly.
-        """
+        '''
         udpp = pkt.pkt.upper_layer
         while not isinstance(udpp, udp.UDP):
             try:
@@ -127,14 +127,14 @@ class DshellPlugin(dshell.core.PacketPlugin):
         data = udpp.body_bytes
 
         try:
-            flag = struct.unpack("!H", data[:2])[0]
+            flag = struct.unpack('!H', data[:2])[0]
         except struct.error:
             return   # awful small packet
         data = data[2:]
         if flag == self.RRQ:
             # this packet is requesting to read a file from the server
             try:
-                filename, mode = data.split(b"\x00")[0:2]
+                filename, mode = data.split(b'\x00')[0:2]
             except ValueError:
                 return  # probably not TFTP
             clientIP, clientPort, serverIP, serverPort = pkt.sip, udpp.sport, pkt.dip, udpp.dport
@@ -150,10 +150,10 @@ class DshellPlugin(dshell.core.PacketPlugin):
         elif flag == self.WRQ:
             # this packet is requesting to write a file to the server
             try:
-                filename, mode = data.split(b"\x00")[0:2]
+                filename, mode = data.split(b'\x00')[0:2]
             except ValueError:
                 return  # probably not TFTP
-            # in this case, we are writing to the "server"
+            # in this case, we are writing to the 'server'
             clientIP, clientPort, serverIP, serverPort = pkt.sip, udpp.sport, pkt.dip, udpp.dport
             self.unset_write_streams[(clientIP, clientPort, serverIP)] = {
                 'filename': filename,
@@ -178,7 +178,7 @@ class DshellPlugin(dshell.core.PacketPlugin):
                         (serverIP, serverPort, clientIP)])
                 else:
                     self.open_streams[key] = self.default_stream
-            blockNum = struct.unpack("!H", data[:2])[0]
+            blockNum = struct.unpack('!H', data[:2])[0]
             data = data[2:]
             if len(data) < 512:
                 # TFTP uses fixed length data chunks. If it's smaller than the
@@ -192,7 +192,7 @@ class DshellPlugin(dshell.core.PacketPlugin):
         elif flag == self.ACK:
             # this packet has acknowledged the receipt of a data chunk or
             # allows a write process to begin
-            blockNum = struct.unpack("!H", data[:2])[0]
+            blockNum = struct.unpack('!H', data[:2])[0]
             clientIP, clientPort, serverIP, serverPort = pkt.sip, udpp.sport, pkt.dip, udpp.dport
 
             # special case: this is acknowledging a write operation and sets
@@ -216,7 +216,7 @@ class DshellPlugin(dshell.core.PacketPlugin):
         elif flag == self.ERROR:
             # this package is sending an error message
             # TODO handle more of these properly
-            errCode = struct.unpack("!H", data[:2])[0]
+            errCode = struct.unpack('!H', data[:2])[0]
             errMessage = data[2:].strip()
             if errCode == 1:   # File not found
                 clientIP, clientPort, serverIP, serverPort = pkt.dip, udpp.dport, pkt.sip, udpp.sport
@@ -234,15 +234,15 @@ class DshellPlugin(dshell.core.PacketPlugin):
         return pkt
 
     def __closeStream(self, key, message=''):
-        """
+        '''
         Called when a stream is finished. It moves the stream from
         open_streams to closed_streams, prints output, and dumps the file
-        """
+        '''
         theStream = self.open_streams[key]
         if not theStream['filename']:
-            message = "INCOMPLETE -- missing filename"
+            message = 'INCOMPLETE -- missing filename'
         else:
-            theStream['filename'] = theStream['filename'].decode('utf-8', "backslashreplace")
+            theStream['filename'] = theStream['filename'].decode('utf-8', 'backslashreplace')
 
         # Rebuild the file from the individual blocks
         rebuiltFile = b''
@@ -257,11 +257,7 @@ class DshellPlugin(dshell.core.PacketPlugin):
             ipsNports = key
 
         # print out information about the stream
-        msg = "{:5} {} ({} bytes) {}".format(
-            theStream['readwrite'],
-            theStream['filename'],
-            len(rebuiltFile),
-            message)
+        msg = f'{theStream["readwrite"]:5} {theStream["filename"]} ({len(rebuiltFile)} bytes) {message}'
         self.write(msg, ts=theStream['timestamp'], sip=ipsNports[0],
             sport=ipsNports[1], dip=ipsNports[2], dport=ipsNports[3],
             readwrite=theStream['readwrite'], filename=theStream['filename'])

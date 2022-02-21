@@ -1,6 +1,6 @@
-"""
+'''
 Extract interesting metadata from TLS connection setup
-"""
+'''
 
 import dshell.core
 from dshell.output.alertout import AlertOutput
@@ -692,7 +692,7 @@ class TLSClientHello(TLSHandshake):
                 server_name_list_length = struct.unpack(
                     '!H', this_extension_data[:2])[0]
                 if server_name_list_length > len(this_extension_data) - 2:
-                    raise Error("Malformed ServerNameList")
+                    raise Error('Malformed ServerNameList')
                 server_name_list = this_extension_data[2:]
                 # Iterate the list
                 while len(server_name_list) > 0:
@@ -706,7 +706,7 @@ class TLSClientHello(TLSHandshake):
                     if name_type == 0:
                         extension_server_name_list.append(name_data)
                     else:
-                        raise UnsupportedOption("Unknown NameType")
+                        raise UnsupportedOption('Unknown NameType')
         # After Loop
         # add extension information to dictionary
         self.extensions['server_name'] = extension_server_name_list
@@ -798,9 +798,9 @@ def keyTypeToString(kt):
         return keytypes[kt]
     else:
         try:
-            return "UNKNOWN(%s)" % str(kt)
+            return 'UNKNOWN(%s)' % str(kt)
         except:
-            return "UNKNOWN(%s)" % repr(kt)
+            return 'UNKNOWN(%s)' % repr(kt)
 
 
 def parse_x509_dtm(dtm):
@@ -814,7 +814,7 @@ def parse_x509_dtm(dtm):
 def render_x509_object(n):
     output = b''
     for component in n.get_components():
-        output += b"%s=%s " % component
+        output += b'%s=%s ' % component
     return output.rstrip().decode('utf-8')
 
 
@@ -856,21 +856,21 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 
     def __init__(self):
         super().__init__(
-            name="tls",
-            author="amm",
-            description="Extract interesting metadata from TLS connection setup",
-            bpf="tcp and (port 443 or port 993 or port 25 or port 587 or port 465 or port 5269 or port 995 or port 3389)",
+            name='tls',
+            author='amm',
+            description='Extract interesting metadata from TLS connection setup',
+            bpf='tcp and (port 443 or port 993 or port 25 or port 587 or port 465 or port 5269 or port 995 or port 3389)',
             output=AlertOutput(label=__name__),
-            longdescription="""
+            longdescription='''
 Extract interesting metadata from TLS connection setup, including the ClientHello and Certificate handshake structures.
 
 For JA3 support (ClientHello hash), install module pyja3
-            """
+            '''
         )
 
     def premodule(self):
         if not ja3_available:
-            self.debug("ja3 capability disabled due to missing python module")
+            self.debug('ja3 capability disabled due to missing python module')
 
     def connection_handler(self, conn):
 
@@ -979,12 +979,12 @@ For JA3 support (ClientHello hash), install module pyja3
         client_name = ','.join(info['client_names'])
         server_name = ','.join(info['server_names'])
         if len(client_name) and client_name != server_name:
-            msg = "%s / %s" % (client_name, server_name)
+            msg = '%s / %s' % (client_name, server_name)
         else:
             msg = server_name
         self.write(msg, **info)
         return conn
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     print(DshellPlugin())

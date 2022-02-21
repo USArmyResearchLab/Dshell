@@ -1,4 +1,4 @@
-"""
+'''
 Proof-of-concept Dshell plugin to detect INNUENDO DNS Channel
 
 Based on the short marketing video (http://vimeo.com/115206626) the
@@ -9,7 +9,7 @@ determine if it matches the network traffic described in the video.
 There are multiple assumptions (*very poor*) in this detection plugin
 but serves as a proof-of-concept detector. This detector has not been
 tested against authentic INNUENDO DNS Channel traffic.
-"""
+'''
 
 
 from dshell.plugins.dnsplugin import DNSPlugin
@@ -20,18 +20,18 @@ from pypacker.layer567 import dns
 import base64
 
 class DshellPlugin(DNSPlugin):
-    """
+    '''
     Proof-of-concept Dshell plugin to detect INNUENDO DNS Channel
 
     Usage: decode -d innuendo *.pcap
-    """
+    '''
 
     def __init__(self):
         super().__init__(
-            name="innuendo-dns",
-            description="proof-of-concept detector for INNUENDO DNS channel",
-            bpf="port 53",
-            author="primalsec",
+            name='innuendo-dns',
+            description='proof-of-concept detector for INNUENDO DNS channel',
+            bpf='port 53',
+            author='primalsec',
             output=AlertOutput(label=__name__),
         )
 

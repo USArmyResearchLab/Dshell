@@ -1,6 +1,6 @@
-"""
+'''
 Identifies DNS queries and finds the country code of the record response.
-"""
+'''
 
 import dshell.core
 from dshell.plugins import dnsplugin
@@ -15,10 +15,10 @@ class DshellPlugin(dnsplugin.DNSPlugin):
 
     def __init__(self, *args, **kwargs):
         super().__init__(
-            name="DNS Country Code",
-            description="identify country code of DNS A/AAAA record responses",
-            bpf="port 53",
-            author="bg",
+            name='DNS Country Code',
+            description='identify country code of DNS A/AAAA record responses',
+            bpf='port 53',
+            author='bg',
             output=AlertOutput(label=__name__),
             optiondict={
                 'foreign': {
@@ -33,16 +33,16 @@ class DshellPlugin(dnsplugin.DNSPlugin):
         )
 
     def dns_handler(self, conn, requests, responses):
-        "pull out the A/AAAA queries from the last DNS request in a connection"
+        'pull out the A/AAAA queries from the last DNS request in a connection'
         queries = []
         if requests:
             request = requests[-1].pkt.highest_layer
             id = request.id
             for query in request.queries:
                 if query.type == dns.DNS_A:
-                    queries.append("A? {}".format(query.name_s))
+                    queries.append(f'A? {query.name_s}')
                 elif query.type == dns.DNS_AAAA:
-                    queries.append("AAAA? {}".format(query.name_s))
+                    queries.append(f'AAAA? {query.name_s}')
         queries = ', '.join(queries)
 
         answers = []
@@ -58,8 +58,7 @@ class DshellPlugin(dnsplugin.DNSPlugin):
                             continue
                         elif self.code and cc != self.code:
                             continue
-                        answers.append("A: {} ({}) (ttl: {}s)".format(
-                            ip, cc, answer.ttl))
+                        answers.append(f'A: {ip} ({cc}) (ttl: {answer.ttl}s)')
                     elif answer.type == dns.DNS_AAAA:
                         ip = ipaddress.ip_address(answer.address).compressed
                         if ip == '::':
@@ -70,12 +69,11 @@ class DshellPlugin(dnsplugin.DNSPlugin):
                             continue
                         elif self.code and cc != self.code:
                             continue
-                        answers.append("AAAA: {} ({}) (ttl: {}s)".format(
-                            ip, cc, answer.ttl))
+                        answers.append(f'AAAA: {ip} ({cc}) (ttl: {answer.ttl}s)')
         answers = ', '.join(answers)
 
         if answers:
-            msg = "ID: {}, {} / {}".format(id, queries, answers)
+            msg = f'ID: {ip}, {queries} / {answers}'
             self.write(msg, queries=queries, answers=answers, **conn.info())
             return conn, requests, responses
         else:

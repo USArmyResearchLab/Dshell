@@ -1,4 +1,4 @@
-"""
+'''
 Goes through TCP connections and tries to find FTP control channels and
 associated data channels. Optionally, it will write out any file data it
 sees into a separate directory.
@@ -6,7 +6,7 @@ sees into a separate directory.
 If a data connection is seen, it prints a message indicating the user, pass,
 and file requested. If the --ftp_dump flag is set, it also dumps the file into the
 --ftp_outdir directory.
-"""
+'''
 
 import dshell.core
 import dshell.util
@@ -24,9 +24,9 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
 
     def __init__(self):
         super().__init__(
-            name="ftp",
-            description="alerts on FTP traffic and, optionally, rips files",
-            longdescription="""
+            name='ftp',
+            description='alerts on FTP traffic and, optionally, rips files',
+            longdescription=""""
 Goes through TCP connections and tries to find FTP control channels and
 associated data channels. Optionally, it will write out any file data it
 sees into a separate directory.
@@ -35,41 +35,42 @@ If a data connection is seen, it prints a message indicating the user, pass,
 and file requested. If the --ftp_dump flag is set, it also dumps the file into the
 --ftp_outdir directory.
 """,
-            author="amm,dev195",
-            bpf="tcp",
+            author='amm,dev195',
+            bpf='tcp',
             output=AlertOutput(label=__name__),
             optiondict={
-                "ports": {
+                'ports': {
                     'help': 'comma-separated list of ports to watch for control connections (default: 21)',
                     'metavar': 'PORT,PORT,PORT,[...]',
-                    'default': '21'},
-                "dump": {
+                    'default': '21'
+                    },
+                'dump': {
                     'action': 'store_true',
                     'help': 'dump files from stream'},
-                "outdir": {
-                    'help': 'directory to write output files (default: "ftpout")',
+                'outdir': {
+                    'help': 'directory to write output files (default: 'ftpout')',
                     'metavar': 'DIRECTORY',
                     'default': 'ftpout'}
             }
         )
 
     def __update_bpf(self):
-        """
+        '''
         Dynamically change the BPF to allow processing of data transfer
         channels.
-        """
+        '''
         dynfilters = []
         for conn, metadata in self.conns.items():
             try:
-                dynfilters += ["(host %s and host %s)" % metadata["tempippair"]]
+                dynfilters += ['(host %s and host %s)' % metadata['tempippair']]
             except (KeyError, TypeError):
                 continue
         for a, p in self.data_channel_map.keys():
-            dynfilters += ["(host %s and port %d)" % (a, p)]
-        self.bpf = "(%s) and ((%s)%s)" % (
+            dynfilters += ['(host %s and port %d)' % (a, p)]
+        self.bpf = '(%s) and ((%s)%s)' % (
             self.original_bpf,
-            " or ".join( "port %d" % p for p in self.control_ports ),
-            " or " + " or ".join(dynfilters) if dynfilters else ""
+            ' or '.join( 'port %d' % p for p in self.control_ports ),
+            ' or ' + ' or '.join(dynfilters) if dynfilters else ''
         )
         self.recompile_bpf()
 
@@ -87,9 +88,9 @@ and file requested. If the --ftp_dump flag is set, it also dumps the file into t
             try:
                 self.control_ports.add(int(p))
             except ValueError as e:
-                self.error("{!r} is not a valid port. Skipping.".format(p))
+                self.error(f'{p!r} is not a valid port. Skipping.')
         if not self.control_ports:
-            self.error("Could not find any control ports. At least one must be set for this plugin.")
+            self.error('Could not find any control ports. At least one must be set for this plugin.')
             sys.exit(1)
 
         # create output directory
@@ -98,8 +99,7 @@ and file requested. If the --ftp_dump flag is set, it also dumps the file into t
             try:
                 os.makedirs(self.outdir)
             except (IOError, OSError) as e:
-                self.error("Could not create output directory: {!r}: {!s}"
-                           .format(self.outdir, e))
+                self.error(f'Could not create output directory: {self.outdir!r}: {e!s}')
                 sys.exit(1)
 
     def connection_init_handler(self, conn):
@@ -290,29 +290,17 @@ and file requested. If the --ftp_dump flag is set, it also dumps the file into t
                     info['filedata'] = None
                     info['outfile'] = outname
                     info.update(conn.info())
-                    msg = 'User: "{}", Pass: "{}", {} File: {} ({:,} bytes written to {})'.format(
-                        info['user'],
-                        info['pass'],
-                        info['file'][0],
-                        os.path.join(*info['file'][1:3]),
-                        numbytes,
-                        os.path.basename(outname)
-                    )
+                    msg = f'User: \'{info["user"]}\', Pass: \'{info["pass"]}\', {info["file"][0]} File: {os.path.join(*info["file"][1:3])} ({numbytes:,} bytes written to {os.path.basename(outname)})'               
                 else:
                     info.update(conn.info())
-                    msg = 'User: "{}", Pass: "{}", {} File: {}'.format(
-                        info['user'],
-                        info['pass'],
-                        info['file'][0],
-                        os.path.join(*info['file'][1:3])
-                    )
+                    msg = f'User: \'{info["user"]}\', Pass: \'{info["pass"]}\', {info["file"][0]} File: {os.path.join(*info["file"][1:3])}'
                     if data[0] not in ('1','2'):
-                        msg += ' ({})'.format(data.rstrip())
+                        msg += f' ({data.rstrip()})'
                 info['ts'] = blob.ts
                 if (blob.sip == conn.sip):
-                    self.write(msg, **info, dir_arrow="->")
+                    self.write(msg, **info, dir_arrow='->')
                 else:
-                    self.write(msg, **info, dir_arrow="<-")
+                    self.write(msg, **info, dir_arrow='<-')
                 info['file'] = None
 
             # Handle EPSV mode port setting
@@ -348,5 +336,5 @@ and file requested. If the --ftp_dump flag is set, it also dumps the file into t
         return ip, port
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     print(DshellPlugin())
