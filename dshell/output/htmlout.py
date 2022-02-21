@@ -61,7 +61,7 @@ End: %(endtime)s
 '''
 
     def __init__(self, *args, **kwargs):
-        'Can be called with an optional 'hex' argument to display output in hex'
+        'Can be called with an optional \'hex\' argument to display output in hex'
         super().__init__(*args, **kwargs)
         self.counter = 1
         self.colors = {
@@ -84,7 +84,7 @@ End: %(endtime)s
             self.format_is_set = True
 
         # a template string for data output
-        colorformat = '<span style='color:%s;'>%s</span>'
+        colorformat = '<span style=\'color:%s;\'>%s</span>'
 
         # Iterate over the args and try to parse out any raw data strings
         rawdata = []

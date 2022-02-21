@@ -41,7 +41,7 @@ class ElasticOutput(dshell.output.jsonout.JSONOutput):
         self.es = Elasticsearch([self.options['host']], port=self.options['port'])
 
     def write(self, *args, **kwargs):
-        'Converts alert's keyword args to JSON and indexes it into Elasticsearch datastore.'
+        'Converts alert\'s keyword args to JSON and indexes it into Elasticsearch datastore.'
         if args and 'data' not in kwargs:
             kwargs['data'] = self.delimiter.join(map(str, args))
 

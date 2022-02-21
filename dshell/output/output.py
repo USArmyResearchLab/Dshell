@@ -254,7 +254,7 @@ class QueueOutputWrapper(object):
         self.id = str(self.__oobject)
 
     def true_write(self, *args, **kwargs):
-        'Calls the wrapped class's write function. Called from decode.py.'
+        'Calls the wrapped class\'s write function. Called from decode.py.'
         self.__owrite(*args, **kwargs)
 
     def write(self, *args, **kwargs):
