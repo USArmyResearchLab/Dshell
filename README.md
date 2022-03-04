@@ -56,8 +56,8 @@ Key features:
 ## Installation
 
 1. Install Dshell with pip
-  * `sudo python3 -m pip install Dshell/` OR `sudo python3 -m pip install <Dshell-tarball>`
-2. Configure geoip2 by moving the MaxMind data files (GeoLite2-ASN.mmdb, GeoLite2-City.mmdb, GeoLite2-Country.mmdb) to &lt;install-location&gt;/data/GeoIP/
+  * `python3 -m pip install Dshell/` OR `python3 -m pip install <Dshell-tarball>`
+2. Configure geoip2 by moving the MaxMind data files (GeoLite2-ASN.mmdb, GeoLite2-City.mmdb, GeoLite2-Country.mmdb) to [...]/site-packages/dshell/data/GeoIP/
 3. Run `dshell`. This should drop you into a `Dshell> ` prompt.
 
 ## Basic Usage
