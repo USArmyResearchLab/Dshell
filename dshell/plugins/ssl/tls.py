@@ -663,7 +663,7 @@ class TLSClientHello(TLSHandshake):
               self.ja3_data.extend(ja3.ja3.process_extensions(
                   ja3.ja3.dpkt.ssl.TLSClientHello(data)))
             except ja3.ja3.dpkt.ssl.SSL3Exception:
-              ja3_available = False
+              self.debug("Error enumerating extensions for ja3")
         self.extensions = {}
         self.raw_extensions = []  # ordered list of tuples (ex_type, ex_data)
         # self.extensions_length
