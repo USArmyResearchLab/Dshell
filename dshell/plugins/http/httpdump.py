@@ -163,6 +163,15 @@ class DshellPlugin(HTTPPlugin):
             kwargs['endtime'] = None
             kwargs['serverbytes'] = 0
 
+        if post_params:
+            kwargs['post_params'] = post_params
+        if url_params:
+            kwargs['url_params'] = url_params
+        if client_cookie:
+            kwargs['client_cookie'] = client_cookie
+        if server_cookie:
+            kwargs['server_cookie'] = server_cookie
+
         self.write('\n'.join(msg), **kwargs)
 
         return conn, request, response
