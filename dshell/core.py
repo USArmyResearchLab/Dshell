@@ -802,6 +802,7 @@ class Packet(object):
     Attributes:
         ts:         timestamp of packet
         dt:         datetime of packet
+        frame:      sequential packet number as read from data stream
         pkt:        pypacker object for the packet
         rawpkt:     raw bytestring of the packet
         pktlen:     length of packet
@@ -1052,6 +1053,7 @@ class Packet(object):
         """
         d = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
         d['byte_count'] = self.byte_count
+        d['rawpkt'] = self.pkt.bin()
         del d['pkt']
         return d
 
@@ -1783,7 +1785,7 @@ class Blob(object):
     def info(self):
         """
         Provides a dictionary with information about a blob. Useful for
-        calls to a plugin's write() function, e.g. self.write(\\*\\*conn.info())
+        calls to a plugin's write() function, e.g. self.write(\\*\\*blob.info())
 
         Returns:
             Dictionary with information
