@@ -10,6 +10,14 @@ Key features:
 * Parallel processing option to divide the handling of data source into separate Python processes
 * Enables development of external plugin packs to share and install new externally developed plugins without overlapping the core Dshell plugin directories
 
+## Guides
+* [Dshell User Guide](Dshell_User_Guide.pdf) 
+  * A guide to installation as well as both basic and advanced analysis with examples
+  * Helps new and experienced end users with using and understanding the decoder-shell (Dshell) framework
+* [Dshell Developer Guide](Dshell_Developer_Guide.pdf) 
+  * A guide to plugin development with basic examples, as well as core function and class definitions, and an overview of data flow
+  * Helps end users develop new, custom Dshell plugins as well as modify existing plugins
+
 ## Requirements
 * Linux (developed on Ubuntu 20.04 LTS)
 * Python 3 (developed with Python 3.8.10)
