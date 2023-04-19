@@ -37,7 +37,7 @@ End:   %(endtime)s
             'cs': '31',   # client-to-server is red
             'sc': '32',   # server-to-client is green
             '--': '34',   # everything else is blue
-        }  # TODO configurable for color-blind users?
+        }
         self.hexmode = kwargs.get('hex', False)
         self.format_is_set = False
 
