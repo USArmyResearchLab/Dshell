@@ -29,6 +29,9 @@ class Output:
         fh : existing open file handle
         file : filename to write to, assuming fh is not defined
         mode : mode to open file, assuming fh is not defined (default 'w')
+        cbf : activate color blind friendly mode, colorout and htmlout output
+              modules use yellow/gold in place of red and different shades of
+              green/yellow/blue are used to help better differentiate between them
     """
     _DEFAULT_FORMAT = "%(data)s\n"
     _DEFAULT_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -37,7 +40,7 @@ class Output:
 
     def __init__(
             self, file=None, fh=None, mode='w', format=None, timeformat=None, delimiter=None, nobuffer=False,
-            noclobber=False, extra=None, **unused_kwargs
+            noclobber=False, extra=None, cbf=False, **unused_kwargs
     ):
         self.format_fields = []
         self.timeformat = timeformat or self._DEFAULT_TIME_FORMAT
@@ -46,6 +49,7 @@ class Output:
         self.noclobber = noclobber
         self.extra = extra
         self.mode = mode
+        self.cbf = cbf
 
         # Must define attributes even if they are setup in different function.
         self.format_fields = None
