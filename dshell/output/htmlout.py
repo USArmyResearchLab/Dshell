@@ -73,6 +73,10 @@ End: %(endtime)s
         self.format_is_set = False
 
     def setup(self):
+        # activate color blind friendly mode
+        if self.cbf:
+            self.colors['cs'] = 'gold'   # client-to-server is gold (darker yellow)
+            self.colors['sc'] = 'seagreen'   # server-to-client is sea green (lighter green)
         self.fh.write(self._HTML_HEADER)
 
     def write(self, *args, **kwargs):
