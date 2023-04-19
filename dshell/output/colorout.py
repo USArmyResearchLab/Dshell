@@ -41,6 +41,11 @@ End:   %(endtime)s
         self.hexmode = kwargs.get('hex', False)
         self.format_is_set = False
 
+    def setup(self):
+        # activate color blind friendly mode
+        if self.cbf:
+            self.colors['cs'] = '33'   #client-to-server is yellow
+    
     def write(self, *args, **kwargs):
         if not self.format_is_set:
             if 'clientip' in kwargs:
