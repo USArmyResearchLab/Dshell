@@ -538,7 +538,7 @@ def main_command_line():
                       help="Show debug messages")
     parser.add_argument('-v', '--verbose', action="store_true",
                       help="Show informational messages")
-    parser.add_argument('-acc', '--allcc', action="store_true",
+    parser.add_argument('--acc', '--allcc', action="store_true",
                       help="Show all 3 GeoIP2 country code types (represented_country/registered_country/country)")
     parser.add_argument('-d', '-p', '--plugin', dest='plugin', type=str,
                       action='append', metavar="PLUGIN",
@@ -580,7 +580,7 @@ def main_command_line():
     output_group.add_argument("--no-buffer", action="store_true",
                             help="Do not buffer plugin output",
                             dest="nobuffer")
-    output_group.add_argument("-cbf", "--color-blind-friendly", action="store_true",
+    output_group.add_argument("--cbf", "--color-blind-friendly", action="store_true",
                             help="Activate color blind friendly mode, colorout and htmlout output modules use yellow/gold in place of red and different shades of green/yellow/blue are used to help better differentiate between them",
                             dest="cbf")    
     output_group.add_argument("-x", "--extra", action="store_true",
@@ -623,7 +623,7 @@ def main_command_line():
                       help='List all available plugins', dest='list')
     parser_short.add_argument("--lo", "--list-output", action="store_true",
                             help="List available output modules")
-    parser_short.add_argument("-cbf", "--color-blind-friendly", action="store_true",
+    parser_short.add_argument("--cbf", "--color-blind-friendly", action="store_true",
                             help="Activate color blind friendly mode, colorout and htmlout output modules use yellow/gold in place of red and different shades of green/yellow/blue are used to help better differentiate between them")   
     # FIXME: Should this duplicate option be removed?
     parser_short.add_argument("-o", "--omodule", type=str, metavar="MODULE",
