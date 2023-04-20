@@ -232,26 +232,27 @@ def main(plugin_args=None, **kwargs):
         for plugin in plugin_chain:
             plugin.out.set_oargs(**oargs)
 
-    # If writing to a file, set for each output module here
-    if kwargs.get("outfile", None):
-        for plugin in plugin_chain:
+    for plugin in plugin_chain:
+        # If writing to a file, set for each output module here
+        if kwargs.get("outfile", None):
             plugin.out.reset_fh(filename=kwargs["outfile"])
 
-    # Set nobuffer mode if that's what the user wants
-    if kwargs.get("nobuffer", False):
-        for plugin in plugin_chain:
+        # Set nobuffer mode if that's what the user wants
+        if kwargs.get("nobuffer", False):
             plugin.out.nobuffer = True
+            
+        # Set color blind friendly mode
+        if kwargs.get("cbf", False):
+            plugin.out.cbf = True
 
-    # Set the extra flag for all output modules
-    if kwargs.get("extra", False):
-        for plugin in plugin_chain:
+        # Set the extra flag for all output modules
+        if kwargs.get("extra", False):
             plugin.out.extra = True
             plugin.out.set_format(plugin.out.format)
 
-    # Set the BPF filters
-    # Each plugin has its own default BPF that will be extended or replaced
-    # based on --no-vlan, --ebpf, or --bpf arguments.
-    for plugin in plugin_chain:
+        # Set the BPF filters
+        # Each plugin has its own default BPF that will be extended or replaced
+        # based on --no-vlan, --ebpf, or --bpf arguments.
         if kwargs.get("bpf", None):
             plugin.bpf = kwargs.get("bpf", "")
             continue
@@ -537,7 +538,7 @@ def main_command_line():
                       help="Show debug messages")
     parser.add_argument('-v', '--verbose', action="store_true",
                       help="Show informational messages")
-    parser.add_argument('-acc', '--allcc', action="store_true",
+    parser.add_argument('--acc', '--allcc', action="store_true",
                       help="Show all 3 GeoIP2 country code types (represented_country/registered_country/country)")
     parser.add_argument('-d', '-p', '--plugin', dest='plugin', type=str,
                       action='append', metavar="PLUGIN",
@@ -579,6 +580,9 @@ def main_command_line():
     output_group.add_argument("--no-buffer", action="store_true",
                             help="Do not buffer plugin output",
                             dest="nobuffer")
+    output_group.add_argument("--cbf", "--color-blind-friendly", action="store_true",
+                            help="Activate color blind friendly mode, colorout and htmlout output modules use yellow/gold in place of red and different shades of green/yellow/blue are used to help better differentiate between them",
+                            dest="cbf")    
     output_group.add_argument("-x", "--extra", action="store_true",
                             help="Appends extra data to all plugin output.")
     # TODO Figure out how to make --extra flag play nicely with user-only
@@ -619,6 +623,8 @@ def main_command_line():
                       help='List all available plugins', dest='list')
     parser_short.add_argument("--lo", "--list-output", action="store_true",
                             help="List available output modules")
+    parser_short.add_argument("--cbf", "--color-blind-friendly", action="store_true",
+                            help="Activate color blind friendly mode, colorout and htmlout output modules use yellow/gold in place of red and different shades of green/yellow/blue are used to help better differentiate between them")   
     # FIXME: Should this duplicate option be removed?
     parser_short.add_argument("-o", "--omodule", type=str, metavar="MODULE",
                             help="Use specified output module for plugins instead of defaults. For example, --omodule=jsonout for JSON output.")

@@ -37,10 +37,15 @@ End:   %(endtime)s
             'cs': '31',   # client-to-server is red
             'sc': '32',   # server-to-client is green
             '--': '34',   # everything else is blue
-        }  # TODO configurable for color-blind users?
+        }
         self.hexmode = kwargs.get('hex', False)
         self.format_is_set = False
 
+    def setup(self):
+        # activate color blind friendly mode
+        if self.cbf:
+            self.colors['cs'] = '33'   #client-to-server is yellow
+    
     def write(self, *args, **kwargs):
         if not self.format_is_set:
             if 'clientip' in kwargs:
