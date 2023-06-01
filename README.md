@@ -51,7 +51,7 @@ Key features:
 * `decode -l`
   * This will list all available plugins, alongside basic information about them
 * `decode -h`
-  * Show generic command-line flags available to most plugins
+  * Show generic command-line flags available to most plugins, such as the color blind friendly mode for all color output 
 * `decode -p <plugin>`
   * Display information about a plugin, including available command line flags
 * `decode -p <plugin> <pcap>`
