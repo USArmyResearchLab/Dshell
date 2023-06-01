@@ -25,7 +25,9 @@ Key features:
 * [pcapy-ng](https://github.com/stamparm/pcapy-ng/)
 * [pyOpenSSL](https://github.com/pyca/pyopenssl)
 * [geoip2](https://github.com/maxmind/GeoIP2-python)
-  * [MaxMind GeoIP2 datasets](https://dev.maxmind.com/geoip/geoip2/geolite2/)
+  * [MaxMind GeoIP2 data sets](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data)
+    * Used to map IP addresses to country codes
+    * See Installation section for configuration 
 
 ## Optional
 * [oui.txt](http://standards-oui.ieee.org/oui.txt)
@@ -41,7 +43,7 @@ Key features:
 
 1. Install Dshell with pip
   * `python3 -m pip install Dshell/` OR `python3 -m pip install <Dshell-tarball>`
-2. Configure geoip2 by moving the MaxMind data files (GeoLite2-ASN.mmdb, GeoLite2-City.mmdb, GeoLite2-Country.mmdb) to [...]/site-packages/dshell/data/GeoIP/
+2. Configure geoip2 by placing the MaxMind GeoLite2 data set files (GeoLite2-ASN.mmdb, GeoLite2-City.mmdb, GeoLite2-Country.mmdb) in [...]/site-packages/dshell/data/GeoIP/
 3. Run `dshell`. This should drop you into a `Dshell> ` prompt.
 
 ## Basic Usage
@@ -182,7 +184,7 @@ import dshell.plugins.tftp.tftp as tftp
 # Instantiate plugin
 plugin = tftp.DshellPlugin()
 # Define plugin-specific arguments, if needed
-dargs = {plugin: {"outdir": "/tmp/"}}
+dargs = {plugin: {"rip": True, "outdir": "/tmp/"}}
 # Add plugin(s) to plugin chain
 decode.plugin_chain = [plugin]
 # Run decode main function with all other arguments
