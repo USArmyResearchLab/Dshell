@@ -53,6 +53,7 @@ class UnsupportedOption(Exception):
 SSL3_VERSION = 0x0300
 TLS1_VERSION = 0x0301
 TLS1_2_VERSION = 0x0303
+TLS1_3_VERSION = 0x0304
 
 # Record type
 SSL3_RT_CHANGE_CIPHER_SPEC = 20
@@ -71,6 +72,14 @@ SSL3_MT_SERVER_DONE = 14
 SSL3_MT_CERTIFICATE_VERIFY = 15
 SSL3_MT_CLIENT_KEY_EXCHANGE = 16
 SSL3_MT_FINISHED = 20
+
+# SSL/TLS Version Text Strings
+tls_version_text = {
+    0x0300 : 'SSL3',
+    0x0301 : 'TLS1.0',
+    0x0303 : 'TLS1.2',
+    0x0304 : 'TLS1.3'
+}
 
 # Cipher Suit Text Strings
 ciphersuit_text = {
@@ -440,7 +449,7 @@ class TLS(object):
         #########################################################################
         self.Handshakes = []
         if self.ContentType == SSL3_RT_HANDSHAKE:
-
+          
             ###############################
             # Loop Through Handshakes     #
             ###############################
@@ -560,6 +569,7 @@ class TLSCertificate(TLSHandshake):
 class TLSClientHello(TLSHandshake):
 
     def __init__(self, HandshakeType, HandshakeLength, data):
+        global ja3_available
         TLSHandshake.__init__(self, HandshakeType, HandshakeLength)
         data_length = len(data)
         offset = 0
@@ -649,8 +659,11 @@ class TLSClientHello(TLSHandshake):
         # Slice Off the Extensions
         ################################
         if ja3_available:
-            self.ja3_data.extend(ja3.ja3.process_extensions(
-                ja3.ja3.dpkt.ssl.TLSClientHello(data)))
+            try:
+              self.ja3_data.extend(ja3.ja3.process_extensions(
+                  ja3.ja3.dpkt.ssl.TLSClientHello(data)))
+            except ja3.ja3.dpkt.ssl.SSL3Exception:
+              self.debug("Error enumerating extensions for ja3")
         self.extensions = {}
         self.raw_extensions = []  # ordered list of tuples (ex_type, ex_data)
         # self.extensions_length
@@ -669,47 +682,7 @@ class TLSClientHello(TLSHandshake):
             raise InsufficientData('%d bytes received by TLSClientHello, expected %d for extensions' % (
                 data_length, offset + self.extensions_length))
 
-        ###########################
-        # Iterate the Extensions
-        ###########################
-        extension_server_name_list = []
-        while len(extensions_data) >= 4:
-
-            (ex_type, length) = struct.unpack('!HH', extensions_data[:4])
-            if len(extensions_data) > length+4:
-                this_extension_data = extensions_data[4:4+length]
-                extensions_data = extensions_data[4+length:]
-            else:
-                this_extension_data = extensions_data[4:]
-                extensions_data = ''
-
-            self.raw_extensions.append((ex_type, this_extension_data))
-
-            # server_name extension
-            # this_extension_data is defined on page 8 of RFC 3546
-            # It is essentially a list of hostnames
-            if ex_type == 0:
-                server_name_list_length = struct.unpack(
-                    '!H', this_extension_data[:2])[0]
-                if server_name_list_length > len(this_extension_data) - 2:
-                    raise Error("Malformed ServerNameList")
-                server_name_list = this_extension_data[2:]
-                # Iterate the list
-                while len(server_name_list) > 0:
-                    (name_type, name_length) = struct.unpack(
-                        '!BH', server_name_list[0:3])
-                    name_data = server_name_list[3:name_length + 3]
-                    if len(server_name_list) > name_length + 3:
-                        server_name_list = server_name_list[name_length + 3:]
-                    else:
-                        server_name_list = ''
-                    if name_type == 0:
-                        extension_server_name_list.append(name_data)
-                    else:
-                        raise UnsupportedOption("Unknown NameType")
-        # After Loop
-        # add extension information to dictionary
-        self.extensions['server_name'] = extension_server_name_list
+        parse_tls_extensions(self, extensions_data)
 
     def ja3(self):
         if ja3_available:
@@ -788,10 +761,92 @@ class TLSServerHello(TLSHandshake):
             raise InsufficientData(
                 '%d bytes received by TLSServerHello, expected %d for compression_method' % (data_length, offset + 1))
 
+        ################################
+        # TLS Extensions
+        ################################
+        self.extensions = {}
+        self.raw_extensions = []  # ordered list of tuples (ex_type, ex_data)
+        # self.extensions_length
+        if data_length >= offset+2:
+            self.extensions_length = struct.unpack(
+                '!H', data[offset:offset+2])[0]
+            offset += 2
+        else:
+            # No extensions
+            return
+
+        # Copy Extension Blob into a new working variable
+        try:
+            extensions_data = data[offset:offset+self.extensions_length]
+        except:
+            raise InsufficientData('%d bytes received by TLSServerHello, expected %d for extensions' % (
+                data_length, offset + self.extensions_length))
+
+        parse_tls_extensions(self, extensions_data)
+
 
 ##############################################################################
 # Some Utility Functions
 ##############################################################################
+def parse_tls_extensions(helloObj, extensions_data):
+
+    ###########################
+    # Iterate the Extensions
+    ###########################
+    extension_server_name_list = []
+    extension_supported_versions_list = []
+    while len(extensions_data) >= 4:
+    
+        (ex_type, length) = struct.unpack('!HH', extensions_data[:4])
+        if len(extensions_data) > length+4:
+            this_extension_data = extensions_data[4:4+length]
+            extensions_data = extensions_data[4+length:]
+        else:
+            this_extension_data = extensions_data[4:]
+            extensions_data = ''
+    
+        helloObj.raw_extensions.append((ex_type, this_extension_data))
+    
+        # server_name extension
+        # this_extension_data is defined on page 8 of RFC 3546
+        # It is essentially a list of hostnames
+        if len(this_extension_data) > 2 and ex_type == 0:
+            server_name_list_length = struct.unpack(
+                '!H', this_extension_data[:2])[0]
+            if server_name_list_length > len(this_extension_data) - 2:
+                raise Error("Malformed ServerNameList")
+            server_name_list = this_extension_data[2:]
+            # Iterate the list
+            while len(server_name_list) > 0:
+                (name_type, name_length) = struct.unpack(
+                    '!BH', server_name_list[0:3])
+                name_data = server_name_list[3:name_length + 3]
+                if len(server_name_list) > name_length + 3:
+                    server_name_list = server_name_list[name_length + 3:]
+                else:
+                    server_name_list = ''
+                if name_type == 0:
+                    extension_server_name_list.append(name_data)
+                else:
+                    raise UnsupportedOption("Unknown NameType")
+        # supported_versions extension
+        elif ex_type == 43:
+            if length == 2:
+                extension_supported_versions_list.append(struct.unpack('!H', this_extension_data[0:2])[0])
+                continue
+            supported_versions_length = this_extension_data[0]
+            # Iterate the list
+            for offset in range(0,supported_versions_length,2):
+                extension_supported_versions_list.append(struct.unpack('!H', this_extension_data[offset+1:offset+3])[0])
+
+    # After Loop
+    # add extension information to dictionary
+    if len(extension_server_name_list):
+        helloObj.extensions['server_name'] = extension_server_name_list
+    if len(extension_supported_versions_list):
+        helloObj.extensions['supported_versions'] = extension_supported_versions_list
+
+
 def keyTypeToString(kt):
     global keytypes
     if kt in keytypes:
@@ -882,9 +937,9 @@ For JA3 support (ClientHello hash), install module pyja3
         certs_sc = []
         server_cipher = None
         client_cipher_list = []
+        tls_version = 0
 
         for blob in conn.blobs:
-
             blob.reassemble(allow_overlap=True, allow_padding=True)
             data = blob.data
             offset = 0
@@ -895,6 +950,9 @@ For JA3 support (ClientHello hash), install module pyja3
                 try:
                     tlsrecord = TLS(data[offset:])
                     offset += tlsrecord.recordbytes
+
+                    if tlsrecord.ProtocolVersion > tls_version:
+                        tls_version = tlsrecord.ProtocolVersion
 
                     if tlsrecord.ContentType == SSL3_RT_HANDSHAKE:
                         for hs in tlsrecord.Handshakes:
@@ -908,6 +966,10 @@ For JA3 support (ClientHello hash), install module pyja3
                                     for server in hs.extensions['server_name']:
                                         client_names.add(
                                             server.decode('utf-8'))
+                                if 'supported_versions' in hs.extensions:
+                                    if 'supported_versions' not in info:
+                                        info['supported_versions'] = {}
+                                    info['supported_versions']['client'] = hs.extensions['supported_versions']
                                 if ja3_available:
                                     info['ja3'] = hs.ja3()
                                     info['ja3_digest'] = hs.ja3_digest()
@@ -915,6 +977,12 @@ For JA3 support (ClientHello hash), install module pyja3
 
                             elif hs.HandshakeType == SSL3_MT_SERVER_HELLO:
                                 server_cipher = hs.cipher_suite
+                                if blob.direction != 'sc':
+                                    inverted_ssl = True
+                                if 'supported_versions' in hs.extensions:
+                                    if 'supported_versions' not in info:
+                                        info['supported_versions'] = {}
+                                    info['supported_versions']['server'] = hs.extensions['supported_versions']
 
                             #
                             # Certificate.  Looking for first server cert.
@@ -957,8 +1025,29 @@ For JA3 support (ClientHello hash), install module pyja3
                     info['server_certs'][0]['subjectAltName']))
             except KeyError:
                 pass
+
+        # Max Intersecting Versions of Client and Server
+        if 'supported_versions' in info:
+            if 'client' in info['supported_versions']:
+                if 'server' in info['supported_versions']:
+                    overlap = [v for v in info['supported_versions']['client'] if v in info['supported_versions']['server']]
+                else:
+                    # Only have client. Ignore values, not confirmed by server.
+                    overlap = [0]
+            else:
+                overlap = info['supported_versions']['server']
+            if max(overlap) > tls_version:
+                tls_version = max(overlap)
+
+        # TLS Version
+        if tls_version in tls_version_text:
+            info['tls_version'] = tls_version_text[tls_version]
+        else:
+            info['tls_version'] = 'TLS: ' + hex(tls_version)
+
         info['client_names'] = list(client_names)
         info['server_names'] = list(server_names)
+
         # Cipher Lists
         if server_cipher in client_cipher_list:
             cipher_index = client_cipher_list.index(server_cipher)
@@ -978,10 +1067,14 @@ For JA3 support (ClientHello hash), install module pyja3
             return conn
         client_name = ','.join(info['client_names'])
         server_name = ','.join(info['server_names'])
-        if len(client_name) and client_name != server_name:
+        if len(client_name)>0 and len(server_name)<1:
+            msg = "%s" % (client_name)
+        elif len(client_name) and client_name != server_name:
             msg = "%s / %s" % (client_name, server_name)
         else:
             msg = server_name
+        if tls_version > 0:
+            msg += " ({tls_version})".format(**info)
         self.write(msg, **info)
         return conn
 
