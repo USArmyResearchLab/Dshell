@@ -91,7 +91,10 @@ class Output:
         Process the standard oargs from the command line.
         """
         if delimiter:
-            self.delimiter = delimiter
+            if delimiter == "tab":
+                self.delimiter = '\t'
+            else:
+                self.delimiter = delimiter
         if timeformat:
             self.timeformat = timeformat
         if noclobber:
