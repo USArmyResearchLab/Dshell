@@ -258,22 +258,43 @@ class PacketPlugin(object):
             else:
                 raise e
 
-    def ipdefrag(self, pkt):
+    def ipdefrag(self, packet: 'Packet') -> 'Packet':
         """
         IP fragment reassembly
-        """
-        if isinstance(pkt, ip.IP):  # IPv4
-            f = self._packet_fragments[(pkt.src, pkt.dst, pkt.id)]
-            f[pkt.offset] = pkt
 
-            if not pkt.flags & 0x1:
+        Store the first seen packet, collect data from followup packets, then
+        glue it all together and update that first packet with new data
+        """
+        pkt = packet.pkt
+        ipp = pkt.upper_layer
+        if isinstance(ipp, ip.IP):  # IPv4
+            f = self._packet_fragments[(ipp.src, ipp.dst, ipp.id)]
+            f[ipp.offset] = packet
+
+            if not ipp.flags & 0x1: # If no more fragments (MF)
+                if len(f) <= 1 and 0 in f:
+                    # If only one unfragmented packet, return that packet
+                    del self._packet_fragments[(ipp.src, ipp.dst, ipp.id)]
+                    return f[0]
+                elif 0 not in f:
+                    logger.debug(f"Missing first fragment of fragmented packet. Dropping ({packet.sip} -> {packet.dip}: {ipp.id}:{ipp.flags}:{ipp.offset})")
+                    del self._packet_fragments[(ipp.src, ipp.dst, ipp.id)]
+                    return None
+                fkeys = sorted(f.keys())
                 data = b''
-                for key in sorted(f.keys()):
-                    data += f[key].body_bytes
-                del self._packet_fragments[(pkt.src, pkt.dst, pkt.id)]
-                newpkt = ip.IP(pkt.header_bytes + data)
-                newpkt.bin(update_auto_fields=True)  # refresh checksum
-                return newpkt
+                firstpacket = f[fkeys[0]]
+                for key in fkeys:
+                    data += f[key].pkt.upper_layer.body_bytes
+                newip = ip.IP(firstpacket.pkt.upper_layer.header_bytes + data)
+                newip.bin(update_auto_fields=True) # refresh checksum
+                firstpacket.pkt.upper_layer = newip
+                del self._packet_fragments[(ipp.src, ipp.dst, ipp.id)]
+                return Packet(
+                    firstpacket.pkt.__len__,
+                    firstpacket.pkt,
+                    firstpacket.ts,
+                    firstpacket.frame
+                )
 
         elif isinstance(pkt, ip6.IP6):  # IPv6
             # TODO handle IPv6 offsets https://en.wikipedia.org/wiki/IPv6_packet#Fragment
@@ -398,16 +419,14 @@ class PacketPlugin(object):
             self.seen_packet_count.value += 1
 
         # Attempt to perform defragmentation
-        if isinstance(packet.pkt.upper_layer, (ip.IP, ip6.IP6)):
-            ipp = packet.pkt.upper_layer
-            if self.defrag_ip:
-                ipp = self.ipdefrag(ipp)
-                if not ipp:
-                    # we do not yet have all of the packet fragments, so move
-                    # on to next packet for now
-                    return
-                else:
-                    packet.pkt.upper_layer = ipp
+        if self.defrag_ip and isinstance(packet.pkt.upper_layer, (ip.IP, ip6.IP6)):
+            defragpkt = self.ipdefrag(packet)
+            if not defragpkt:
+                # we do not yet have all of the packet fragments, so move
+                # on to next packet for now
+                return
+            else:
+                packet = defragpkt
 
         # call packet_handler and return its output
         # decode.py will continue down the chain if it returns anything
@@ -882,6 +901,9 @@ class Packet(object):
                 ieee80211_p = layer
             elif ip_p is None and isinstance(layer, (ip.IP, ip6.IP6)):
                 ip_p = layer
+                if ip_p.flags & 0x1 and ip_p.offset > 0:
+                    # IP fragmentation, break all further layer processing
+                    break
             elif tcp_p is None and isinstance(layer, tcp.TCP):
                 tcp_p = layer
             elif udp_p is None and isinstance(layer, udp.UDP):
