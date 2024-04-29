@@ -15,31 +15,23 @@ class CSVOutput(Output):
     A header row can be printed with --oarg header
 
     Additional fields can be included with --oarg fields=field1,field2,field3
+    For example, MAC address can be included with --oarg fields=smac,dmac
+    Note: Field names must match the variable names in the plugin
 
-    Note: Field names much match the variable names in the plugin
+    Additional flow fields for connection can be included with --oarg flows
     """
 
     # TODO refine plugin to do things like wrap quotes around long strings
 
     _DEFAULT_FIELDS = ['plugin', 'ts', 'sip', 'sport', 'dip', 'dport', 'data']
+    _DEFAULT_FLOW_FIELDS = ['plugin', 'starttime', 'clientip', 'serverip', 'clientcc', 'servercc', 'protocol', 'clientport', 'serverport', 'clientpackets', 'serverpackets', 'clientbytes', 'serverbytes', 'duration', 'data']
     _DEFAULT_DELIM = ','
     _DESCRIPTION = "CSV format output"
 
     def __init__(self, *args, **kwargs):
-        self.delimiter = kwargs.get('delimiter', self._DEFAULT_DELIM)
-        if self.delimiter == 'tab':
-            self.delimiter = '\t'
-
-        self.use_header = kwargs.get("header", False)
-
+        self.use_header = False
         self.fields = list(self._DEFAULT_FIELDS)
-        exfields = kwargs.get("fields", "")
-        for field in exfields.split(','):
-            self.fields.append(field)
-
         super().__init__(**kwargs)
-
-        self.set_format()
 
     def set_format(self, _=None):
         "Set the format to a CSV list of fields"
@@ -54,6 +46,12 @@ class CSVOutput(Output):
         super().set_format(fmt)
 
     def set_oargs(self, **kwargs):
+        self.use_header = kwargs.pop("header", False)
+        if kwargs.pop("flows", False):
+            self.fields = list(self._DEFAULT_FLOW_FIELDS)
+        if exfields := kwargs.pop("fields", None):
+            for field in exfields.split(','):
+                self.fields.append(field)
         super().set_oargs(**kwargs)
         self.set_format()
 
