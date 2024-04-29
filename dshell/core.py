@@ -596,12 +596,12 @@ class ConnectionPlugin(PacketPlugin):
         connection should close.
         """
         # Sort the addr value for consistent dictionary key purposes
-        addr = tuple(sorted(packet.addr))
+        connkey = tuple(sorted(packet.addr) + [packet.protocol_num])
 
         # If this is a new connection, initialize it and call the init handler
-        if addr not in self._connection_tracker:
+        if connkey not in self._connection_tracker:
             conn = Connection(packet)
-            self._connection_tracker[addr] = conn
+            self._connection_tracker[connkey] = conn
             try:
                 self.connection_init_handler(conn)
             except Exception as e:
@@ -610,7 +610,7 @@ class ConnectionPlugin(PacketPlugin):
             with self.seen_conn_count.get_lock():
                 self.seen_conn_count.value += 1
         else:
-            conn = self._connection_tracker[addr]
+            conn = self._connection_tracker[connkey]
             conn.add_packet(packet)
 
         # TODO: Do we need this? This flag is set to False when the connection is initialized and not
@@ -647,7 +647,8 @@ class ConnectionPlugin(PacketPlugin):
 
         # Remove connection from tracker once in the queue.
         try:
-            del self._connection_tracker[tuple(sorted(conn.addr))]
+            connkey = tuple(sorted(conn.addr) + [conn.protocol_num])
+            del self._connection_tracker[connkey]
         except KeyError:
             pass
 
@@ -1120,6 +1121,7 @@ class Connection(object):
         serverlon:  same as diplon
         serverasn:  same as dipasn
         protocol:   text version of protocol in layer-3 header
+        protocol_num:   numeric version of protocol in layer-3 header
         clientpackets:  counts of packets from client side
         clientbytes:    total bytes transferred from client side
         serverpackets:  counts of packets from server side
@@ -1185,6 +1187,7 @@ class Connection(object):
         self.serverlon = first_packet.diplon
         self.serverasn = first_packet.dipasn
         self.protocol = first_packet.protocol
+        self.protocol_num = first_packet.protocol_num
         self.ts = first_packet.ts
         self.dt = first_packet.dt
         self.starttime = first_packet.dt
