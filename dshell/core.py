@@ -513,7 +513,7 @@ class ConnectionPlugin(PacketPlugin):
         # timestamp of the current packet, minus this value
         self.timeout = datetime.timedelta(hours=1)
         # The number of packets to process between timeout checks.
-        self.timeout_frequency = 300
+        self.timeout_frequency = 50
         # The maximum number of open connections allowed at one time.
         # If the maximum number of connections is met, the oldest connections
         # will be force closed.
@@ -1199,6 +1199,9 @@ class Connection(object):
         self.stop = False
         self.handled = False
 
+        # Cache of created blobs
+        self._blob_cache = []
+
         self.add_packet(first_packet)
 
     @property
@@ -1224,37 +1227,42 @@ class Connection(object):
 
         This is dynamically generated on-demand based on the current set of packets in the connection.
         """
-        blobs = []
+        if self._blob_cache:
+            yield from self._blob_cache
 
-        for packet in self.packets:
-            # TODO: skipping packets without data greatly improves speed, but we may want to
-            #   allow them if we support using ack numbers.
-            if not packet.data:
-                continue
+        else:
+            blobs = []
 
-            # If we see a sequence for an old blob, this is a retransmission.
-            # Find the blob and add this packet.
-            # NOTE: There is probably more to it than this, but this seems to work for now.
-            seq = packet.sequence_number
-            if seq is not None:
-                found = False
-                for blob in blobs:
-                    if blob.sip == packet.sip and seq in blob.sequence_range:
-                        blob.add_packet(packet)
-                        found = True
-                        break
-                if found:
+            for packet in self.packets:
+                # TODO: skipping packets without data greatly improves speed, but we may want to
+                #   allow them if we support using ack numbers.
+                if not packet.data:
                     continue
 
-            # Create a new message if the first or the other direction has started sending data.
-            if not blobs or (packet.sip != blobs[-1].sip and packet.data):
-                blobs.append(Blob(self, packet))
+                # If we see a sequence for an old blob, this is a retransmission.
+                # Find the blob and add this packet.
+                # NOTE: There is probably more to it than this, but this seems to work for now.
+                seq = packet.sequence_number
+                if seq is not None:
+                    found = False
+                    for blob in blobs:
+                        if blob.sip == packet.sip and seq in blob.sequence_range:
+                            blob.add_packet(packet)
+                            found = True
+                            break
+                    if found:
+                        continue
 
-            # Otherwise add packet to last blob.
-            else:
-                blobs[-1].add_packet(packet)
+                # Create a new message if the first or the other direction has started sending data.
+                if not blobs or (packet.sip != blobs[-1].sip and packet.data):
+                    blobs.append(Blob(self, packet))
 
-        yield from blobs
+                # Otherwise add packet to last blob.
+                else:
+                    blobs[-1].add_packet(packet)
+
+            self._blob_cache = blobs
+            yield from blobs
 
     def add_packet(self, packet: Packet):
         """
@@ -1266,6 +1274,8 @@ class Connection(object):
             raise ValueError(f"Address {repr(packet.sip)} is not part of connection.")
 
         self.packets.append(packet)
+        # A new packet means we might need to recalculate all of the blobs
+        self._blob_cache = []
 
         # Adjust state if packet is part of a startup or shutdown.
         if packet.tcp_flags is not None:
@@ -1300,11 +1310,18 @@ class Connection(object):
             Dictionary with information
         """
         d = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
+
+        cb, cp, sb, sp = self.bytes_and_counts()
+
         d['duration'] = self.duration
-        d['clientbytes'] = self.clientbytes
-        d['clientpackets'] = self.clientpackets
-        d['serverbytes'] = self.serverbytes
-        d['serverpackets'] = self.serverpackets
+#        d['clientbytes'] = self.clientbytes
+#        d['clientpackets'] = self.clientpackets
+#        d['serverbytes'] = self.serverbytes
+#        d['serverpackets'] = self.serverpackets
+        d['clientbytes'] = cb
+        d['clientpackets'] = cp
+        d['serverbytes'] = sb
+        d['serverpackets'] = sp
         del d['stop']
         del d['handled']
         del d['packets']
@@ -1320,10 +1337,36 @@ class Connection(object):
             if packet.addr != self.addr:
                 yield packet
 
+    def bytes_and_counts(self) -> Tuple[int, int, int, int]:
+        """
+        Convenience function to get client and server packet and byte counts
+        while only iterating over the packet list once.
+        Returns a tuple of:
+            (client bytes, client packets, server bytes, server packets)
+        """
+        cbytes, cpkts, sbytes, spkts = 0, 0, 0, 0
+        for packet in self.packets:
+            if packet.addr == self.addr:
+                # client
+                cbytes += packet.byte_count
+                cpkts += bool(packet.byte_count) # only count packets with data
+            else:
+                # server
+                sbytes += packet.byte_count
+                spkts += bool(packet.byte_count) # only count packets with data
+        return (cbytes, cpkts, sbytes, spkts)
+
+    @property
+    def totalbytes(self) -> int:
+        """
+        The total number of bytes from both directions
+        """
+        return sum(packet.byte_count for packet in self.packets)
+
     @property
     def clientbytes(self) -> int:
         """
-        The total number of bytes form the client.
+        The total number of bytes from the client.
         """
         return sum(packet.byte_count for packet in self._client_packets())
 
@@ -1338,7 +1381,7 @@ class Connection(object):
     @property
     def serverbytes(self) -> int:
         """
-        The total number of bytes form the server.
+        The total number of bytes from the server.
         """
         return sum(packet.byte_count for packet in self._server_packets())
 
@@ -1351,6 +1394,7 @@ class Connection(object):
         return sum(bool(packet.byte_count) for packet in self._server_packets())
 
     def __repr__(self):
+        cb, cp, sb, sp = self.bytes_and_counts()
         return '%s  %16s -> %16s  (%s -> %s)  %6s  %6s %5d  %5d  %7d  %7d  %-.4fs' % (
             self.starttime,
             self.clientip,
@@ -1359,10 +1403,14 @@ class Connection(object):
             self.servercc,
             self.clientport,
             self.serverport,
-            self.clientpackets,
-            self.serverpackets,
-            self.clientbytes,
-            self.serverbytes,
+#            self.clientpackets,
+#            self.serverpackets,
+#            self.clientbytes,
+#            self.serverbytes,
+            cp,
+            sp,
+            cb,
+            sb,
             self.duration,
         )
 
@@ -1418,6 +1466,8 @@ class Blob(object):
         self.connection = connection
         self.addr = first_packet.addr
         self.ts = first_packet.ts
+        self.starttime = first_packet.ts
+        self.endtime = first_packet.ts
         self.sip = first_packet.sip
         self.smac = first_packet.smac
         self.sport = first_packet.sport
@@ -1440,6 +1490,8 @@ class Blob(object):
 
         # Maps sequence number with packets
         self._seq_map = {}
+        self.seq_max = 0
+        self.seq_min = 0
 
         # Used to indicate that a Blob should not be passed to next plugin.
         # Can theoretically be overruled in, say, a connection_handler to
@@ -1461,17 +1513,17 @@ class Blob(object):
         warnings.warn("all_packets has been replaced with packets attribute", DeprecationWarning)
         return self.packets
 
-    @property
-    def starttime(self):
-        return min(packet.dt for packet in self.packets)
+#    @property
+#    def starttime(self):
+#        return min(packet.dt for packet in self.packets)
 
     @property
     def start_time(self):
         return self.starttime
 
-    @property
-    def endtime(self):
-        return max(packet.dt for packet in self.packets)
+#    @property
+#    def endtime(self):
+#        return max(packet.dt for packet in self.packets)
 
     @property
     def end_time(self):
@@ -1542,13 +1594,17 @@ class Blob(object):
         """
         The range of sequence numbers found within the packets.
         """
-        sequence_numbers = self.sequence_numbers
-        if not sequence_numbers:
+#        sequence_numbers = self.sequence_numbers
+#        if not sequence_numbers:
+#            return range(0, 0)
+#
+#        min_seq = min(sequence_numbers)
+#        max_seq = max(sequence_numbers)
+#        return range(min_seq, max_seq + len(self._seq_map[max_seq].data))
+        if not self._seq_map:
             return range(0, 0)
 
-        min_seq = min(sequence_numbers)
-        max_seq = max(sequence_numbers)
-        return range(min_seq, max_seq + len(self._seq_map[max_seq].data))
+        return range(self.seq_min, self.seq_max + len(self._seq_map[self.seq_max].data))
 
     @property
     def segments(self) -> List[Tuple[int, "Packet"]]:
@@ -1573,7 +1629,7 @@ class Blob(object):
                 if missing_num_bytes:
                     logger.debug(
                         f"Missing {missing_num_bytes} bytes of data between packets "
-                        f"{prev_packet and prev_packet.frame} and {packet.frame}"
+                        f"{prev_packet.frame} and {packet.frame}"
                     )
                 expected_seq += missing_num_bytes + len(packet.data)
                 prev_packet = packet
@@ -1842,11 +1898,17 @@ class Blob(object):
         # If packet is not TCP just add packet to list.
         if seq is None:
             self.packets.append(packet)
+            if packet.ts < self.starttime: self.starttime = packet.ts
+            if packet.ts > self.endtime: self.endtime = packet.ts
             return
 
         # If this a new sequence number we haven't seen before, add it to the map.
         if seq not in self._seq_map:
             self._seq_map[seq] = packet
+            if seq < self.seq_min: self.seq_min = seq
+            if seq > self.seq_max: self.seq_max = seq
+            if packet.ts < self.starttime: self.starttime = packet.ts
+            if packet.ts > self.endtime: self.endtime = packet.ts
             self.packets.append(packet)
             return
 
@@ -1856,7 +1918,8 @@ class Blob(object):
         orig_packet = self._seq_map[seq]
 
         # ignore duplicate packet.
-        if len(packet.data) <= len(orig_packet.data):
+#        if len(packet.data) <= len(orig_packet.data):
+        if packet.data == orig_packet.data:
             # TODO: should we still handle duplicate packets.
             logger.debug(f'Ignoring duplicate packet: {packet.frame}')
             return
@@ -1867,7 +1930,8 @@ class Blob(object):
         orig_next_seq = seq + len(orig_packet.data)
         next_seq = seq + len(packet.data)
         if (
-            next_seq < max(self.sequence_numbers)
+#            next_seq < max(self.sequence_numbers)
+            next_seq < self.seq_max
             and orig_packet.data
             and next_seq not in self._seq_map
             and orig_next_seq in self._seq_map
@@ -1882,6 +1946,8 @@ class Blob(object):
         logger.debug(f'Replacing packet {orig_packet.frame} with {packet.frame}')
         self._seq_map[seq] = packet
         self.packets = [packet if p.sequence_number == seq else p for p in self.packets]
+        if packet.ts < self.starttime: self.starttime = packet.ts
+        if packet.ts > self.endtime: self.endtime = packet.ts
 
         # Now remove any packets that contained data that is now part of the retransmitted packet.
         packets_to_remove = []
@@ -1904,5 +1970,7 @@ class Blob(object):
         for seq, packet_ in list(self._seq_map.items()):
             if packet_ == packet:
                 del self._seq_map[seq]
+                if seq == self.seq_max:
+                    self.seq_max = max(self._seq_map.keys())
 
         self.packets.remove(packet)

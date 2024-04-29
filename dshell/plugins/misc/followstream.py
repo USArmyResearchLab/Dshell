@@ -17,7 +17,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
         )
 
     def connection_handler(self, conn):
-        if (conn.clientbytes + conn.serverbytes > 0):
+        if conn.totalbytes > 0:
             self.write(conn, **conn.info())
             return conn
 
