@@ -32,6 +32,7 @@ import sys
 import tempfile
 import zipfile
 from collections import OrderedDict
+from datetime import timedelta
 from getpass import getpass
 from glob import glob
 from importlib import import_module
@@ -250,6 +251,17 @@ def main(plugin_args=None, **kwargs):
             plugin.out.extra = True
             plugin.out.set_format(plugin.out.format)
 
+        # Set some attributes for ConnectionPlugins
+        if hasattr(plugin, "timeout"):
+            # Set wait time since last packet arrived in a connection before
+            # considering connection closed
+            if t := kwargs.get("conntimeout"):
+                td = timedelta(seconds=int(t))
+                plugin.timeout = td
+            # Set max number of allowed open connections
+            if t := kwargs.get("connmax"):
+                plugin.max_open_connections = int(t)
+
         # Set the BPF filters
         # Each plugin has its own default BPF that will be extended or replaced
         # based on --no-vlan, --ebpf, or --bpf arguments.
@@ -447,8 +459,12 @@ def read_packets(input: str, interface=False, bpf=None, count=None) -> Iterable[
         try:
             header, packet_data = capture.next()
             if header is None and not packet_data:
-                # probably the end of the capture
-                break
+                if not interface:
+                    # probably the end of the capture
+                    break
+                else:
+                    # interface timed out
+                    continue
             if count and frame - 1 >= count:
                 # we've reached the maximum number of packets to process
                 break
@@ -463,6 +479,11 @@ def read_packets(input: str, interface=False, bpf=None, count=None) -> Iterable[
             frame += 1
 
             yield packet
+
+        # handle SIGINT gracefully, break read loop and allow shutdown
+        except KeyboardInterrupt:
+            logger.debug("Caught KeyboardInterrupt or SIGINT. Closing capture.")
+            break
 
         except pcapy.PcapError as e:
             estr = str(e)
@@ -557,6 +578,12 @@ def main_command_line():
     parser.add_argument('--unzipdir', type=str, metavar="DIRECTORY",
                       default=tempfile.gettempdir(),
                       help='Directory to use when decompressing input files (.gz, .bz2, and .zip only)')
+    parser.add_argument('--conn-timeout', dest="conntimeout", type=int,
+                      metavar="SECONDS", default=3600,
+                      help="Number of seconds to wait after last packet in a connection before closing it (default: 3600)")
+    parser.add_argument('--conn-max-open', dest='connmax', type=int,
+                      metavar="NUMBER", default=1000,
+                      help="Number of connections to hold in an open state before Dshell begins closing the oldest (default: 1000)")
 
     multiprocess_group = parser.add_argument_group("multiprocessing arguments")
     multiprocess_group.add_argument('-P', '--parallel', dest='multiprocessing', action='store_true',
