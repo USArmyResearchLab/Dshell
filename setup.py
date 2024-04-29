@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="Dshell",
-    version="3.2.2",
+    version="3.2.3",
     author="USArmyResearchLab",
     description="An extensible network forensic analysis framework",
     url="https://github.com/USArmyResearchLab/Dshell",
