@@ -902,9 +902,13 @@ class Packet(object):
                 ieee80211_p = layer
             elif ip_p is None and isinstance(layer, (ip.IP, ip6.IP6)):
                 ip_p = layer
-                if ip_p.flags & 0x1 and ip_p.offset > 0:
-                    # IP fragmentation, break all further layer processing
-                    break
+                try:
+                    if ip_p.flags & 0x1 and ip_p.offset > 0:
+                        # IP fragmentation, break all further layer processing
+                        break
+                except AttributeError:
+                    # IPv6 does not always have flags header field set
+                     pass
             elif tcp_p is None and isinstance(layer, tcp.TCP):
                 tcp_p = layer
             elif udp_p is None and isinstance(layer, udp.UDP):
