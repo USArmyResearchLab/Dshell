@@ -7,22 +7,29 @@ from dshell.output.output import Output
 
 from pypacker.layer12 import ieee80211
 
+try:
+    from pypacker.layer12.ieee80211 import FTYPE_MGMT, FTYPE_CTRL, FTYPE_DATA
+except ImportError:
+    # pypacker < 6.0 names
+    from pypacker.layer12.ieee80211 import (
+        MGMT_TYPE as FTYPE_MGMT, CTL_TYPE as FTYPE_CTRL, DATA_TYPE as FTYPE_DATA)
+
 # Create a dictionary of string representations of frame types
 TYPE_KEYS = {
-    ieee80211.MGMT_TYPE: "MGMT",
-    ieee80211.CTL_TYPE: "CTRL",
-    ieee80211.DATA_TYPE: "DATA"
+    FTYPE_MGMT: "MGMT",
+    FTYPE_CTRL: "CTRL",
+    FTYPE_DATA: "DATA"
 }
 
 # Create a dictionary of subtype keys from constants defined in ieee80211
 # Its keys will be tuple pairs of (TYPE, SUBTYPE)
 SUBTYPE_KEYS = dict()
 # Management frame subtypes
-SUBTYPE_KEYS.update(dict(((ieee80211.MGMT_TYPE, v), k[2:]) for k, v in ieee80211.__dict__.items() if type(v) == int and k.startswith("M_")))
+SUBTYPE_KEYS.update(dict(((FTYPE_MGMT, v), k[2:]) for k, v in ieee80211.__dict__.items() if type(v) == int and k.startswith("M_")))
 # Control frame subtypes
-SUBTYPE_KEYS.update(dict(((ieee80211.CTL_TYPE, v), k[2:]) for k, v in ieee80211.__dict__.items() if type(v) == int and k.startswith("C_")))
+SUBTYPE_KEYS.update(dict(((FTYPE_CTRL, v), k[2:]) for k, v in ieee80211.__dict__.items() if type(v) == int and k.startswith("C_")))
 # Data frame subtypes
-SUBTYPE_KEYS.update(dict(((ieee80211.DATA_TYPE, v), k[2:]) for k, v in ieee80211.__dict__.items() if type(v) == int and k.startswith("D_")))
+SUBTYPE_KEYS.update(dict(((FTYPE_DATA, v), k[2:]) for k, v in ieee80211.__dict__.items() if type(v) == int and k.startswith("D_")))
 
 class DshellPlugin(dshell.core.PacketPlugin):
 
