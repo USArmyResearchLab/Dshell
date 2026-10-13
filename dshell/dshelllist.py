@@ -5,13 +5,21 @@ These are mostly used in decode.py and in unit tests
 
 import logging
 import os
-import pkg_resources
 from glob import iglob
+from importlib.metadata import entry_points
 
 from dshell.util import get_plugin_path
 
 
 logger = logging.getLogger(__name__)
+
+
+def _plugin_entry_points():
+    try:
+        return entry_points(group="dshell_plugins")
+    except TypeError:
+        # Python < 3.10
+        return entry_points().get("dshell_plugins", [])
 
 
 def get_plugins():
@@ -39,10 +47,10 @@ def get_plugins():
 
     # Next, try to discover additional plugins installed externally.
     # Uses entry points in setup.py files.
-    for ep_plugin in pkg_resources.iter_entry_points("dshell_plugins"):
+    for ep_plugin in _plugin_entry_points():
         if ep_plugin.name in plugins:
             logger.warning("Duplicate plugin name found: {}".format(ep_plugin.name))
-        plugins[ep_plugin.name] = ep_plugin.module_name
+        plugins[ep_plugin.name] = ep_plugin.value.partition(":")[0].strip()
 
     return plugins
 
