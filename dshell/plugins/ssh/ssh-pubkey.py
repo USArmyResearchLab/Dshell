@@ -164,7 +164,7 @@ def key_fingerprint(ssh_pubkey, hashfunction=hashlib.sha256):
     # Try to decode key as base64
     try:
         keybin = base64.b64decode(ssh_pubkey)
-    except:
+    except Exception:
         sys.stderr.write("Invalid key value:\n")
         sys.stderr.write("  \"%s\":\n" % ssh_pubkey)
         return None

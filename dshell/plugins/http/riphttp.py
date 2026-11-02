@@ -138,7 +138,7 @@ class HTTPFile(object):
             self.plugin.warning("Incomplete file: {!r}".format(self.filename))
             try:
                 os.rename(self.filename, self.filename + "_INCOMPLETE")
-            except:
+            except OSError:
                 pass
             ls = 0
             le = 0
@@ -163,13 +163,13 @@ class HTTPFile(object):
                 try:
                     if int(m.group(3)) > self.size:
                         self.size = int(m.group(3))
-                except:
+                except ValueError:
                     pass
         elif 'content-length' in response.headers:
             try:
                 if int(response.headers['content-length']) > self.size:
                     self.size = int(response.headers['content-length'])
-            except:
+            except ValueError:
                 pass
         # Update range tracking
         self.ranges.append((range_start, range_end))
