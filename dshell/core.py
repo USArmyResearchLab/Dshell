@@ -40,6 +40,15 @@ logger = logging.getLogger(__name__)
 
 __version__ = "3.2.3"
 
+# Maximum gap (in bytes) that will be padded over when reassembling a TCP blob.
+# An untrusted pcap can carry sequence numbers with arbitrarily large gaps;
+# padding such a gap without a bound lets a remote attacker force an
+# unbounded memory allocation (memory-exhaustion DoS) via Blob.data or
+# Blob.reassemble. A legitimate reassembly stream with a multi-megabyte hole
+# is an abnormal condition, so we cap it and raise instead of allocating.
+MAX_REASSEMBLY_GAP = 1000 * 1024 * 1024  # 1 GB
+
+
 class SequenceNumberError(Exception):
     """
     Raised when reassembling connections and data is missing or overlapping.
@@ -1687,8 +1696,14 @@ class Blob(object):
 
             # Check if we have missing packets.
             if seq - initial_seq != len(data):
-                # buffer data with null bytes
-                data += b'\x00' * (seq - initial_seq - len(data))
+                gap = seq - initial_seq - len(data)
+                if gap > MAX_REASSEMBLY_GAP:
+                    raise SequenceNumberError(
+                        "Sequence number gap of %d bytes exceeds the maximum allowed of %d bytes. %s"
+                        % (gap, MAX_REASSEMBLY_GAP, self.addr))
+                # buffer data with null bytes (a negative gap yields empty
+                # padding, preserving the prior overlap/out-of-order behavior)
+                data += b'\x00' * gap
 
             data += packet.data
         data = bytes(data)
@@ -1815,10 +1830,14 @@ class Blob(object):
             for offset in offsets:
                 if offset > nextoffset:
                     # data is missing
-                    if allow_padding:
-                        out += padding * (offset - nextoffset)
-                    else:
+                    if not allow_padding:
                         raise SequenceNumberError("Missing data for sequence number %d %s" % (nextoffset, self.addr))
+                    gap = offset - nextoffset
+                    if gap > MAX_REASSEMBLY_GAP:
+                        raise SequenceNumberError(
+                            "Sequence number gap of %d bytes exceeds the maximum allowed of %d bytes. %s"
+                            % (gap, MAX_REASSEMBLY_GAP, self.addr))
+                    data += padding * gap
                 elif offset < nextoffset:
                     # data is overlapping
                     if not allow_overlap:
