@@ -7,6 +7,7 @@ from dshell.output.alertout import AlertOutput
 import struct
 import base64
 import hashlib
+import sys
 
 
 class DshellPlugin(dshell.core.ConnectionPlugin):
