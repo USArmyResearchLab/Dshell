@@ -502,10 +502,11 @@ class ConnectionPlugin(PacketPlugin):
         self.seen_conn_count = Value('i', 0)
         self.handled_conn_count = Value('i', 0)
 
-        # maximum number of blobs a connection will store before calling
-        # connection_handler
-        # it defaults to infinite, but this should be lowered for huge datasets
-        self.maxblobs = float("inf")  # infinite
+        # maximum number of blobs (messages) a single connection may accumulate
+        # before it is flushed and closed. Bounding this prevents one
+        # connection from holding an unbounded number of reassembled messages
+        # in memory (memory-exhaustion DoS). A large value relaxes the bound.
+        self.maxblobs = 1000
 
         # how long do we wait before deciding a connection is "finished"
         # time is checked by iterating over cached connections and checking if
@@ -621,18 +622,13 @@ class ConnectionPlugin(PacketPlugin):
         # if pkt.data:
         #     conn.handled = False
 
-        if conn.closed:
-            # Both sides have closed the connection, process blobs (messages) and
-            # close connection.
+        blob_overflow = conn.blob_count > self.maxblobs
+        if conn.closed or blob_overflow:
+            # Both sides have closed the connection, or the per-connection blob
+            # budget was exceeded; process blobs (messages) and close connection.
             for blob in conn.blobs:
                 self._blob_handler(conn, blob)
-            self._close_connection(conn, full=True)
-
-        # TODO: Switch to a max_packets option.
-        # elif len(conn.blobs) > self.maxblobs:
-        #     # Max blobs hit, so we will run connection_handler and decode.py
-        #     # will clear the connection's blob cache
-        #     self._close_connection(conn)
+            self._close_connection(conn, full=conn.closed)
 
         # Check for and close old connections every so often.
         if self.handled_packet_count.value % self.timeout_frequency == 0:
@@ -1206,6 +1202,13 @@ class Connection(object):
         # Cache of created blobs
         self._blob_cache = []
 
+        # Running count of blobs (messages) and the source of the most recent
+        # data packet, used to enforce ConnectionPlugin.maxblobs. A new blob
+        # starts whenever a data packet changes direction relative to the
+        # previous data packet (mirrors the blobs property).
+        self._blob_count = 0
+        self._last_data_sip = None
+
         self.add_packet(first_packet)
 
     @property
@@ -1223,6 +1226,11 @@ class Connection(object):
     @property
     def established(self):
         return self.client_state == self.ESTABLISHED and self.server_state == self.ESTABLISHED
+
+    @property
+    def blob_count(self) -> int:
+        """Number of blobs (messages) currently accumulated in this connection."""
+        return self._blob_count
 
     @property
     def blobs(self) -> Iterable["Blob"]:
@@ -1280,6 +1288,14 @@ class Connection(object):
         self.packets.append(packet)
         # A new packet means we might need to recalculate all of the blobs
         self._blob_cache = []
+
+        # Track the blob count for maxblobs enforcement: a new blob starts
+        # whenever a data packet arrives from the opposite source to the
+        # previous data packet (mirrors the blobs property).
+        if packet.data:
+            if self._last_data_sip is None or packet.sip != self._last_data_sip:
+                self._blob_count += 1
+            self._last_data_sip = packet.sip
 
         # Adjust state if packet is part of a startup or shutdown.
         if packet.tcp_flags is not None:
