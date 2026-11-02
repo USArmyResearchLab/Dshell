@@ -127,10 +127,10 @@ class Output:
             while os.stat(filename):
                 p = filename.rsplit('-', 1)
                 try:
-                    p, n = p[0], int(p[1])
-                except ValueError:
-                    n = 0
-                filename = '-'.join(p + ['%04d' % (int(n) + 1)])
+                    base, n = p[0], int(p[1])
+                except (ValueError, IndexError):
+                    base, n = filename, 0
+                filename = '%s-%04d' % (base, n + 1)
         except OSError:
             pass  # file not found
         return filename
