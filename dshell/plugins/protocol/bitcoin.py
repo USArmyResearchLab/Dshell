@@ -286,15 +286,15 @@ Examples:
             # The extra information (JOB ID, BLOCK VER, etc.) will be useful in matching the 
             #   information outputted by the alerts to the payload containing the 
             #   generation transaction info and merkle branches
-            fout = open(self.gentx, "a+")  
-            fout.write(("\nJOB IDs: \t\t{0:<20} \nPREV BLK HASH: \t{1:<65} \n\nGEN TX1: \t\t{2:<20}" 
-                        "\n\nGEN TX2: \t\t{3:<20} \n\nMERKLE BRANCHES: {4:<20} \n\nBLOCK VER: \t\t{5:<20}" 
-                        "\nHASH DIFF: \t\t{6:<10}\n").format(
-                        ', '.join(self.notify_params[conn.addr][0][conn.addr]), self.notify_params[conn.addr][1],
-                        self.notify_params[conn.addr][2], self.notify_params[conn.addr][3],
-                        ', '.join(self.notify_params[conn.addr][4]), self.notify_params[conn.addr][5],
-                        self.notify_params[conn.addr][6]))
-            fout.write(("\n" + "-"*100)*2)
+            with open(self.gentx, "a+") as fout:
+                fout.write(("\nJOB IDs: \t\t{0:<20} \nPREV BLK HASH: \t{1:<65} \n\nGEN TX1: \t\t{2:<20}"
+                            "\n\nGEN TX2: \t\t{3:<20} \n\nMERKLE BRANCHES: {4:<20} \n\nBLOCK VER: \t\t{5:<20}"
+                            "\nHASH DIFF: \t\t{6:<10}\n").format(
+                            ', '.join(self.notify_params[conn.addr][0][conn.addr]), self.notify_params[conn.addr][1],
+                            self.notify_params[conn.addr][2], self.notify_params[conn.addr][3],
+                            ', '.join(self.notify_params[conn.addr][4]), self.notify_params[conn.addr][5],
+                            self.notify_params[conn.addr][6]))
+                fout.write(("\n" + "-"*100)*2)
 
 
         # Else if we dont have Bitcoin User IDs, or Block information 
