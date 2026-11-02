@@ -1805,15 +1805,18 @@ class Blob(object):
                 segments[pkt.sequence_number] = pkt.data
 
             offsets = sorted(segments.keys())
-            # iterate over the segments and try to piece them together
-            # handle any instances of missing or overlapping segments
+            # Reassemble the segments in sequence order, handling gaps and
+            # overlaps in O(total data) time. (The previous per-segment
+            # `data = data[:x] + seg + data[y:]` splicing was O(n^2) and a
+            # CPU-exhaustion vector.)
+            base = offsets[0]
             nextoffset = offsets[0]
-            startoffset = offsets[0]
+            out = bytearray()
             for offset in offsets:
                 if offset > nextoffset:
                     # data is missing
                     if allow_padding:
-                        data += padding * (offset - nextoffset)
+                        out += padding * (offset - nextoffset)
                     else:
                         raise SequenceNumberError("Missing data for sequence number %d %s" % (nextoffset, self.addr))
                 elif offset < nextoffset:
@@ -1822,10 +1825,14 @@ class Blob(object):
                         raise SequenceNumberError(
                             "Overlapping data for sequence number %d %s" % (nextoffset, self.addr))
 
-                nextoffset = (offset + len(segments[offset])) & self.MAX_OFFSET
-                data = data[:offset - startoffset] + \
-                       segments[offset] + \
-                       data[nextoffset - startoffset:]
+                seg = segments[offset]
+                seg_start = offset - base
+                if len(out) > seg_start:
+                    # Overlap: the new data wins (allow_overlap semantics)
+                    del out[seg_start:]
+                out += seg
+                nextoffset = (offset + len(seg)) & self.MAX_OFFSET
+            data = bytes(out)
             self.__data_bytes = data
 
         return data
