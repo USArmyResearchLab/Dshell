@@ -1267,7 +1267,11 @@ class Connection(object):
                 if seq is not None:
                     found = False
                     for blob in blobs:
-                        if blob.sip == packet.sip and seq in blob.sequence_range:
+                        if (
+                            blob.sip == packet.sip
+                            and blob.sport == packet.sport
+                            and seq in blob.sequence_range
+                        ):
                             blob.add_packet(packet)
                             found = True
                             break
@@ -1275,7 +1279,15 @@ class Connection(object):
                         continue
 
                 # Create a new message if the first or the other direction has started sending data.
-                if not blobs or (packet.sip != blobs[-1].sip and packet.data):
+                # A direction change is a change in the source (IP, port) tuple, not just the IP:
+                # on same-host (e.g. loopback) connections both directions share the source IP, so
+                # the source port is required to tell them apart, otherwise both directions are
+                # merged into one blob and their unrelated TCP sequence-number spaces produce a
+                # spurious giant gap.
+                if not blobs or (
+                    (packet.sip != blobs[-1].sip or packet.sport != blobs[-1].sport)
+                    and packet.data
+                ):
                     blobs.append(Blob(self, packet))
 
                 # Otherwise add packet to last blob.
