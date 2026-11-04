@@ -89,7 +89,7 @@ class DshellPlugin(dshell.core.ConnectionPlugin):
             # Calculate key fingerprints
             info['host_fingerprints'] = {}
             for hash_scheme in ("md5", "sha1", "sha256"):
-                hashfunction = eval("hashlib."+hash_scheme)
+                hashfunction = getattr(hashlib, hash_scheme)
                 thisfp = key_fingerprint(info['host_pubkey'], hashfunction)
                 info['host_fingerprints'][hash_scheme] = ':'.join(
                     ['%02x' % b for b in thisfp])
