@@ -48,6 +48,16 @@ __version__ = "3.2.3"
 # is an abnormal condition, so we cap it and raise instead of allocating.
 MAX_REASSEMBLY_GAP = 1000 * 1024 * 1024  # 1 GB
 
+# IP fragment reassembly (core.ipdefrag) stages fragments in a table keyed by
+# (src, dst, id) and only drops an entry once the final (MF=0) fragment
+# arrives. An attacker can therefore stage unbounded memory by emitting many
+# distinct (src, dst, id) flows -- or many fragments within one flow -- whose
+# final fragment is never sent (CWE-770). Cap both the number of concurrent
+# reassembly flows and the number of staged fragments per flow; evict the
+# oldest flow (insertion order) when the flow cap is reached.
+MAX_IP_FRAGMENT_SETS = 1024
+MAX_IP_FRAGMENTS_PER_ID = 512
+
 
 class SequenceNumberError(Exception):
     """
@@ -277,17 +287,37 @@ class PacketPlugin(object):
         pkt = packet.pkt
         ipp = pkt.upper_layer
         if isinstance(ipp, ip.IP):  # IPv4
-            f = self._packet_fragments[(ipp.src, ipp.dst, ipp.id)]
+            fragkey = (ipp.src, ipp.dst, ipp.id)
+
+            if fragkey not in self._packet_fragments:
+                # Bound the number of concurrent reassembly flows so an
+                # attacker cannot stage unbounded (src, dst, id) tables with
+                # MF=1 fragments that never complete. Evict the oldest flow
+                # (insertion order) to make room for this one.
+                while len(self._packet_fragments) >= MAX_IP_FRAGMENT_SETS:
+                    self._packet_fragments.pop(next(iter(self._packet_fragments)))
+                self._packet_fragments[fragkey] = {}
+
+            f = self._packet_fragments[fragkey]
+
+            if ipp.offset not in f and len(f) >= MAX_IP_FRAGMENTS_PER_ID:
+                # A single flow already has the maximum staged fragments and
+                # this is a new one: drop the whole flow (free its memory)
+                # rather than let it grow without bound.
+                logger.debug(f"Dropping IP fragment flow at MAX_IP_FRAGMENTS_PER_ID ({packet.sip} -> {packet.dip}: {ipp.id}:{ipp.flags}:{ipp.offset})")
+                del self._packet_fragments[fragkey]
+                return None
+
             f[ipp.offset] = packet
 
             if not ipp.flags & 0x1: # If no more fragments (MF)
                 if len(f) <= 1 and 0 in f:
                     # If only one unfragmented packet, return that packet
-                    del self._packet_fragments[(ipp.src, ipp.dst, ipp.id)]
+                    del self._packet_fragments[fragkey]
                     return f[0]
                 elif 0 not in f:
                     logger.debug(f"Missing first fragment of fragmented packet. Dropping ({packet.sip} -> {packet.dip}: {ipp.id}:{ipp.flags}:{ipp.offset})")
-                    del self._packet_fragments[(ipp.src, ipp.dst, ipp.id)]
+                    del self._packet_fragments[fragkey]
                     return None
                 fkeys = sorted(f.keys())
                 data = b''
@@ -297,7 +327,7 @@ class PacketPlugin(object):
                 newip = ip.IP(firstpacket.pkt.upper_layer.header_bytes + data)
                 newip.bin(update_auto_fields=True) # refresh checksum
                 firstpacket.pkt.upper_layer = newip
-                del self._packet_fragments[(ipp.src, ipp.dst, ipp.id)]
+                del self._packet_fragments[fragkey]
                 return Packet(
                     firstpacket.pkt.__len__,
                     firstpacket.pkt,
@@ -913,7 +943,7 @@ class Packet(object):
                         break
                 except AttributeError:
                     # IPv6 does not always have flags header field set
-                     pass
+                    pass
             elif tcp_p is None and isinstance(layer, tcp.TCP):
                 tcp_p = layer
             elif udp_p is None and isinstance(layer, udp.UDP):
