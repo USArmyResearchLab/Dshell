@@ -38,7 +38,7 @@ from pypacker.layer4 import tcp, udp
 
 logger = logging.getLogger(__name__)
 
-__version__ = "3.2.3"
+__version__ = "3.2.4"
 
 # Maximum gap (in bytes) that will be padded over when reassembling a TCP blob.
 # An untrusted pcap can carry sequence numbers with arbitrarily large gaps;
