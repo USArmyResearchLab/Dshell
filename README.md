@@ -10,6 +10,9 @@ Key features:
 * Parallel processing option to divide the handling of data source into separate Python processes
 * Enables development of external plugin packs to share and install new externally developed plugins without overlapping the core Dshell plugin directories
 
+> [!WARNING]
+> The current 3.2.4 version of Dshell fixes several vulnerabilities including an out-of-memory exception that can crash a Dshell process. Users are encouraged to update to this version.
+
 ## Guides
 * [Dshell User Guide](Dshell_User_Guide.pdf) 
   * A guide to installation as well as both basic and advanced analysis with examples
