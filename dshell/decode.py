@@ -241,7 +241,7 @@ def main(plugin_args=None, **kwargs):
         # Set nobuffer mode if that's what the user wants
         if kwargs.get("nobuffer", False):
             plugin.out.nobuffer = True
-            
+
         # Set color blind friendly mode
         if kwargs.get("cbf", False):
             plugin.out.cbf = True
@@ -261,6 +261,9 @@ def main(plugin_args=None, **kwargs):
             # Set max number of allowed open connections
             if t := kwargs.get("connmax"):
                 plugin.max_open_connections = int(t)
+            # Set max blobs (messages) per connection before forced flush+close
+            if t := kwargs.get("connmaxblobs") is not None:
+                plugin.maxblobs = int(t)
 
         # Set the BPF filters
         # Each plugin has its own default BPF that will be extended or replaced
@@ -584,6 +587,9 @@ def main_command_line():
     parser.add_argument('--conn-max-open', dest='connmax', type=int,
                       metavar="NUMBER", default=1000,
                       help="Number of connections to hold in an open state before Dshell begins closing the oldest (default: 1000)")
+    parser.add_argument('--conn-max-blobs', dest='connmaxblobs', type=int,
+                      metavar="NUMBER", default=None,
+                      help="Maximum number of blobs (messages) a single connection may hold before it is flushed and closed (default: 1000)")
 
     multiprocess_group = parser.add_argument_group("multiprocessing arguments")
     multiprocess_group.add_argument('-P', '--parallel', dest='multiprocessing', action='store_true',

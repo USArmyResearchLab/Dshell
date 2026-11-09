@@ -10,6 +10,7 @@ import re
 import sys
 from collections import defaultdict
 from datetime import datetime
+from xml.sax.saxutils import escape
 import warnings
 
 
@@ -50,6 +51,10 @@ class Output:
         self.extra = extra
         self.mode = mode
         self.cbf = cbf
+        # HTML (or other markup) output modules set this to True so that free-form
+        # fields rendered into the --extra block are entity-escaped (prevents
+        # stored XSS from attacker-controlled pcap fields such as FTP username).
+        self.escape_html = False
 
         # Must define attributes even if they are setup in different function.
         self.format_fields = None
@@ -122,10 +127,10 @@ class Output:
             while os.stat(filename):
                 p = filename.rsplit('-', 1)
                 try:
-                    p, n = p[0], int(p[1])
-                except ValueError:
-                    n = 0
-                filename = '-'.join(p + ['%04d' % (int(n) + 1)])
+                    base, n = p[0], int(p[1])
+                except (ValueError, IndexError):
+                    base, n = filename, 0
+                filename = '%s-%04d' % (base, n + 1)
         except OSError:
             pass  # file not found
         return filename
@@ -203,7 +208,12 @@ class Output:
                 outdict[key] = val
             if self.extra:
                 if key not in self.format_fields:
-                    extras.append("%s=%s" % (key, val))
+                    # Entity-escape free-form values for markup output modules
+                    # (e.g. htmlout) so attacker-controlled pcap fields cannot
+                    # inject HTML/JS into the report. Non-markup modules leave
+                    # escape_html unset and are unaffected.
+                    value = escape(str(val)) if self.escape_html else val
+                    extras.append("%s=%s" % (key, value))
 
         # Dump the args into a 'data' field
         outdict['data'] = self.delimiter.join(map(str, args))

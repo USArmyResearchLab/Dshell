@@ -38,7 +38,26 @@ from pypacker.layer4 import tcp, udp
 
 logger = logging.getLogger(__name__)
 
-__version__ = "3.2.3"
+__version__ = "3.2.4"
+
+# Maximum gap (in bytes) that will be padded over when reassembling a TCP blob.
+# An untrusted pcap can carry sequence numbers with arbitrarily large gaps;
+# padding such a gap without a bound lets a remote attacker force an
+# unbounded memory allocation (memory-exhaustion DoS) via Blob.data or
+# Blob.reassemble. A legitimate reassembly stream with a multi-megabyte hole
+# is an abnormal condition, so we cap it and raise instead of allocating.
+MAX_REASSEMBLY_GAP = 1000 * 1024 * 1024  # 1 GB
+
+# IP fragment reassembly (core.ipdefrag) stages fragments in a table keyed by
+# (src, dst, id) and only drops an entry once the final (MF=0) fragment
+# arrives. An attacker can therefore stage unbounded memory by emitting many
+# distinct (src, dst, id) flows -- or many fragments within one flow -- whose
+# final fragment is never sent (CWE-770). Cap both the number of concurrent
+# reassembly flows and the number of staged fragments per flow; evict the
+# oldest flow (insertion order) when the flow cap is reached.
+MAX_IP_FRAGMENT_SETS = 1024
+MAX_IP_FRAGMENTS_PER_ID = 512
+
 
 class SequenceNumberError(Exception):
     """
@@ -268,17 +287,37 @@ class PacketPlugin(object):
         pkt = packet.pkt
         ipp = pkt.upper_layer
         if isinstance(ipp, ip.IP):  # IPv4
-            f = self._packet_fragments[(ipp.src, ipp.dst, ipp.id)]
+            fragkey = (ipp.src, ipp.dst, ipp.id)
+
+            if fragkey not in self._packet_fragments:
+                # Bound the number of concurrent reassembly flows so an
+                # attacker cannot stage unbounded (src, dst, id) tables with
+                # MF=1 fragments that never complete. Evict the oldest flow
+                # (insertion order) to make room for this one.
+                while len(self._packet_fragments) >= MAX_IP_FRAGMENT_SETS:
+                    self._packet_fragments.pop(next(iter(self._packet_fragments)))
+                self._packet_fragments[fragkey] = {}
+
+            f = self._packet_fragments[fragkey]
+
+            if ipp.offset not in f and len(f) >= MAX_IP_FRAGMENTS_PER_ID:
+                # A single flow already has the maximum staged fragments and
+                # this is a new one: drop the whole flow (free its memory)
+                # rather than let it grow without bound.
+                logger.debug(f"Dropping IP fragment flow at MAX_IP_FRAGMENTS_PER_ID ({packet.sip} -> {packet.dip}: {ipp.id}:{ipp.flags}:{ipp.offset})")
+                del self._packet_fragments[fragkey]
+                return None
+
             f[ipp.offset] = packet
 
             if not ipp.flags & 0x1: # If no more fragments (MF)
                 if len(f) <= 1 and 0 in f:
                     # If only one unfragmented packet, return that packet
-                    del self._packet_fragments[(ipp.src, ipp.dst, ipp.id)]
+                    del self._packet_fragments[fragkey]
                     return f[0]
                 elif 0 not in f:
                     logger.debug(f"Missing first fragment of fragmented packet. Dropping ({packet.sip} -> {packet.dip}: {ipp.id}:{ipp.flags}:{ipp.offset})")
-                    del self._packet_fragments[(ipp.src, ipp.dst, ipp.id)]
+                    del self._packet_fragments[fragkey]
                     return None
                 fkeys = sorted(f.keys())
                 data = b''
@@ -288,7 +327,7 @@ class PacketPlugin(object):
                 newip = ip.IP(firstpacket.pkt.upper_layer.header_bytes + data)
                 newip.bin(update_auto_fields=True) # refresh checksum
                 firstpacket.pkt.upper_layer = newip
-                del self._packet_fragments[(ipp.src, ipp.dst, ipp.id)]
+                del self._packet_fragments[fragkey]
                 return Packet(
                     firstpacket.pkt.__len__,
                     firstpacket.pkt,
@@ -502,10 +541,11 @@ class ConnectionPlugin(PacketPlugin):
         self.seen_conn_count = Value('i', 0)
         self.handled_conn_count = Value('i', 0)
 
-        # maximum number of blobs a connection will store before calling
-        # connection_handler
-        # it defaults to infinite, but this should be lowered for huge datasets
-        self.maxblobs = float("inf")  # infinite
+        # maximum number of blobs (messages) a single connection may accumulate
+        # before it is flushed and closed. Bounding this prevents one
+        # connection from holding an unbounded number of reassembled messages
+        # in memory (memory-exhaustion DoS). A large value relaxes the bound.
+        self.maxblobs = 1000
 
         # how long do we wait before deciding a connection is "finished"
         # time is checked by iterating over cached connections and checking if
@@ -621,18 +661,13 @@ class ConnectionPlugin(PacketPlugin):
         # if pkt.data:
         #     conn.handled = False
 
-        if conn.closed:
-            # Both sides have closed the connection, process blobs (messages) and
-            # close connection.
+        blob_overflow = conn.blob_count > self.maxblobs
+        if conn.closed or blob_overflow:
+            # Both sides have closed the connection, or the per-connection blob
+            # budget was exceeded; process blobs (messages) and close connection.
             for blob in conn.blobs:
                 self._blob_handler(conn, blob)
-            self._close_connection(conn, full=True)
-
-        # TODO: Switch to a max_packets option.
-        # elif len(conn.blobs) > self.maxblobs:
-        #     # Max blobs hit, so we will run connection_handler and decode.py
-        #     # will clear the connection's blob cache
-        #     self._close_connection(conn)
+            self._close_connection(conn, full=conn.closed)
 
         # Check for and close old connections every so often.
         if self.handled_packet_count.value % self.timeout_frequency == 0:
@@ -908,7 +943,7 @@ class Packet(object):
                         break
                 except AttributeError:
                     # IPv6 does not always have flags header field set
-                     pass
+                    pass
             elif tcp_p is None and isinstance(layer, tcp.TCP):
                 tcp_p = layer
             elif udp_p is None and isinstance(layer, udp.UDP):
@@ -1206,6 +1241,13 @@ class Connection(object):
         # Cache of created blobs
         self._blob_cache = []
 
+        # Running count of blobs (messages) and the source of the most recent
+        # data packet, used to enforce ConnectionPlugin.maxblobs. A new blob
+        # starts whenever a data packet changes direction relative to the
+        # previous data packet (mirrors the blobs property).
+        self._blob_count = 0
+        self._last_data_sip = None
+
         self.add_packet(first_packet)
 
     @property
@@ -1223,6 +1265,11 @@ class Connection(object):
     @property
     def established(self):
         return self.client_state == self.ESTABLISHED and self.server_state == self.ESTABLISHED
+
+    @property
+    def blob_count(self) -> int:
+        """Number of blobs (messages) currently accumulated in this connection."""
+        return self._blob_count
 
     @property
     def blobs(self) -> Iterable["Blob"]:
@@ -1250,7 +1297,11 @@ class Connection(object):
                 if seq is not None:
                     found = False
                     for blob in blobs:
-                        if blob.sip == packet.sip and seq in blob.sequence_range:
+                        if (
+                            blob.sip == packet.sip
+                            and blob.sport == packet.sport
+                            and seq in blob.sequence_range
+                        ):
                             blob.add_packet(packet)
                             found = True
                             break
@@ -1258,7 +1309,15 @@ class Connection(object):
                         continue
 
                 # Create a new message if the first or the other direction has started sending data.
-                if not blobs or (packet.sip != blobs[-1].sip and packet.data):
+                # A direction change is a change in the source (IP, port) tuple, not just the IP:
+                # on same-host (e.g. loopback) connections both directions share the source IP, so
+                # the source port is required to tell them apart, otherwise both directions are
+                # merged into one blob and their unrelated TCP sequence-number spaces produce a
+                # spurious giant gap.
+                if not blobs or (
+                    (packet.sip != blobs[-1].sip or packet.sport != blobs[-1].sport)
+                    and packet.data
+                ):
                     blobs.append(Blob(self, packet))
 
                 # Otherwise add packet to last blob.
@@ -1280,6 +1339,14 @@ class Connection(object):
         self.packets.append(packet)
         # A new packet means we might need to recalculate all of the blobs
         self._blob_cache = []
+
+        # Track the blob count for maxblobs enforcement: a new blob starts
+        # whenever a data packet arrives from the opposite source to the
+        # previous data packet (mirrors the blobs property).
+        if packet.data:
+            if self._last_data_sip is None or packet.sip != self._last_data_sip:
+                self._blob_count += 1
+            self._last_data_sip = packet.sip
 
         # Adjust state if packet is part of a startup or shutdown.
         if packet.tcp_flags is not None:
@@ -1671,8 +1738,14 @@ class Blob(object):
 
             # Check if we have missing packets.
             if seq - initial_seq != len(data):
-                # buffer data with null bytes
-                data += b'\x00' * (seq - initial_seq - len(data))
+                gap = seq - initial_seq - len(data)
+                if gap > MAX_REASSEMBLY_GAP:
+                    raise SequenceNumberError(
+                        "Sequence number gap of %d bytes exceeds the maximum allowed of %d bytes. %s"
+                        % (gap, MAX_REASSEMBLY_GAP, self.addr))
+                # buffer data with null bytes (a negative gap yields empty
+                # padding, preserving the prior overlap/out-of-order behavior)
+                data += b'\x00' * gap
 
             data += packet.data
         data = bytes(data)
@@ -1789,27 +1862,38 @@ class Blob(object):
                 segments[pkt.sequence_number] = pkt.data
 
             offsets = sorted(segments.keys())
-            # iterate over the segments and try to piece them together
-            # handle any instances of missing or overlapping segments
+            # Reassemble the segments in sequence order, handling gaps and
+            # overlaps in O(total data) time. (The previous per-segment
+            # `data = data[:x] + seg + data[y:]` splicing was O(n^2) and a
+            # CPU-exhaustion vector.)
+            base = offsets[0]
             nextoffset = offsets[0]
-            startoffset = offsets[0]
+            out = bytearray()
             for offset in offsets:
                 if offset > nextoffset:
                     # data is missing
-                    if allow_padding:
-                        data += padding * (offset - nextoffset)
-                    else:
+                    if not allow_padding:
                         raise SequenceNumberError("Missing data for sequence number %d %s" % (nextoffset, self.addr))
+                    gap = offset - nextoffset
+                    if gap > MAX_REASSEMBLY_GAP:
+                        raise SequenceNumberError(
+                            "Sequence number gap of %d bytes exceeds the maximum allowed of %d bytes. %s"
+                            % (gap, MAX_REASSEMBLY_GAP, self.addr))
+                    data += padding * gap
                 elif offset < nextoffset:
                     # data is overlapping
                     if not allow_overlap:
                         raise SequenceNumberError(
                             "Overlapping data for sequence number %d %s" % (nextoffset, self.addr))
 
-                nextoffset = (offset + len(segments[offset])) & self.MAX_OFFSET
-                data = data[:offset - startoffset] + \
-                       segments[offset] + \
-                       data[nextoffset - startoffset:]
+                seg = segments[offset]
+                seg_start = offset - base
+                if len(out) > seg_start:
+                    # Overlap: the new data wins (allow_overlap semantics)
+                    del out[seg_start:]
+                out += seg
+                nextoffset = (offset + len(seg)) & self.MAX_OFFSET
+            data = bytes(out)
             self.__data_bytes = data
 
         return data

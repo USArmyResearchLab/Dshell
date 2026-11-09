@@ -177,7 +177,20 @@ class DshellPlugin(dshell.core.PacketPlugin):
                     del(self.unset_read_streams[
                         (serverIP, serverPort, clientIP)])
                 else:
-                    self.open_streams[key] = self.default_stream
+                    # Give this stream its OWN dict (and its own filedata).
+                    # Pre-fix this stored the single shared self.default_stream
+                    # object, so concurrent "unset read" streams cross-
+                    # contaminated each other's filedata/closed_connection, and
+                    # __closeStream's filename mutation corrupted every stream
+                    # that pointed at the same dict.
+                    self.open_streams[key] = {
+                        'filename': '',
+                        'mode': '',
+                        'readwrite': '',
+                        'closed_connection': False,
+                        'filedata': {},
+                        'timestamp': pkt.ts
+                    }
             blockNum = struct.unpack("!H", data[:2])[0]
             data = data[2:]
             if len(data) < 512:
@@ -269,9 +282,8 @@ class DshellPlugin(dshell.core.PacketPlugin):
         # dump the file, if that's what the user wants
         if self.rip and len(rebuiltFile) > 0:
             outpath = dshell.util.gen_local_filename(self.outdir, theStream['filename'])
-            outfile = open(outpath, 'wb')
-            outfile.write(rebuiltFile)
-            outfile.close()
+            with open(outpath, 'wb') as outfile:
+                outfile.write(rebuiltFile)
 
         # remove the stream from the list of open streams
         self.closed_streams.append((

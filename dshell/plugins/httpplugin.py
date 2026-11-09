@@ -21,6 +21,11 @@ import io
 
 logger = logging.getLogger(__name__)
 
+# Upper bound on how much a gzipped HTTP body may expand to. A small compressed
+# payload can otherwise expand into an unbounded memory allocation (decompression
+# bomb). Bounded at 1 GB of decompressed output.
+MAX_GUNZIP_BYTES = 1000 * 1024 * 1024
+
 
 def parse_headers(obj, f):
     """Return dict of HTTP headers parsed from a file object."""
@@ -181,6 +186,11 @@ class HTTPResponse(object):
         """
         If this response has Content-Encoding set to something with "gzip",
         this function will decompress it and store it in the body.
+
+        Decompression is bounded by MAX_GUNZIP_BYTES so that a small compressed
+        payload cannot expand into an unbounded memory allocation (a
+        decompression bomb). The output is truncated at the limit and an error
+        is recorded.
         """
         if "gzip" in self.headers.get("content-encoding", ""):
             try:
@@ -192,7 +202,20 @@ class HTTPResponse(object):
                 self.errors.append(dshell.core.DataError("Body was not a byte string ({!s}). Could not decompress.".format(type(self.body))))
                 return
             try:
-                self.body = gzip.GzipFile(fileobj=iobody).read()
+                decoder = gzip.GzipFile(fileobj=iobody)
+                out = bytearray()
+                while True:
+                    chunk = decoder.read(65536)
+                    if not chunk:
+                        break
+                    out += chunk
+                    if len(out) > MAX_GUNZIP_BYTES:
+                        self.errors.append(OSError(
+                            "Decompressed body exceeds the %d byte limit; truncated "
+                            "to prevent resource exhaustion (decompression bomb)." % MAX_GUNZIP_BYTES))
+                        self.body = bytes(out[:MAX_GUNZIP_BYTES])
+                        return
+                self.body = bytes(out)
             except OSError as e:
                 self.errors.append(OSError("Could not gunzip body. {!s}".format(e)))
                 return

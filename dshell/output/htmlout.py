@@ -71,6 +71,9 @@ End: %(endtime)s
         }
         self.hexmode = kwargs.get('hex', False)
         self.format_is_set = False
+        # Escape free-form --extra fields (attacker-controlled pcap data) so the
+        # generated HTML report is not vulnerable to stored XSS.
+        self.escape_html = True
 
     def setup(self):
         # activate color blind friendly mode

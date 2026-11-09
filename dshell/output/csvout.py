@@ -3,6 +3,8 @@ This output module converts plugin output into a CSV format
 """
 
 import csv
+from collections import defaultdict
+from datetime import datetime
 from dshell.output.output import Output
 
 class CSVOutput(Output):
@@ -58,6 +60,68 @@ class CSVOutput(Output):
     def setup(self):
         if self.use_header:
             self.fh.write(self.delimiter.join([f for f in self.fields]) + "\n")
+
+    def convert(self, *args, **kwargs):
+        """
+        Build the CSV row as a list of field values.
+
+        Values are taken from the plugin's kwargs (with the same timestamp
+        normalization and None->'' handling the base class applies) so that
+        csv.writer can quote them correctly. The previous implementation used
+        Python's repr() (%%(field)r), which single-quotes values and therefore
+        does NOT escape the delimiter -- a value containing the delimiter split
+        the row (CSV field injection) and a leading '=' survived into
+        spreadsheets (formula injection).
+        """
+        outdict = defaultdict(str, **kwargs)
+
+        if 'ts' in outdict:
+            try:
+                outdict['ts'] = datetime.fromtimestamp(float(outdict['ts'])).strftime(self.timeformat)
+            except (TypeError, KeyError, ValueError):
+                pass
+        for key in ('starttime', 'endtime', 'dt'):
+            if key in outdict and isinstance(outdict[key], datetime):
+                outdict[key] = outdict[key].strftime(self.timeformat)
+
+        for key, val in list(outdict.items()):
+            if val is None:
+                outdict[key] = ''
+
+        outdict['data'] = self.delimiter.join(map(str, args))
+
+        columns = [f for f in self.fields if f]
+        if self.extra:
+            extras = ["%s=%s" % (k, outdict[k]) for k in sorted(outdict) if k not in self.format_fields]
+            outdict['extra'] = ', '.join(extras)
+            columns.append('extra')
+
+        return [self._csv_safe(outdict.get(f, '')) for f in columns]
+
+    @staticmethod
+    def _csv_safe(value):
+        """
+        Neutralize CSV formula injection: prefix a single quote to string
+        values that begin with a formula-triggering character (=, +, -, @,
+        tab, CR). csv.writer handles delimiter/quote escaping, but it does not
+        neutralize values that spreadsheets evaluate as formulas, so the two
+        protections are complementary.
+        """
+        v = value if isinstance(value, str) else str(value)
+        if v[:1] in ('=', '+', '-', '@', '\t', '\r'):
+            v = "'" + v
+        return v
+
+    def write(self, *args, **kwargs):
+        """Write one row using the csv module for RFC-4180 quoting."""
+        row = self.convert(*args, **kwargs)
+        try:
+            writer = csv.writer(self.fh, delimiter=self.delimiter, quoting=csv.QUOTE_MINIMAL)
+            writer.writerow(row)
+            if self.nobuffer:
+                self.fh.flush()
+        except BrokenPipeError:
+            pass
 
 
 obj = CSVOutput

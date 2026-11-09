@@ -140,6 +140,10 @@ def gen_local_filename(path, origname):
             localname += c
         else:
             localname += "%%%02X" % ord(c)
+    if localname in (".", ".."):
+        # A bare "." or ".." would resolve to the output directory (or its
+        # parent) instead of a filename, escaping outdir.
+        localname = "_" + localname
     localname = os.path.join(path, localname)
     postfix = ''
     i = 0

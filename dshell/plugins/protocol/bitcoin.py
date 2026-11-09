@@ -126,7 +126,7 @@ Examples:
             data = blob.data
             data_str = ''.join(chr(x) for x in data)
             data_len = len(data)
-        except:
+        except Exception:
             self.logger.error('could not parse session data')
             return
 
@@ -196,19 +196,19 @@ Examples:
         try:
             magic_val = data[0:4].hex().upper()
             magic_val = ' '.join([magic_val[i:i+2] for i in range(0, len(magic_val), 2)])
-        except:
+        except Exception:
             self.logger.error('could not parse session data')
-            return 
+            return
 
         # Attempt to translate first 4 bytes of payload into a Bitcoin (bc) 
         #   network type, and determine if blob is part of connection which 
         #   contained BITCOIN-MAIN traffic, or if using BITCOIN-MAIN port, or
         #   if part of Stratum mining 
         try:
-            self.bc_net = str(MAGIC_VALS[magic_val])  
+            self.bc_net = str(MAGIC_VALS[magic_val])
             if self.bc_net == 'BITCOIN-MAIN':
                 self.bcm_cache.add(conn.addr)
-        except:
+        except KeyError:
             if conn.addr in self.bcm_cache:
                 self.bc_net = 'Potential BITCOIN-MAIN (part of connection which detected BITCOIN-MAIN traffic)'
             elif (blob.sport == 8333 or blob.dport == 8333):
@@ -286,15 +286,15 @@ Examples:
             # The extra information (JOB ID, BLOCK VER, etc.) will be useful in matching the 
             #   information outputted by the alerts to the payload containing the 
             #   generation transaction info and merkle branches
-            fout = open(self.gentx, "a+")  
-            fout.write(("\nJOB IDs: \t\t{0:<20} \nPREV BLK HASH: \t{1:<65} \n\nGEN TX1: \t\t{2:<20}" 
-                        "\n\nGEN TX2: \t\t{3:<20} \n\nMERKLE BRANCHES: {4:<20} \n\nBLOCK VER: \t\t{5:<20}" 
-                        "\nHASH DIFF: \t\t{6:<10}\n").format(
-                        ', '.join(self.notify_params[conn.addr][0][conn.addr]), self.notify_params[conn.addr][1],
-                        self.notify_params[conn.addr][2], self.notify_params[conn.addr][3],
-                        ', '.join(self.notify_params[conn.addr][4]), self.notify_params[conn.addr][5],
-                        self.notify_params[conn.addr][6]))
-            fout.write(("\n" + "-"*100)*2)
+            with open(self.gentx, "a+") as fout:
+                fout.write(("\nJOB IDs: \t\t{0:<20} \nPREV BLK HASH: \t{1:<65} \n\nGEN TX1: \t\t{2:<20}"
+                            "\n\nGEN TX2: \t\t{3:<20} \n\nMERKLE BRANCHES: {4:<20} \n\nBLOCK VER: \t\t{5:<20}"
+                            "\nHASH DIFF: \t\t{6:<10}\n").format(
+                            ', '.join(self.notify_params[conn.addr][0][conn.addr]), self.notify_params[conn.addr][1],
+                            self.notify_params[conn.addr][2], self.notify_params[conn.addr][3],
+                            ', '.join(self.notify_params[conn.addr][4]), self.notify_params[conn.addr][5],
+                            self.notify_params[conn.addr][6]))
+                fout.write(("\n" + "-"*100)*2)
 
 
         # Else if we dont have Bitcoin User IDs, or Block information 
