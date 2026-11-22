@@ -23,6 +23,7 @@ setup(
         "pcapy-ng",
         "pypacker",
         "pyopenssl",
+        "cryptography",
         "elasticsearch",
         "tabulate",
     ],
