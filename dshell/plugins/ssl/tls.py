@@ -10,6 +10,8 @@ import binascii
 import hashlib
 import OpenSSL
 import time
+import ipaddress
+from cryptography import x509
 try:
     import ja3.ja3
     ja3_available = True
@@ -818,6 +820,71 @@ def render_x509_object(n):
     return output.rstrip().decode('utf-8')
 
 
+# OpenSSL's names for attributes that rfc4514_attribute_name gives as OIDs
+_ATTRIBUTE_NAMES = {
+    '1.2.840.113549.1.9.1': 'emailAddress',
+    '2.5.4.5': 'serialNumber',
+}
+
+
+def _attribute_to_string(attribute):
+    name = _ATTRIBUTE_NAMES.get(attribute.oid.dotted_string,
+                                attribute.rfc4514_attribute_name)
+    value = attribute.value
+    if isinstance(value, bytes):
+        return '%s = #%s' % (name, value.hex().upper())
+    if any(ch in value for ch in ',+;<>"\\=#') or value != value.strip():
+        value = '"%s"' % value.replace('\\', '\\\\').replace('"', '\\"')
+    return '%s = %s' % (name, value)
+
+
+def general_name_to_string(name):
+    """Render a subjectAltName entry the way OpenSSL prints it."""
+    if isinstance(name, x509.DNSName):
+        return 'DNS:' + name.value
+    if isinstance(name, x509.IPAddress):
+        ip = name.value
+        if isinstance(ip, (ipaddress.IPv4Network, ipaddress.IPv6Network)):
+            # an 8 or 32 byte entry, which OpenSSL does not decode
+            return 'IP Address:<invalid length=%d>' % (
+                2 * len(ip.network_address.packed))
+        if ip.version == 6:
+            return 'IP Address:' + ':'.join(
+                '%X' % g for g in struct.unpack('!8H', ip.packed))
+        return 'IP Address:' + str(ip)
+    if isinstance(name, x509.RFC822Name):
+        return 'email:' + name.value
+    if isinstance(name, x509.UniformResourceIdentifier):
+        return 'URI:' + name.value
+    if isinstance(name, x509.DirectoryName):
+        return 'DirName:' + ', '.join(
+            ' + '.join(_attribute_to_string(a) for a in rdn)
+            for rdn in name.value.rdns)
+    if isinstance(name, x509.RegisteredID):
+        return 'Registered ID:' + name.value.dotted_string
+    return 'othername:<unsupported>'
+
+
+def _subject_alt_name(c):
+    """Return the subjectAltName as OpenSSL prints it, or None."""
+    if hasattr(c, 'get_extension'):
+        # pyOpenSSL < 26.2: OpenSSL renders it (the last one wins, as before)
+        subject_alt_name = None
+        for i in range(0, c.get_extension_count()):
+            ext = c.get_extension(i)
+            if ext.get_short_name() == b'subjectAltName':
+                subject_alt_name = str(ext)
+        return subject_alt_name
+    try:
+        san = c.to_cryptography().extensions.get_extension_for_class(
+            x509.SubjectAlternativeName)
+        return ', '.join(general_name_to_string(n) for n in san.value)
+    except Exception:
+        # no SAN, or a certificate cryptography cannot parse (invalid
+        # version, duplicate or malformed extensions); keep the rest
+        return None
+
+
 def openSSL_cert_to_info_dictionary(c):
     d = {'fingerprints': {}}
     for h in ('md5', 'sha1', 'sha256'):
@@ -831,10 +898,9 @@ def openSSL_cert_to_info_dictionary(c):
     #
     # Look for subjectAltName
     #
-    for i in range(0, c.get_extension_count()):
-        ext = c.get_extension(i)
-        if ext.get_short_name() == b'subjectAltName':
-            d['subjectAltName'] = str(ext)
+    subject_alt_name = _subject_alt_name(c)
+    if subject_alt_name is not None:
+        d['subjectAltName'] = subject_alt_name
     public_key = c.get_pubkey()
     d['pubkey_bits'] = public_key.bits()
     d['pubkey_type'] = keyTypeToString(public_key.type())
